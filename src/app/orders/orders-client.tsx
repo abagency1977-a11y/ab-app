@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import type { Order, Customer, Product } from '@/lib/types';
+import React, { useState, useMemo, useEffect } from 'react';
+import type { Order, Customer, Product, PaymentTerm, PaymentMode } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -18,8 +18,11 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { getProducts } from '@/lib/data';
 import { Rupee } from '@/components/icons';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Checkbox } from '@/components/ui/checkbox';
 
-const formatNumber = (value: number) => new Intl.NumberFormat('en-IN').format(value);
+const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(value).replace('₹', '');
+
 
 export function OrdersClient({ orders: initialOrders, customers: initialCustomers }: { orders: Order[], customers: Customer[] }) {
     const [orders, setOrders] = useState<Order[]>(initialOrders);
@@ -33,7 +36,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     const [isAddOrderOpen, setIsAddOrderOpen] = useState(false);
     const { toast } = useToast();
 
-    React.useEffect(() => {
+    useEffect(() => {
         getProducts().then(setProducts);
     }, []);
 
@@ -59,7 +62,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 customerName: customer.name,
                 customerAddress: customer.address,
                 invoiceNumber: order.id,
-                invoiceDate: new Date().toISOString().split('T')[0],
+                invoiceDate: new Date(order.orderDate).toISOString().split('T')[0],
                 companyName: 'AB Agency',
                 companyAddress: '456 Corporate Lane, Business City, 98765',
             });
@@ -85,7 +88,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             const result = await generateReceipt({
                 customerName: customer.name,
                 items: order.items.map(i => ({ name: i.productName, quantity: i.quantity, price: i.price })),
-                totalAmount: order.total,
+                totalAmount: order.grandTotal,
                 date: new Date().toISOString().split('T')[0],
                 transactionId: `TRANS-${order.id}`,
             });
@@ -153,7 +156,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                                 </TableCell>
                                 <TableCell className="text-right flex items-center justify-end">
                                     <Rupee className="inline-block h-4 w-4 mr-1" />
-                                    {formatNumber(order.total)}
+                                    {formatNumber(order.grandTotal)}
                                 </TableCell>
                                 <TableCell>
                                     <DropdownMenu>
@@ -225,19 +228,33 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     customerCount: number,
 }) {
     const [customerId, setCustomerId] = useState<string>('');
-    const [items, setItems] = useState<{ productId: string, quantity: number }[]>([]);
+    const [items, setItems] = useState<{ productId: string, quantity: number, price: number, gst: number }[]>([]);
     const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
+    const [paymentTerm, setPaymentTerm] = useState<PaymentTerm>('Full Payment');
+    const [paymentMode, setPaymentMode] = useState<PaymentMode>('Cash');
+    const [paymentRemarks, setPaymentRemarks] = useState('');
+    const [dueDate, setDueDate] = useState('');
+    const [deliveryDate, setDeliveryDate] = useState('');
+    const [deliveryAddress, setDeliveryAddress] = useState('');
+    const [isGstInvoice, setIsGstInvoice] = useState(true);
+    const [discount, setDiscount] = useState(0);
 
     const handleAddItem = () => {
-        setItems([...items, { productId: '', quantity: 1 }]);
+        setItems([...items, { productId: '', quantity: 1, price: 0, gst: 0 }]);
     };
 
-    const handleItemChange = (index: number, field: 'productId' | 'quantity', value: string) => {
+    const handleItemChange = (index: number, field: 'productId' | 'quantity', value: string | number) => {
         const newItems = [...items];
+        const product = products.find(p => p.id === (field === 'productId' ? value : newItems[index].productId));
+
         if (field === 'quantity') {
-            newItems[index][field] = parseInt(value, 10) || 1;
-        } else {
-            newItems[index][field] = value;
+            newItems[index][field] = parseInt(value as string, 10) || 1;
+        } else if (field === 'productId') {
+            newItems[index][field] = value as string;
+            if (product) {
+                newItems[index].price = product.price;
+                newItems[index].gst = product.gst;
+            }
         }
         setItems(newItems);
     };
@@ -262,27 +279,29 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         setCustomerId(newCustomer.id);
     };
 
+    const { subTotal, totalGst, total } = useMemo(() => {
+        const subTotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+        const totalGst = items.reduce((sum, item) => sum + (item.price * item.quantity * (item.gst / 100)), 0);
+        const total = subTotal + totalGst;
+        return { subTotal, totalGst, total };
+    }, [items]);
+
+    const grandTotal = useMemo(() => total - discount, [total, discount]);
+
+
     const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (!customerId || items.length === 0 || items.some(i => !i.productId)) {
-            alert('Please select a customer and add at least one valid item.');
+            toast({
+                title: "Validation Error",
+                description: 'Please select a customer and add at least one valid item.',
+                variant: 'destructive'
+            });
             return;
         }
         
         const customer = customers.find(c => c.id === customerId);
         if (!customer) return;
-
-        const orderItems = items.map(item => {
-            const product = products.find(p => p.id === item.productId);
-            return {
-                productId: item.productId,
-                productName: product?.name || 'Unknown',
-                quantity: item.quantity,
-                price: product?.price || 0,
-            };
-        });
-
-        const total = orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
         const newOrder: Order = {
             id: `ORD-${String(orderCount + 1).padStart(3, '0')}`,
@@ -290,8 +309,26 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
             customerName: customer.name,
             orderDate: new Date().toISOString().split('T')[0],
             status: 'Pending',
-            items: orderItems,
+            items: items.map(item => {
+                const product = products.find(p => p.id === item.productId);
+                return {
+                    productId: item.productId,
+                    productName: product?.name || 'Unknown',
+                    quantity: item.quantity,
+                    price: product?.price || 0,
+                    gst: product?.gst || 0
+                };
+            }),
             total,
+            discount,
+            grandTotal,
+            paymentTerm,
+            paymentMode: paymentTerm === 'Full Payment' ? paymentMode : undefined,
+            paymentRemarks: paymentTerm === 'Full Payment' ? paymentRemarks : undefined,
+            dueDate: paymentTerm === 'Credit' ? dueDate : undefined,
+            deliveryDate,
+            deliveryAddress,
+            isGstInvoice,
         };
 
         onOrderAdded(newOrder);
@@ -299,79 +336,147 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         // Reset form
         setCustomerId('');
         setItems([]);
+        setPaymentTerm('Full Payment');
+        setPaymentMode('Cash');
+        setPaymentRemarks('');
+        setDueDate('');
+        setDeliveryDate('');
+        setDeliveryAddress('');
+        setIsGstInvoice(true);
+        setDiscount(0);
     };
-
-    const total = useMemo(() => {
-        return items.reduce((sum, item) => {
-            const product = products.find(p => p.id === item.productId);
-            return sum + (product?.price || 0) * item.quantity;
-        }, 0);
-    }, [items, products]);
 
     return (
         <>
             <Dialog open={isOpen} onOpenChange={onOpenChange}>
-                <DialogContent className="sm:max-w-3xl">
+                <DialogContent className="sm:max-w-4xl">
                     <DialogHeader>
                         <DialogTitle>Place New Order</DialogTitle>
                         <DialogDescription>Select a customer and add products to the order.</DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleSubmit}>
-                        <div className="grid gap-6 py-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="customer">Customer</Label>
-                                <div className="flex gap-2">
-                                    <Select value={customerId} onValueChange={setCustomerId}>
-                                        <SelectTrigger id="customer">
-                                            <SelectValue placeholder="Select a customer" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {customers.map(customer => (
-                                                <SelectItem key={customer.id} value={customer.id}>{customer.name}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <Button type="button" variant="outline" onClick={() => setIsAddCustomerOpen(true)}>
-                                        <PlusCircle className="mr-2 h-4 w-4" /> Add New
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
+                            {/* Left Column */}
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="customer">Customer</Label>
+                                    <div className="flex gap-2">
+                                        <Select value={customerId} onValueChange={setCustomerId}>
+                                            <SelectTrigger id="customer">
+                                                <SelectValue placeholder="Select a customer" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {customers.map(customer => (
+                                                    <SelectItem key={customer.id} value={customer.id}>{customer.name}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <Button type="button" variant="outline" onClick={() => setIsAddCustomerOpen(true)}>
+                                            <PlusCircle className="mr-2 h-4 w-4" /> Add New
+                                        </Button>
+                                    </div>
+                                </div>
+                                
+                                <div className="space-y-2">
+                                    <Label>Order Items</Label>
+                                    <div className="space-y-2 max-h-60 overflow-y-auto pr-2 border rounded-md p-2">
+                                        {items.map((item, index) => (
+                                            <div key={index} className="flex items-center gap-2">
+                                                <Select value={item.productId} onValueChange={(value) => handleItemChange(index, 'productId', value)}>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Select product" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {products.map(product => (
+                                                            <SelectItem key={product.id} value={product.id}>{product.name}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                <Input
+                                                    type="number"
+                                                    min="1"
+                                                    value={item.quantity}
+                                                    onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                                                    className="w-24"
+                                                />
+                                                <Button type="button" variant="outline" size="icon" onClick={() => handleRemoveItem(index)}>
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <Button type="button" variant="outline" size="sm" onClick={handleAddItem}>
+                                        <PlusCircle className="mr-2 h-4 w-4" /> Add Item
                                     </Button>
                                 </div>
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Order Items</Label>
-                                <div className="space-y-4 max-h-60 overflow-y-auto pr-2">
-                                    {items.map((item, index) => (
-                                        <div key={index} className="flex items-center gap-2">
-                                            <Select value={item.productId} onValueChange={(value) => handleItemChange(index, 'productId', value)}>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select product" />
-                                                </SelectTrigger>
+                                <div className="space-y-2">
+                                    <Label>Payment Term</Label>
+                                    <RadioGroup value={paymentTerm} onValueChange={(v) => setPaymentTerm(v as PaymentTerm)} className="flex gap-4">
+                                        <div className="flex items-center space-x-2">
+                                            <RadioGroupItem value="Full Payment" id="full_payment" />
+                                            <Label htmlFor="full_payment">Full Payment</Label>
+                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                            <RadioGroupItem value="Credit" id="credit" />
+                                            <Label htmlFor="credit">Credit</Label>
+                                        </div>
+                                    </RadioGroup>
+                                </div>
+                                {paymentTerm === 'Full Payment' ? (
+                                    <>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="payment_mode">Payment Mode</Label>
+                                            <Select value={paymentMode} onValueChange={(v) => setPaymentMode(v as PaymentMode)}>
+                                                <SelectTrigger id="payment_mode"><SelectValue /></SelectTrigger>
                                                 <SelectContent>
-                                                    {products.map(product => (
-                                                        <SelectItem key={product.id} value={product.id}>{product.name}</SelectItem>
-                                                    ))}
+                                                    <SelectItem value="Cash">Cash</SelectItem>
+                                                    <SelectItem value="Card">Card</SelectItem>
+                                                    <SelectItem value="UPI">UPI</SelectItem>
+                                                    <SelectItem value="Cheque">Cheque</SelectItem>
+                                                    <SelectItem value="Online Transfer">Online Transfer</SelectItem>
                                                 </SelectContent>
                                             </Select>
-                                            <Input
-                                                type="number"
-                                                min="1"
-                                                value={item.quantity}
-                                                onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                                                className="w-24"
-                                            />
-                                            <Button variant="outline" size="icon" onClick={() => handleRemoveItem(index)}>
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
                                         </div>
-                                    ))}
-                                </div>
-                                <Button type="button" variant="outline" size="sm" onClick={handleAddItem}>
-                                    <PlusCircle className="mr-2 h-4 w-4" /> Add Item
-                                </Button>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="payment_remarks">Payment Remarks</Label>
+                                            <Input id="payment_remarks" value={paymentRemarks} onChange={(e) => setPaymentRemarks(e.target.value)} />
+                                        </div>
+                                    </>
+                                ) : (
+                                     <div className="space-y-2">
+                                        <Label htmlFor="due_date">Due Date</Label>
+                                        <Input id="due_date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+                                    </div>
+                                )}
                             </div>
-                            <div className="text-right text-xl font-bold flex items-center justify-end">
-                                Total: <Rupee className="inline-block h-5 w-5 ml-2 mr-1" />{formatNumber(total)}
+
+                            {/* Right Column */}
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="delivery_date">Delivery Date</Label>
+                                    <Input id="delivery_date" type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="delivery_address">Delivery Address</Label>
+                                    <Textarea id="delivery_address" value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} />
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox id="is_gst" checked={isGstInvoice} onCheckedChange={(c) => setIsGstInvoice(c as boolean)} />
+                                    <Label htmlFor="is_gst">Is GST Invoice?</Label>
+                                </div>
+                                <div className="border-t pt-4 space-y-2">
+                                    <div className="flex justify-between"><span>Subtotal:</span> <span className="flex items-center"><Rupee className="inline-block h-4 w-4 mr-1" />{formatNumber(subTotal)}</span></div>
+                                    <div className="flex justify-between"><span>Total GST:</span> <span className="flex items-center"><Rupee className="inline-block h-4 w-4 mr-1" />{formatNumber(totalGst)}</span></div>
+                                    <div className="flex justify-between font-bold"><span>Total:</span> <span className="flex items-center"><Rupee className="inline-block h-4 w-4 mr-1" />{formatNumber(total)}</span></div>
+                                    <div className="flex items-center gap-2">
+                                        <Label htmlFor="discount">Discount:</Label>
+                                        <Input id="discount" type="number" value={discount} onChange={(e) => setDiscount(Number(e.target.value))} className="w-32" />
+                                    </div>
+                                    <div className="flex justify-between text-xl font-bold text-primary"><span>Grand Total:</span> <span className="flex items-center"><Rupee className="inline-block h-5 w-5 mr-1" />{formatNumber(grandTotal)}</span></div>
+                                </div>
                             </div>
                         </div>
+
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
                             <Button type="submit">Place Order</Button>

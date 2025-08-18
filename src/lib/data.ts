@@ -114,10 +114,16 @@ const orders: Order[] = [
     orderDate: '2023-05-15',
     status: 'Fulfilled',
     items: [
-      { productId: 'PROD-001', productName: 'Premium Widget', quantity: 20, price: 150.00 },
-      { productId: 'PROD-002', productName: 'Standard Gadget', quantity: 50, price: 75.50 },
+      { productId: 'PROD-001', productName: 'Premium Widget', quantity: 20, price: 150.00, gst: 18 },
+      { productId: 'PROD-002', productName: 'Standard Gadget', quantity: 50, price: 75.50, gst: 18 },
     ],
-    total: 6775.00,
+    total: 8000.00,
+    discount: 225.00,
+    grandTotal: 7775.00,
+    paymentTerm: 'Full Payment',
+    paymentMode: 'Card',
+    isGstInvoice: true,
+    deliveryAddress: '123 Innovation Drive, Tech City, 12345'
   },
   {
     id: 'ORD-002',
@@ -125,8 +131,14 @@ const orders: Order[] = [
     customerName: 'Synergy Solutions',
     orderDate: '2023-05-20',
     status: 'Pending',
-    items: [{ productId: 'PROD-003', productName: 'Advanced Gizmo', quantity: 10, price: 220.00 }],
-    total: 2200.00,
+    items: [{ productId: 'PROD-003', productName: 'Advanced Gizmo', quantity: 10, price: 220.00, gst: 18 }],
+    total: 2596,
+    discount: 0,
+    grandTotal: 2596,
+    paymentTerm: 'Credit',
+    dueDate: '2023-06-20',
+    isGstInvoice: true,
+    deliveryAddress: '456 Synergy Ave, Business Bay, 67890'
   },
   {
     id: 'ORD-003',
@@ -135,10 +147,15 @@ const orders: Order[] = [
     orderDate: '2023-04-28',
     status: 'Fulfilled',
     items: [
-      { productId: 'PROD-001', productName: 'Premium Widget', quantity: 50, price: 150.00 },
-      { productId: 'PROD-004', productName: 'Basic Thingamajig', quantity: 200, price: 25.00 },
+      { productId: 'PROD-001', productName: 'Premium Widget', quantity: 50, price: 150.00, gst: 18 },
+      { productId: 'PROD-004', productName: 'Basic Thingamajig', quantity: 200, price: 25.00, gst: 18 },
     ],
-    total: 12500.00,
+    total: 14750,
+    discount: 500,
+    grandTotal: 14250,
+    paymentTerm: 'Full Payment',
+    paymentMode: 'Online Transfer',
+    isGstInvoice: true,
   },
     {
     id: 'ORD-004',
@@ -147,10 +164,15 @@ const orders: Order[] = [
     orderDate: '2023-05-22',
     status: 'Pending',
     items: [
-      { productId: 'PROD-002', productName: 'Standard Gadget', quantity: 100, price: 75.50 },
-      { productId: 'PROD-003', productName: 'Advanced Gizmo', quantity: 30, price: 220.00 },
+      { productId: 'PROD-002', productName: 'Standard Gadget', quantity: 100, price: 75.50, gst: 18 },
+      { productId: 'PROD-003', productName: 'Advanced Gizmo', quantity: 30, price: 220.00, gst: 18 },
     ],
-    total: 14150.00,
+    total: 16699,
+    discount: 0,
+    grandTotal: 16699,
+    paymentTerm: 'Credit',
+    dueDate: '2023-06-22',
+    isGstInvoice: false,
   },
   {
     id: 'ORD-005',
@@ -158,8 +180,12 @@ const orders: Order[] = [
     customerName: 'Innovate Inc.',
     orderDate: '2023-05-25',
     status: 'Canceled',
-    items: [{ productId: 'PROD-004', productName: 'Basic Thingamajig', quantity: 100, price: 25.00 }],
-    total: 2500.00,
+    items: [{ productId: 'PROD-004', productName: 'Basic Thingamajig', quantity: 100, price: 25.00, gst: 18 }],
+    total: 2950,
+    discount: 0,
+    grandTotal: 2950,
+    paymentTerm: 'Full Payment',
+    isGstInvoice: true,
   },
 ];
 
@@ -177,14 +203,14 @@ export const getOrders = async (): Promise<Order[]> => {
 };
 
 export const getDashboardData = async () => {
-    const totalRevenue = orders.filter(o => o.status === 'Fulfilled').reduce((sum, order) => sum + order.total, 0);
+    const totalRevenue = orders.filter(o => o.status === 'Fulfilled').reduce((sum, order) => sum + order.grandTotal, 0);
     const totalCustomers = customers.length;
     const itemsInStock = products.reduce((sum, product) => sum + product.stock, 0);
     const pendingOrders = orders.filter(o => o.status === 'Pending').length;
 
     const monthlyRevenue = orders.filter(o => o.status === 'Fulfilled').reduce((acc, order) => {
         const month = new Date(order.orderDate).toLocaleString('default', { month: 'short' });
-        acc[month] = (acc[month] || 0) + order.total;
+        acc[month] = (acc[month] || 0) + order.grandTotal;
         return acc;
     }, {} as Record<string, number>);
 
@@ -196,8 +222,6 @@ export const getDashboardData = async () => {
         itemsInStock,
         pendingOrders,
         revenueChartData,
-        recentOrders: orders.slice(0, 5),
+        recentOrders: orders.slice(0, 5).map(o => ({...o, total: o.grandTotal})),
     }), 500));
 };
-
-    

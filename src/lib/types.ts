@@ -21,12 +21,16 @@ export interface Product {
 }
 
 export type OrderStatus = 'Pending' | 'Fulfilled' | 'Canceled';
+export type PaymentTerm = 'Full Payment' | 'Credit';
+export type PaymentMode = 'Cash' | 'Card' | 'UPI' | 'Cheque' | 'Online Transfer';
+
 
 export interface OrderItem {
   productId: string;
   productName: string;
   quantity: number;
   price: number;
+  gst: number;
 }
 
 export interface Order {
@@ -37,6 +41,13 @@ export interface Order {
   status: OrderStatus;
   items: OrderItem[];
   total: number;
+  discount: number;
+  grandTotal: number;
+  paymentTerm: PaymentTerm;
+  paymentMode?: PaymentMode;
+  paymentRemarks?: string;
+  dueDate?: string;
+  deliveryDate?: string;
+  deliveryAddress?: string;
+  isGstInvoice: boolean;
 }
-
-    
