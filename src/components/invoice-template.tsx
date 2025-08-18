@@ -21,135 +21,138 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
 
     const subtotal = order.items.reduce((acc, item) => acc + item.price * item.quantity, 0);
 
+    const invoiceTitle = order.paymentTerm === 'Credit' ? 'CREDIT INVOICE' : 'INVOICE';
+
     return (
-      <div ref={ref} className="bg-white text-black p-8 font-sans text-sm">
-        <div className="w-[210mm] h-auto mx-auto my-0">
-            {/* Header */}
-            <header className="text-center mb-6">
-                <h1 className="text-3xl font-bold text-[#4A90E2]">AB AGENCY</h1>
-                <p>1, AYYANCHERY MAIN ROAD, AYYANCHERY URAPAKKAM</p>
-                <p>Chennai, Tamil Nadu, 603210</p>
-                <p>MOB: +91 9551195505 | Email: abagency1977@gmail.com</p>
-            </header>
+      <div ref={ref} style={{ backgroundColor: 'white', color: 'black', padding: '40px', fontFamily: 'sans-serif', fontSize: '12px', width: '210mm', height: '297mm', boxSizing: 'border-box' }}>
+        
+        {/* Header */}
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+          <h1 style={{ color: '#4A90E2', fontSize: '2.5rem', fontWeight: 'bold', margin: '0' }}>AB AGENCY</h1>
+          <p style={{ margin: '0' }}>1, AYYANCHERY MAIN ROAD, AYYANCHERY URAPAKKAM</p>
+          <p style={{ margin: '0' }}>Chennai, Tamil Nadu, 603210</p>
+          <p style={{ margin: '0' }}>MOB: +91 9551195505 | Email: abagency1977@gmail.com</p>
+        </div>
 
-            {/* Title */}
-            <div className="text-center mb-6">
-                <h2 className="text-xl font-bold underline">
-                    {order.paymentTerm === 'Credit' ? 'CREDIT INVOICE' : 'INVOICE'}
-                </h2>
+        {/* Title */}
+        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', textDecoration: 'underline', margin: '0' }}>
+            {invoiceTitle}
+          </h2>
+        </div>
+
+        {/* Customer and Invoice Details Table */}
+        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '1rem', fontSize: '11px' }}>
+            <tbody>
+                <tr>
+                    <td style={{ width: '50%', border: '1px solid black', padding: '8px', verticalAlign: 'top' }}>
+                        <p style={{ fontWeight: 'bold', margin: '0 0 4px 0' }}>Billed to:</p>
+                        <p style={{ margin: '0' }}>{customer.name}</p>
+                    </td>
+                    <td style={{ width: '50%', border: '1px solid black', padding: '8px', verticalAlign: 'top' }}>
+                        <p style={{ margin: '0 0 4px 0' }}><span style={{ fontWeight: 'bold' }}>Date:</span> {new Date(order.orderDate).toLocaleDateString()}</p>
+                        <p style={{ margin: '0' }}><span style={{ fontWeight: 'bold' }}>Invoice No:</span> {order.id.replace('ORD', 'INV')}</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td style={{ border: '1px solid black', padding: '8px', verticalAlign: 'top' }}>
+                        <p style={{ fontWeight: 'bold', margin: '0 0 4px 0' }}>Delivery Address:</p>
+                        <p style={{ margin: '0' }}>{order.deliveryAddress || customer.address}</p>
+                    </td>
+                    <td style={{ border: '1px solid black', padding: '8px', verticalAlign: 'top' }}>
+                        <p style={{ margin: '0 0 4px 0' }}><span style={{ fontWeight: 'bold' }}>Order No:</span> {order.id}</p>
+                        {order.deliveryDate && <p style={{ margin: '0' }}><span style={{ fontWeight: 'bold' }}>Delivery Date:</span> {new Date(order.deliveryDate).toLocaleDateString()}</p>}
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        {/* Items Table */}
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+            <thead style={{ backgroundColor: '#E5E7EB' }}>
+                <tr>
+                    <th style={{ border: '1px solid black', padding: '6px', textAlign: 'left', fontWeight: 'bold', width: '55%' }}>Item Description</th>
+                    <th style={{ border: '1px solid black', padding: '6px', textAlign: 'right', fontWeight: 'bold', width: '15%' }}>Quantity</th>
+                    <th style={{ border: '1px solid black', padding: '6px', textAlign: 'right', fontWeight: 'bold', width: '15%' }}>Rate</th>
+                    <th style={{ border: '1px solid black', padding: '6px', textAlign: 'right', fontWeight: 'bold', width: '15%' }}>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {order.items.map((item, index) => (
+                    <tr key={index}>
+                        <td style={{ border: '1px solid black', padding: '6px' }}>{item.productName}</td>
+                        <td style={{ border: '1px solid black', padding: '6px', textAlign: 'right' }}>{item.quantity}</td>
+                        <td style={{ border: '1px solid black', padding: '6px', textAlign: 'right' }}>{formatNumber(item.price)}</td>
+                        <td style={{ border: '1px solid black', padding: '6px', textAlign: 'right' }}>{formatNumber(item.price * item.quantity)}</td>
+                    </tr>
+                ))}
+                {/* Spacer rows to push footer down */}
+                {Array.from({ length: Math.max(0, 15 - order.items.length) }).map((_, i) => (
+                   <tr key={`spacer-${i}`}><td colSpan={4} style={{ padding: '16px', borderLeft: '1px solid black', borderRight: '1px solid black' }}></td></tr>
+                ))}
+            </tbody>
+            <tfoot>
+              {/* This closing border for the table body */}
+               <tr>
+                  <td colSpan={4} style={{ borderTop: '1px solid black', padding: 0 }}></td>
+               </tr>
+            </tfoot>
+        </table>
+
+        {/* Totals Section */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1rem', fontSize: '11px' }}>
+            <div style={{ width: '50%', verticalAlign: 'top' }}>
+                {order.paymentTerm === 'Full Payment' && <p><span style={{ fontWeight: 'bold' }}>Payment Mode:</span> {order.paymentMode}</p>}
             </div>
-            
-            {/* Customer and Invoice Details */}
-            <table className="w-full border-collapse text-xs mb-4">
-                <tbody>
-                    <tr>
-                        <td className="w-1/2 p-2 border border-black align-top">
-                            <p className="font-bold">Billed to:</p>
-                            <p>{customer.name}</p>
-                        </td>
-                        <td className="w-1/2 p-2 border border-black align-top">
-                            <p><span className="font-bold">Date:</span> {new Date(order.orderDate).toLocaleDateString()}</p>
-                            <p><span className="font-bold">Invoice No:</span> {order.id.replace('ORD', 'INV')}</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td className="w-1/2 p-2 border border-black align-top">
-                            <p className="font-bold">Delivery Address:</p>
-                            <p>{order.deliveryAddress || customer.address}</p>
-                        </td>
-                        <td className="w-1/2 p-2 border border-black align-top">
-                             <p><span className="font-bold">Order No:</span> {order.id}</p>
-                            {order.deliveryDate && <p><span className="font-bold">Delivery Date:</span> {new Date(order.deliveryDate).toLocaleDateString()}</p>}
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-
-            {/* Items Table */}
-            <div className="mb-4">
-                <table className="w-full border-collapse border border-black text-xs">
-                    <thead>
-                        <tr className="bg-gray-200">
-                            <th className="border border-black p-1 text-left font-bold w-[50%]">Item Description</th>
-                            <th className="border border-black p-1 text-right font-bold w-[15%]">Quantity</th>
-                            <th className="border border-black p-1 text-right font-bold w-[15%]">Rate</th>
-                            <th className="border border-black p-1 text-right font-bold w-[20%]">Total</th>
-                        </tr>
-                    </thead>
+            <div style={{ width: '45%' }}>
+                <table style={{ width: '100%'}}>
                     <tbody>
-                        {order.items.map((item, index) => {
-                             const total = item.price * item.quantity;
-                             return (
-                                <tr key={index}>
-                                    <td className="border border-black p-1">{item.productName}</td>
-                                    <td className="border border-black p-1 text-right">{item.quantity}</td>
-                                    <td className="border border-black p-1 text-right">{formatNumber(item.price)}</td>
-                                    <td className="border border-black p-1 text-right">{formatNumber(total)}</td>
-                                </tr>
-                             )
+                        <tr>
+                            <td style={{ textAlign: 'right', padding: '2px 8px', fontWeight: 'bold' }}>Subtotal:</td>
+                            <td style={{ textAlign: 'right', padding: '2px 8px', width: '40%' }}>{formatNumber(subtotal)}</td>
+                        </tr>
+                        {order.isGstInvoice && order.items.map((item, index) => {
+                            if(item.gst > 0) {
+                                return (
+                                    <tr key={index}>
+                                        <td style={{ textAlign: 'right', padding: '2px 8px' }}>GST ({item.gst}%) on {formatNumber(item.price * item.quantity)}:</td>
+                                        <td style={{ textAlign: 'right', padding: '2px 8px' }}>{formatNumber(item.price * item.quantity * (item.gst / 100))}</td>
+                                    </tr>
+                                )
+                            }
+                            return null;
                         })}
-                         {/* Spacer rows to push footer down */}
-                        {Array.from({ length: Math.max(0, 15 - order.items.length) }).map((_, i) => (
-                           <tr key={`spacer-${i}`}><td className="p-3" colSpan={4}></td></tr>
-                        ))}
+                        {order.discount > 0 && (
+                            <tr>
+                                <td style={{ textAlign: 'right', padding: '2px 8px', fontWeight: 'bold' }}>Discount:</td>
+                                <td style={{ textAlign: 'right', padding: '2px 8px' }}>-{formatNumber(order.discount)}</td>
+                            </tr>
+                        )}
+                        <tr>
+                            <td style={{ textAlign: 'right', padding: '8px 8px 2px 8px', fontWeight: 'bold', borderTop: '1px solid black' }}>GRAND TOTAL:</td>
+                            <td style={{ textAlign: 'right', padding: '8px 8px 2px 8px', fontWeight: 'bold', borderTop: '1px solid black' }}>{formatNumber(order.grandTotal)}</td>
+                        </tr>
+                        {order.paymentTerm === 'Credit' && order.dueDate && (
+                            <>
+                                <tr>
+                                    <td style={{ color: 'red', textAlign: 'right', padding: '2px 8px', fontWeight: 'bold' }}>Amount Due:</td>
+                                    <td style={{ color: 'red', textAlign: 'right', padding: '2px 8px', fontWeight: 'bold' }}>{formatNumber(order.grandTotal)}</td>
+                                </tr>
+                                <tr>
+                                    <td style={{ color: 'red', textAlign: 'right', padding: '2px 8px', fontWeight: 'bold' }}>Due Date:</td>
+                                    <td style={{ color: 'red', textAlign: 'right', padding: '2px 8px', fontWeight: 'bold' }}>{new Date(order.dueDate).toLocaleDateString()}</td>
+                                </tr>
+                            </>
+                        )}
                     </tbody>
                 </table>
             </div>
+        </div>
 
-            {/* Totals Section */}
-             <table className="w-full text-xs">
-                <tbody>
-                    <tr>
-                        <td className="w-1/2 align-top">
-                             {order.paymentTerm === 'Full Payment' && <p><span className="font-bold">Payment Mode:</span> {order.paymentMode}</p>}
-                        </td>
-                        <td className="w-1/2">
-                            <table className="w-full">
-                                <tbody>
-                                <tr>
-                                    <td className="font-bold text-right pr-4">Subtotal:</td>
-                                    <td className="text-right">{formatNumber(subtotal)}</td>
-                                </tr>
-                                {order.isGstInvoice && order.items.map((item, index) => (
-                                    <tr key={index}>
-                                        <td className="font-bold text-right pr-4">GST ({item.gst}%) on {formatNumber(item.price * item.quantity)}:</td>
-                                        <td className="text-right">{formatNumber(item.price * item.quantity * (item.gst / 100))}</td>
-                                    </tr>
-                                ))}
-                                {order.discount > 0 && (
-                                    <tr>
-                                        <td className="font-bold text-right pr-4">Discount:</td>
-                                        <td className="text-right">-{formatNumber(order.discount)}</td>
-                                    </tr>
-                                )}
-                                <tr>
-                                    <td className="font-bold text-right border-t border-black mt-1 pt-1 pr-4">GRAND TOTAL:</td>
-                                    <td className="font-bold text-right border-t border-black mt-1 pt-1">{formatNumber(order.grandTotal)}</td>
-                                </tr>
-                                {order.paymentTerm === 'Credit' && order.dueDate && (
-                                    <>
-                                        <tr>
-                                            <td className="font-bold text-red-600 text-right pr-4">Amount Due:</td>
-                                            <td className="font-bold text-red-600 text-right">{formatNumber(order.grandTotal)}</td>
-                                        </tr>
-                                        <tr>
-                                            <td className="font-bold text-red-600 text-right pr-4">Due Date:</td>
-                                            <td className="font-bold text-red-600 text-right">{new Date(order.dueDate).toLocaleDateString()}</td>
-                                        </tr>
-                                    </>
-                                )}
-                                </tbody>
-                            </table>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-
-            {/* Footer */}
-            <div className="mt-auto pt-24 text-right">
-                <p>------------------------</p>
-                <p>Authorized Signatory</p>
-            </div>
+        {/* Footer */}
+        <div style={{ position: 'absolute', bottom: '40px', right: '40px', textAlign: 'right' }}>
+            <p style={{marginBottom: '0.5rem'}}>------------------------</p>
+            <p style={{margin: '0'}}>Authorized Signatory</p>
         </div>
       </div>
     );
@@ -157,4 +160,3 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
 );
 
 InvoiceTemplate.displayName = 'InvoiceTemplate';
-
