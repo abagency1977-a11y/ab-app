@@ -1,26 +1,39 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import type { Order, Customer } from '@/lib/types';
+import type { Order, Customer, Product } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, FileText, Receipt, Loader2 } from 'lucide-react';
+import { MoreHorizontal, FileText, Receipt, Loader2, PlusCircle, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { generateInvoice } from '@/ai/flows/generate-invoice';
 import { generateReceipt } from '@/ai/flows/generate-receipt';
 import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { useToast } from '@/hooks/use-toast';
+import { getProducts } from '@/lib/data';
 
-const formatCurrency = (value: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+const formatCurrency = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value);
 
-export function OrdersClient({ orders, customers }: { orders: Order[], customers: Customer[] }) {
+export function OrdersClient({ orders: initialOrders, customers }: { orders: Order[], customers: Customer[] }) {
+    const [orders, setOrders] = useState<Order[]>(initialOrders);
+    const [products, setProducts] = useState<Product[]>([]);
     const [statusFilter, setStatusFilter] = useState('All');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalContent, setModalContent] = useState('');
     const [modalTitle, setModalTitle] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [isAddOrderOpen, setIsAddOrderOpen] = useState(false);
+    const { toast } = useToast();
+
+    React.useEffect(() => {
+        getProducts().then(setProducts);
+    }, []);
 
     const filteredOrders = useMemo(() => {
         if (statusFilter === 'All') return orders;
@@ -81,12 +94,23 @@ export function OrdersClient({ orders, customers }: { orders: Order[], customers
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const handleAddOrder = (newOrder: Order) => {
+        setOrders(prev => [newOrder, ...prev]);
+        toast({
+            title: "Order Placed",
+            description: `Order ${newOrder.id} has been successfully created.`,
+        });
     }
 
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-bold">Orders</h1>
+                 <Button onClick={() => setIsAddOrderOpen(true)}>
+                    <PlusCircle className="mr-2 h-4 w-4" /> Place Order
+                </Button>
             </div>
             <Tabs value={statusFilter} onValueChange={setStatusFilter}>
                 <TabsList>
@@ -162,6 +186,158 @@ export function OrdersClient({ orders, customers }: { orders: Order[], customers
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            <AddOrderDialog
+                isOpen={isAddOrderOpen}
+                onOpenChange={setIsAddOrderOpen}
+                customers={customers}
+                products={products}
+                onOrderAdded={handleAddOrder}
+                orderCount={orders.length}
+            />
         </div>
+    );
+}
+
+function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdded, orderCount }: {
+    isOpen: boolean,
+    onOpenChange: (open: boolean) => void,
+    customers: Customer[],
+    products: Product[],
+    onOrderAdded: (order: Order) => void,
+    orderCount: number,
+}) {
+    const [customerId, setCustomerId] = useState<string>('');
+    const [items, setItems] = useState<{ productId: string, quantity: number }[]>([]);
+
+    const handleAddItem = () => {
+        setItems([...items, { productId: '', quantity: 1 }]);
+    };
+
+    const handleItemChange = (index: number, field: 'productId' | 'quantity', value: string) => {
+        const newItems = [...items];
+        if (field === 'quantity') {
+            newItems[index][field] = parseInt(value, 10) || 1;
+        } else {
+            newItems[index][field] = value;
+        }
+        setItems(newItems);
+    };
+
+    const handleRemoveItem = (index: number) => {
+        setItems(items.filter((_, i) => i !== index));
+    };
+
+    const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (!customerId || items.length === 0 || items.some(i => !i.productId)) {
+            alert('Please select a customer and add at least one valid item.');
+            return;
+        }
+        
+        const customer = customers.find(c => c.id === customerId);
+        if (!customer) return;
+
+        const orderItems = items.map(item => {
+            const product = products.find(p => p.id === item.productId);
+            return {
+                productId: item.productId,
+                productName: product?.name || 'Unknown',
+                quantity: item.quantity,
+                price: product?.price || 0,
+            };
+        });
+
+        const total = orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+        const newOrder: Order = {
+            id: `ORD-${String(orderCount + 1).padStart(3, '0')}`,
+            customerId,
+            customerName: customer.name,
+            orderDate: new Date().toISOString().split('T')[0],
+            status: 'Pending',
+            items: orderItems,
+            total,
+        };
+
+        onOrderAdded(newOrder);
+        onOpenChange(false);
+        // Reset form
+        setCustomerId('');
+        setItems([]);
+    };
+
+    const total = useMemo(() => {
+        return items.reduce((sum, item) => {
+            const product = products.find(p => p.id === item.productId);
+            return sum + (product?.price || 0) * item.quantity;
+        }, 0);
+    }, [items, products]);
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-3xl">
+                <DialogHeader>
+                    <DialogTitle>Place New Order</DialogTitle>
+                    <DialogDescription>Select a customer and add products to the order.</DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleSubmit}>
+                    <div className="grid gap-6 py-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="customer">Customer</Label>
+                            <Select value={customerId} onValueChange={setCustomerId}>
+                                <SelectTrigger id="customer">
+                                    <SelectValue placeholder="Select a customer" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {customers.map(customer => (
+                                        <SelectItem key={customer.id} value={customer.id}>{customer.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Order Items</Label>
+                            <div className="space-y-4 max-h-60 overflow-y-auto pr-2">
+                                {items.map((item, index) => (
+                                    <div key={index} className="flex items-center gap-2">
+                                        <Select value={item.productId} onValueChange={(value) => handleItemChange(index, 'productId', value)}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select product" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {products.map(product => (
+                                                    <SelectItem key={product.id} value={product.id}>{product.name}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <Input
+                                            type="number"
+                                            min="1"
+                                            value={item.quantity}
+                                            onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                                            className="w-24"
+                                        />
+                                        <Button variant="outline" size="icon" onClick={() => handleRemoveItem(index)}>
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
+                            <Button type="button" variant="outline" size="sm" onClick={handleAddItem}>
+                                <PlusCircle className="mr-2 h-4 w-4" /> Add Item
+                            </Button>
+                        </div>
+                        <div className="text-right text-xl font-bold">
+                            Total: {formatCurrency(total)}
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                        <Button type="submit">Place Order</Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
     );
 }

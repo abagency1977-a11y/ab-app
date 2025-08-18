@@ -9,8 +9,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { PlusCircle, MoreHorizontal, ArrowUpDown } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
 
-const formatCurrency = (value: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+const formatCurrency = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value);
 
 type SortKey = keyof Customer | 'transactionHistory.totalSpent';
 
@@ -19,6 +20,7 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
     const [search, setSearch] = useState('');
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'ascending' | 'descending' } | null>(null);
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+    const { toast } = useToast();
 
     const sortedCustomers = useMemo(() => {
         let sortableItems = [...customers];
@@ -71,8 +73,14 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
             address: formData.get('address') as string,
             transactionHistory: { totalSpent: 0, lastPurchaseDate: new Date().toISOString().split('T')[0] },
         };
+        // Here you would typically make an API call to save the new customer to your backend.
+        // For this prototype, we'll just add it to the local state.
         setCustomers(prev => [...prev, newCustomer]);
         setIsAddDialogOpen(false);
+        toast({
+            title: "Customer Added",
+            description: `${newCustomer.name} has been successfully added.`,
+        });
     };
 
 

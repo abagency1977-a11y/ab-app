@@ -30,7 +30,7 @@ const StatCard = ({ title, value, icon: Icon, description }: { title: string, va
 
 export function DashboardClient({ data }: { data: any }) {
 
-    const formatCurrency = (value: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+    const formatCurrency = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value);
 
     return (
         <div className="flex flex-col gap-6">
@@ -58,7 +58,7 @@ export function DashboardClient({ data }: { data: any }) {
                                     axisLine={false}
                                     tickFormatter={(value) => value.slice(0, 3)}
                                 />
-                                <YAxis tickFormatter={(value) => `$${value / 1000}k`}/>
+                                <YAxis tickFormatter={(value) => `₹${value / 1000}k`}/>
                                 <Tooltip
                                     cursor={false}
                                     content={<ChartTooltipContent
