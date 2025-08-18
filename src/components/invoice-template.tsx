@@ -88,7 +88,7 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
                 ))}
                 {/* Spacer rows to push footer down */}
                 {Array.from({ length: Math.max(0, 15 - order.items.length) }).map((_, i) => (
-                   <tr key={`spacer-${i}`}><td colSpan={4} style={{ padding: '16px', borderLeft: '1px solid black', borderRight: '1px solid black' }}></td></tr>
+                   <tr key={`spacer-${i}`}><td colSpan={4} style={{ padding: '16px', borderLeft: '1px solid black', borderRight: '1px solid black' }}>&nbsp;</td></tr>
                 ))}
             </tbody>
             <tfoot>
@@ -102,7 +102,7 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
         {/* Totals Section */}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1rem', fontSize: '11px' }}>
             <div style={{ width: '50%', verticalAlign: 'top' }}>
-                {order.paymentTerm === 'Full Payment' && <p><span style={{ fontWeight: 'bold' }}>Payment Mode:</span> {order.paymentMode}</p>}
+                {order.paymentTerm === 'Full Payment' && <p><span style={{ fontWeight: 'bold' }}>Payment Mode:</span>&nbsp;{order.paymentMode}</p>}
             </div>
             <div style={{ width: '45%' }}>
                 <table style={{ width: '100%'}}>
@@ -129,8 +129,13 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
                             </tr>
                         )}
                         <tr>
-                            <td style={{ textAlign: 'right', padding: '8px 8px 2px 8px', fontWeight: 'bold', borderTop: '1px solid black' }}>GRAND TOTAL:</td>
-                            <td style={{ textAlign: 'right', padding: '8px 8px 2px 8px', fontWeight: 'bold', borderTop: '1px solid black' }}>{formatNumber(order.grandTotal)}</td>
+                            <td colSpan={2} style={{padding: '4px 0'}}>
+                                <div style={{ borderTop: '1px solid black', marginLeft: 'auto', width: '100%' }}></div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style={{ textAlign: 'right', padding: '2px 8px', fontWeight: 'bold' }}>GRAND TOTAL:</td>
+                            <td style={{ textAlign: 'right', padding: '2px 8px', fontWeight: 'bold' }}>{formatNumber(order.grandTotal)}</td>
                         </tr>
                         {order.paymentTerm === 'Credit' && order.dueDate && (
                             <>
@@ -151,7 +156,7 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
 
         {/* Footer */}
         <div style={{ position: 'absolute', bottom: '40px', right: '40px', textAlign: 'right' }}>
-            <p style={{marginBottom: '0.5rem'}}>------------------------</p>
+            <div style={{marginBottom: '0.5rem', borderTop: '1px solid black', width: '150px', marginLeft: 'auto'}}></div>
             <p style={{margin: '0'}}>Authorized Signatory</p>
         </div>
       </div>
