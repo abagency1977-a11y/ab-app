@@ -66,7 +66,10 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         setModalContent('');
         setIsModalOpen(true);
 
-        const orderData = order.items.map(item => `${item.quantity}x ${item.productName} @ ₹${formatNumber(item.price)} (GST: ${item.gst}%) = ₹${formatNumber(item.price * item.quantity * (1 + item.gst/100))}`).join('\n');
+        const orderData = order.items.map(item => {
+            const total = item.price * item.quantity * (order.isGstInvoice ? (1 + item.gst/100) : 1);
+            return `${item.productName.padEnd(30)} ${String(item.quantity).padStart(8)} ${formatNumber(item.price).padStart(10)} ${formatNumber(total).padStart(10)}`;
+        }).join('\n');
         
         try {
             let result;
@@ -74,11 +77,11 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 result = await generateCreditInvoice({
                     orderData,
                     customerName: customer.name,
-                    customerAddress: customer.address,
-                    invoiceNumber: order.id,
+                    customerAddress: order.deliveryAddress || customer.address,
+                    invoiceNumber: order.id.replace('ORD', 'CRN'), // Example for credit note
                     invoiceDate: new Date(order.orderDate).toISOString().split('T')[0],
                     companyName: 'AB Agency',
-                    companyAddress: '456 Corporate Lane, Business City, 98765',
+                    companyAddress: '1, AYYANCHERY MAIN ROAD, AYYANCHERY URAPAKKAM, Chennai, Tamil Nadu, 603210',
                     grandTotal: order.grandTotal,
                     dueDate: order.dueDate || 'N/A',
                 });
@@ -86,13 +89,16 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                  result = await generateFullPaymentInvoice({
                     orderData,
                     customerName: customer.name,
-                    customerAddress: customer.address,
-                    invoiceNumber: order.id,
+                    customerAddress: order.deliveryAddress || customer.address,
+                    invoiceNumber: order.id.replace('ORD', 'FPI'), // Example for full payment invoice
                     invoiceDate: new Date(order.orderDate).toISOString().split('T')[0],
                     companyName: 'AB Agency',
-                    companyAddress: '456 Corporate Lane, Business City, 98765',
+                    companyAddress: '1, AYYANCHERY MAIN ROAD, AYYANCHERY URAPAKKAM, Chennai, Tamil Nadu, 603210',
                     grandTotal: order.grandTotal,
-                    paymentMode: order.paymentMode || 'N/A'
+                    paymentMode: order.paymentMode || 'N/A',
+                    discount: order.discount,
+                    orderId: order.id,
+                    deliveryDate: order.deliveryDate
                 });
             }
             setModalTitle(`Invoice for ${order.id}`);
@@ -151,12 +157,25 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         const input = invoiceRef.current;
         if (!input) return;
 
-        const canvas = await html2canvas(input);
+        const canvas = await html2canvas(input, { scale: 2 });
         const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF();
+        
+        const pdf = new jsPDF('p', 'mm', 'a4');
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        let heightLeft = pdfHeight;
+        let position = 0;
+
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+        heightLeft -= pdf.internal.pageSize.getHeight();
+
+        while (heightLeft > 0) {
+            position = heightLeft - pdfHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+            heightLeft -= pdf.internal.pageSize.getHeight();
+        }
+
         pdf.save(`${modalTitle.replace(/\s/g, '_')}.pdf`);
     };
 
@@ -396,13 +415,13 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
                             </div>
                         ) : (
-                            <div ref={invoiceRef} className="p-4 bg-white text-black">
-                                <pre className="whitespace-pre-wrap font-mono text-sm">{modalContent}</pre>
+                            <div ref={invoiceRef} className="p-4 bg-white text-black font-mono text-sm">
+                                <pre className="whitespace-pre-wrap">{modalContent}</pre>
                             </div>
                         )}
                     </div>
                     <DialogFooter>
-                        <Button onClick={() => navigator.clipboard.writeText(modalContent)} disabled={isLoading}>Copy</Button>
+                        <Button onClick={() => navigator.clipboard.writeText(modalContent)} disabled={isLoading}>Copy Text</Button>
                         <Button onClick={handleDownloadPdf} disabled={isLoading}><Download className="mr-2 h-4 w-4" /> Download PDF</Button>
                         <Button variant="outline" onClick={() => setIsModalOpen(false)}>Close</Button>
                     </DialogFooter>
@@ -649,7 +668,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                             </div>
                                             <div className="space-y-2">
                                                 <Label>Quantity</Label>
-                                                <Input type="number" placeholder="0" value={currentItem.quantity} onChange={e => setCurrentItem(s => ({ ...s, quantity: e.target.value }))} min="1" />
+                                                <Input type="number" placeholder="" value={currentItem.quantity} onChange={e => setCurrentItem(s => ({ ...s, quantity: e.target.value }))} min="1" />
                                             </div>
                                             <div className="space-y-2">
                                                 <Label>Rate</Label>
