@@ -531,10 +531,15 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
 
     const { subTotal, totalGst, total } = useMemo(() => {
         const subTotal = items.reduce((sum, item) => sum + (parseFloat(item.price) || 0) * (parseInt(item.quantity) || 0), 0);
-        const totalGst = items.reduce((sum, item) => sum + ((parseFloat(item.price) || 0) * (parseInt(item.quantity) || 0) * ((parseFloat(item.gst) || 0) / 100)), 0);
+        
+        let totalGst = 0;
+        if (isGstInvoice) {
+            totalGst = items.reduce((sum, item) => sum + ((parseFloat(item.price) || 0) * (parseInt(item.quantity) || 0) * ((parseFloat(item.gst) || 0) / 100)), 0);
+        }
+        
         const total = subTotal + totalGst;
         return { subTotal, totalGst, total };
-    }, [items]);
+    }, [items, isGstInvoice]);
 
     const grandTotal = useMemo(() => total - discount, [total, discount]);
 
@@ -653,13 +658,18 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                             <TableBody>
                                                 {items.map((item, index) => {
                                                     const product = products.find(p => p.id === item.productId);
-                                                    const itemTotal = (parseFloat(item.price) || 0) * (parseInt(item.quantity) || 0) * (1 + (parseFloat(item.gst) || 0) / 100);
+                                                    const price = parseFloat(item.price) || 0;
+                                                    const quantity = parseInt(item.quantity) || 0;
+                                                    const gst = parseFloat(item.gst) || 0;
+                                                    const itemTotal = isGstInvoice
+                                                        ? price * quantity * (1 + gst / 100)
+                                                        : price * quantity;
                                                     return (
                                                         <TableRow key={index}>
                                                             <TableCell>{product?.name}</TableCell>
                                                             <TableCell>{item.quantity}</TableCell>
-                                                            <TableCell>{formatNumber(parseFloat(item.price))}</TableCell>
-                                                            <TableCell>{item.gst}%</TableCell>
+                                                            <TableCell>{formatNumber(price)}</TableCell>
+                                                            <TableCell>{isGstInvoice ? `${item.gst}%` : 'N/A'}</TableCell>
                                                             <TableCell>{formatNumber(itemTotal)}</TableCell>
                                                             <TableCell className="space-x-2">
                                                                 <Button type="button" size="sm" variant="outline" onClick={() => handleEditItemClick(index)}>Edit</Button>
