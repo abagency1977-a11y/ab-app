@@ -17,6 +17,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { getProducts } from '@/lib/data';
+import { Rupee } from '@/components/icons';
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-IN').format(value);
 
@@ -141,7 +142,10 @@ export function OrdersClient({ orders: initialOrders, customers }: { orders: Ord
                                 <TableCell>
                                     <Badge variant={order.status === 'Fulfilled' ? 'default' : order.status === 'Pending' ? 'secondary' : 'destructive'} className="capitalize">{order.status}</Badge>
                                 </TableCell>
-                                <TableCell className="text-right">₹{formatNumber(order.total)}</TableCell>
+                                <TableCell className="text-right flex items-center justify-end">
+                                    <Rupee className="inline-block h-4 w-4 mr-1" />
+                                    {formatNumber(order.total)}
+                                </TableCell>
                                 <TableCell>
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
@@ -328,8 +332,8 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                 <PlusCircle className="mr-2 h-4 w-4" /> Add Item
                             </Button>
                         </div>
-                        <div className="text-right text-xl font-bold">
-                            Total: ₹{formatNumber(total)}
+                        <div className="text-right text-xl font-bold flex items-center justify-end">
+                            Total: <Rupee className="inline-block h-5 w-5 ml-2 mr-1" />{formatNumber(total)}
                         </div>
                     </div>
                     <DialogFooter>

@@ -9,6 +9,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { ChartConfig, ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { generateReportNarrative } from '@/ai/flows/generate-report-narrative';
+import { Rupee } from '@/components/icons';
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-IN').format(value);
 
@@ -64,7 +65,12 @@ export function ReportsClient({ reportData }: { reportData: any }) {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                  <Card>
                     <CardHeader><CardTitle>Total Revenue</CardTitle></CardHeader>
-                    <CardContent><p className="text-3xl font-bold">₹{formatNumber(reportData.totalRevenue)}</p></CardContent>
+                    <CardContent>
+                        <p className="text-3xl font-bold flex items-center">
+                            <Rupee className="inline-block h-7 w-7 mr-1" />
+                            {formatNumber(reportData.totalRevenue)}
+                        </p>
+                    </CardContent>
                 </Card>
                 <Card>
                     <CardHeader><CardTitle>Total Customers</CardTitle></CardHeader>
@@ -91,8 +97,19 @@ export function ReportsClient({ reportData }: { reportData: any }) {
                             <LineChart data={reportData.revenueChartData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                                 <CartesianGrid strokeDasharray="3 3" />
                                 <XAxis dataKey="month" />
-                                <YAxis tickFormatter={(value) => `₹${formatNumber(value as number)}`} />
-                                <Tooltip content={<ChartTooltipContent formatter={(value) => `₹${formatNumber(value as number)}`}/>} />
+                                <YAxis tickFormatter={(value) => {
+                                    const num = value as number;
+                                    return `₹${formatNumber(num)}`;
+                                }} />
+                                <Tooltip content={<ChartTooltipContent formatter={(value) => {
+                                    const formattedValue = formatNumber(value as number);
+                                    return (
+                                        <div className="flex items-center">
+                                           <Rupee className="inline-block h-4 w-4 mr-1" />
+                                           {formattedValue}
+                                        </div>
+                                    );
+                                }}/>} />
                                 <Line type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={2} dot={{r: 5, fill: "hsl(var(--primary))"}} activeDot={{ r: 8 }} />
                             </LineChart>
                         </ResponsiveContainer>

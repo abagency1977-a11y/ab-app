@@ -7,6 +7,7 @@ import { ChartConfig, ChartContainer, ChartTooltipContent } from '@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import type { Order } from '@/lib/types';
+import { Rupee } from '@/components/icons';
 
 const chartConfig = {
   revenue: {
@@ -15,14 +16,14 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-const StatCard = ({ title, value, icon: Icon, description }: { title: string, value: string, icon: React.ElementType, description: string }) => (
+const StatCard = ({ title, value, icon: Icon, description }: { title: string, value: string | React.ReactNode, icon: React.ElementType, description: string }) => (
     <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{title}</CardTitle>
             <Icon className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-            <div className="text-2xl font-bold">{value}</div>
+            <div className="text-2xl font-bold flex items-center">{value}</div>
             <p className="text-xs text-muted-foreground">{description}</p>
         </CardContent>
     </Card>
@@ -36,7 +37,12 @@ export function DashboardClient({ data }: { data: any }) {
         <div className="flex flex-col gap-6">
             <h1 className="text-3xl font-bold">Dashboard</h1>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <StatCard title="Total Revenue" value={`₹${formatNumber(data.totalRevenue)}`} icon={DollarSign} description="Total revenue from fulfilled orders" />
+                <StatCard 
+                    title="Total Revenue" 
+                    value={<><Rupee className="inline-block h-6 w-6 mr-1" />{formatNumber(data.totalRevenue)}</>}
+                    icon={DollarSign} 
+                    description="Total revenue from fulfilled orders" 
+                />
                 <StatCard title="Customers" value={`${data.totalCustomers}`} icon={Users} description="Total number of customers" />
                 <StatCard title="Items in Stock" value={data.itemsInStock.toLocaleString()} icon={Boxes} description="Total items across all products" />
                 <StatCard title="Pending Orders" value={`${data.pendingOrders}`} icon={ShoppingCart} description="Orders awaiting fulfillment" />
@@ -62,7 +68,15 @@ export function DashboardClient({ data }: { data: any }) {
                                 <Tooltip
                                     cursor={false}
                                     content={<ChartTooltipContent
-                                        formatter={(value) => `₹${formatNumber(value as number)}`}
+                                        formatter={(value) => {
+                                            const formattedValue = formatNumber(value as number);
+                                            return (
+                                                <div className="flex items-center">
+                                                   <Rupee className="inline-block h-4 w-4 mr-1" />
+                                                   {formattedValue}
+                                                </div>
+                                            );
+                                        }}
                                         indicator="dot"
                                     />}
                                 />
@@ -95,7 +109,10 @@ export function DashboardClient({ data }: { data: any }) {
                                         <TableCell>
                                                 <Badge variant={order.status === 'Fulfilled' ? 'default' : order.status === 'Pending' ? 'secondary' : 'destructive'} className="capitalize">{order.status}</Badge>
                                         </TableCell>
-                                        <TableCell className="text-right">₹{formatNumber(order.total)}</TableCell>
+                                        <TableCell className="text-right flex items-center justify-end">
+                                            <Rupee className="inline-block h-4 w-4 mr-1" />
+                                            {formatNumber(order.total)}
+                                        </TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>

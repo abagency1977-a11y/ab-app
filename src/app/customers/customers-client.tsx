@@ -10,6 +10,7 @@ import { PlusCircle, MoreHorizontal, ArrowUpDown } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { Rupee } from '@/components/icons';
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-IN').format(value);
 
@@ -127,7 +128,10 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                                     <div className="text-sm">{customer.email}</div>
                                     <div className="text-xs text-muted-foreground">{customer.phone}</div>
                                 </TableCell>
-                                <TableCell>₹{formatNumber(customer.transactionHistory.totalSpent)}</TableCell>
+                                <TableCell className="flex items-center">
+                                    <Rupee className="inline-block h-4 w-4 mr-1" />
+                                    {formatNumber(customer.transactionHistory.totalSpent)}
+                                </TableCell>
                                 <TableCell>{new Date(customer.transactionHistory.lastPurchaseDate).toLocaleDateString()}</TableCell>
                                 <TableCell>
                                     <DropdownMenu>
