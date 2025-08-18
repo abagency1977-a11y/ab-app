@@ -20,8 +20,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Icons } from '@/components/icons';
 import { BarChart3, Boxes, LayoutDashboard, LogOut, Settings, ShoppingCart, Users } from 'lucide-react';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -103,6 +104,9 @@ function MobileHeader() {
           <SidebarTrigger className="sm:hidden" />
         </SheetTrigger>
         <SheetContent side="left" className="sm:max-w-xs p-0 w-72">
+          <SheetHeader className="sr-only">
+            <SheetTitle><VisuallyHidden>Main Navigation</VisuallyHidden></SheetTitle>
+          </SheetHeader>
           <nav className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
               <SidebarHeader className="p-4">
                   <Link href="/dashboard" className="flex items-center gap-2">
