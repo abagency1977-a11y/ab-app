@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 
-const formatCurrency = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value);
+const formatCurrency = (value: number) => `₹${new Intl.NumberFormat('en-IN').format(value)}`;
 
 type SortKey = keyof Customer | 'transactionHistory.totalSpent';
 

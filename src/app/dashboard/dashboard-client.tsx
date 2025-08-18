@@ -30,7 +30,7 @@ const StatCard = ({ title, value, icon: Icon, description }: { title: string, va
 
 export function DashboardClient({ data }: { data: any }) {
 
-    const formatCurrency = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value);
+    const formatCurrency = (value: number) => `₹${new Intl.NumberFormat('en-IN').format(value)}`;
 
     return (
         <div className="flex flex-col gap-6">

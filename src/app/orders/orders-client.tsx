@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { getProducts } from '@/lib/data';
 
-const formatCurrency = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value);
+const formatCurrency = (value: number) => `₹${new Intl.NumberFormat('en-IN').format(value)}`;
 
 export function OrdersClient({ orders: initialOrders, customers }: { orders: Order[], customers: Customer[] }) {
     const [orders, setOrders] = useState<Order[]>(initialOrders);

@@ -10,7 +10,7 @@ import { ChartConfig, ChartContainer, ChartTooltipContent } from '@/components/u
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { generateReportNarrative } from '@/ai/flows/generate-report-narrative';
 
-const formatCurrency = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value);
+const formatCurrency = (value: number) => `₹${new Intl.NumberFormat('en-IN').format(value)}`;
 
 const revenueChartConfig = {
   revenue: { label: 'Revenue', color: 'hsl(var(--primary))' },

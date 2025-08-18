@@ -17,7 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 
-const formatCurrency = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value);
+const formatCurrency = (value: number) => `₹${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
 
 export function InventoryClient({ products: initialProducts }: { products: Product[] }) {
     const [products, setProducts] = useState<Product[]>(initialProducts);
@@ -69,7 +69,6 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             name: formData.get('name') as string,
             sku: formData.get('sku') as string,
             stock: Number(formData.get('stock')),
-            location: '',
             price: Number(formData.get('price')),
             historicalData: [],
         };
