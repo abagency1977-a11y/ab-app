@@ -1,12 +1,12 @@
 
 'use client';
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import type { Order, Customer, Product, PaymentTerm, PaymentMode } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, FileText, Receipt, Loader2, PlusCircle, Trash2 } from 'lucide-react';
+import { MoreHorizontal, FileText, Receipt, Loader2, PlusCircle, Trash2, Download } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -25,6 +25,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 const formatNumber = (value: number) => {
     if (isNaN(value)) return '0.00';
@@ -43,6 +45,8 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     const [isLoading, setIsLoading] = useState(false);
     const [isAddOrderOpen, setIsAddOrderOpen] = useState(false);
     const { toast } = useToast();
+    const invoiceRef = useRef<HTMLDivElement>(null);
+
 
     useEffect(() => {
         getProducts().then(setProducts);
@@ -141,6 +145,19 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             title: "Customer Added",
             description: `${newCustomer.name} has been successfully added.`,
         });
+    };
+
+    const handleDownloadPdf = async () => {
+        const input = invoiceRef.current;
+        if (!input) return;
+
+        const canvas = await html2canvas(input);
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF();
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        pdf.save(`${modalTitle.replace(/\s/g, '_')}.pdf`);
     };
 
     return (
@@ -379,11 +396,14 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
                             </div>
                         ) : (
-                            <Textarea readOnly value={modalContent} className="h-96 w-full font-mono text-sm" />
+                            <div ref={invoiceRef} className="p-4 bg-white text-black">
+                                <pre className="whitespace-pre-wrap font-mono text-sm">{modalContent}</pre>
+                            </div>
                         )}
                     </div>
                     <DialogFooter>
                         <Button onClick={() => navigator.clipboard.writeText(modalContent)} disabled={isLoading}>Copy</Button>
+                        <Button onClick={handleDownloadPdf} disabled={isLoading}><Download className="mr-2 h-4 w-4" /> Download PDF</Button>
                         <Button variant="outline" onClick={() => setIsModalOpen(false)}>Close</Button>
                     </DialogFooter>
                 </DialogContent>
@@ -590,7 +610,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
 
     return (
         <>
-            <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <Dialog open={isOpen} onOpenChange={(open) => { if(!open) resetForm(); else onOpenChange(open);}}>
                 <DialogContent className="max-w-6xl">
                     <DialogHeader>
                         <DialogTitle>Place New Order</DialogTitle>
@@ -725,18 +745,18 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                         <Card><CardContent className="p-4 space-y-2">
                                             <DialogTitle className="text-lg">Order Summary</DialogTitle>
                                             <div className="flex justify-between"><span>Total Order Value:</span> <span className="font-semibold flex items-center"><Rupee className="inline-block h-4 w-4 mr-1" />{formatNumber(total)}</span></div>
-                                            <div className="flex items-center space-x-2">
-                                                <Checkbox id="enable_discount" checked={enableDiscount} onCheckedChange={c => setEnableDiscount(c as boolean)} />
-                                                <Label htmlFor="enable_discount" className="flex-1">Enable Discount Input</Label>
-                                                <Input type="number" placeholder="0.00" className="w-24" value={discount} onChange={e => setDiscount(parseFloat(e.target.value) || 0)} disabled={!enableDiscount} />
-                                            </div>
-                                            <div className="flex justify-between"><span>Discount Applied:</span> <span className="font-semibold flex items-center"><Rupee className="inline-block h-4 w-4 mr-1" />{formatNumber(discount)}</span></div>
                                             <Separator />
                                             <div className="flex justify-between text-lg">
                                                 <span className="font-bold">Grand Total Value:</span>
                                                 <span className="font-bold text-primary flex items-center"><Rupee className="inline-block h-5 w-5 mr-1" />{formatNumber(grandTotal)}</span>
                                             </div>
                                             <div className="flex items-center space-x-2 pt-2">
+                                                <Checkbox id="enable_discount" checked={enableDiscount} onCheckedChange={c => setEnableDiscount(c as boolean)} />
+                                                <Label htmlFor="enable_discount" className="flex-1">Enable Discount</Label>
+                                                <Input type="number" placeholder="0.00" className="w-24" value={String(discount)} onChange={e => setDiscount(parseFloat(e.target.value) || 0)} disabled={!enableDiscount} />
+                                            </div>
+                                            <div className="flex justify-between"><span>Discount Applied:</span> <span className="font-semibold flex items-center"><Rupee className="inline-block h-4 w-4 mr-1" />{formatNumber(discount)}</span></div>
+                                             <div className="flex items-center space-x-2 pt-2">
                                                 <Checkbox id="is_gst_invoice" checked={isGstInvoice} onCheckedChange={c => setIsGstInvoice(c as boolean)} />
                                                 <Label htmlFor="is_gst_invoice">Generate GST Invoice?</Label>
                                             </div>
