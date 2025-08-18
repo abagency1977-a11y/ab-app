@@ -20,7 +20,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Icons } from '@/components/icons';
 import { BarChart3, Boxes, LayoutDashboard, LogOut, Settings, ShoppingCart, Users } from 'lucide-react';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 
@@ -101,7 +101,7 @@ function MobileHeader() {
     <header className="sticky top-0 z-40 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild>
-          <SidebarTrigger className="sm:hidden" />
+           <SidebarTrigger className="sm:hidden" />
         </SheetTrigger>
         <SheetContent side="left" className="sm:max-w-xs p-0 w-72">
           <SheetHeader className="sr-only">
