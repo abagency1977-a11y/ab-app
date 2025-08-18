@@ -8,8 +8,10 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { predictProductDemand, PredictProductDemandOutput } from '@/ai/flows/predict-product-demand';
-import { Lightbulb, Loader2, PlusCircle } from 'lucide-react';
+import { Lightbulb, Loader2, PlusCircle, MoreHorizontal } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -23,6 +25,9 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+    const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+    const [productToEdit, setProductToEdit] = useState<Product | null>(null);
+    const [productToDelete, setProductToDelete] = useState<Product | null>(null);
     const { toast } = useToast();
 
     const handlePredictDemand = async () => {
@@ -68,12 +73,46 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             historicalData: [],
         };
 
-        // In a real app, this would be an API call.
         setProducts(prev => [...prev, newProduct]);
         setIsAddDialogOpen(false);
         toast({
             title: "Product Added",
             description: `${newProduct.name} has been successfully added to inventory.`,
+        });
+    };
+
+    const handleEditProduct = (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (!productToEdit) return;
+
+        const formData = new FormData(event.currentTarget);
+        const updatedProduct: Product = {
+            ...productToEdit,
+            name: formData.get('name') as string,
+            sku: formData.get('sku') as string,
+            stock: Number(formData.get('stock')),
+            location: formData.get('location') as string,
+            price: Number(formData.get('price')),
+        };
+
+        setProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p));
+        setIsEditDialogOpen(false);
+        setProductToEdit(null);
+        toast({
+            title: "Product Updated",
+            description: `${updatedProduct.name} has been successfully updated.`,
+        });
+    };
+
+    const handleDeleteProduct = () => {
+        if (!productToDelete) return;
+
+        setProducts(prev => prev.filter(p => p.id !== productToDelete.id));
+        setProductToDelete(null);
+        toast({
+            title: "Product Deleted",
+            description: `${productToDelete.name} has been removed from inventory.`,
+            variant: "destructive"
         });
     };
     
@@ -96,6 +135,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                     <TableHead>Stock</TableHead>
                                     <TableHead>Location</TableHead>
                                     <TableHead className="text-right">Price</TableHead>
+                                    <TableHead>Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -106,6 +146,20 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                         <TableCell>{product.stock}</TableCell>
                                         <TableCell>{product.location}</TableCell>
                                         <TableCell className="text-right">{formatCurrency(product.price)}</TableCell>
+                                        <TableCell>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" className="h-8 w-8 p-0">
+                                                        <span className="sr-only">Open menu</span>
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem onClick={() => { setProductToEdit(product); setIsEditDialogOpen(true); }}>Edit</DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => setProductToDelete(product)} className="text-red-600">Delete</DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>
@@ -189,6 +243,60 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                     </form>
                 </DialogContent>
             </Dialog>
+
+             <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Edit Product</DialogTitle>
+                        <DialogDescription>
+                            Update the details for {productToEdit?.name}.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleEditProduct}>
+                        <div className="grid gap-4 py-4">
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="name" className="text-right">Name</Label>
+                                <Input id="name" name="name" className="col-span-3" defaultValue={productToEdit?.name} required />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="sku" className="text-right">SKU</Label>
+                                <Input id="sku" name="sku" className="col-span-3" defaultValue={productToEdit?.sku} required />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="stock" className="text-right">Stock</Label>
+                                <Input id="stock" name="stock" type="number" className="col-span-3" defaultValue={productToEdit?.stock} required />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="price" className="text-right">Price</Label>
+                                <Input id="price" name="price" type="number" step="0.01" className="col-span-3" defaultValue={productToEdit?.price} required />
+                            </div>
+                             <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="location" className="text-right">Location</Label>
+                                <Input id="location" name="location" className="col-span-3" defaultValue={productToEdit?.location} />
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={() => { setIsEditDialogOpen(false); setProductToEdit(null);}}>Cancel</Button>
+                            <Button type="submit">Save Changes</Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            <AlertDialog open={!!productToDelete} onOpenChange={(open) => !open && setProductToDelete(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        This action cannot be undone. This will permanently delete the product "{productToDelete?.name}".
+                    </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => setProductToDelete(null)}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteProduct}>Delete</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }
