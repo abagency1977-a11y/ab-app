@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { PlusCircle, MoreHorizontal, ArrowUpDown } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Rupee } from '@/components/icons';
@@ -21,6 +22,7 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
     const [search, setSearch] = useState('');
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'ascending' | 'descending' } | null>(null);
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+    const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
     const { toast } = useToast();
 
     const sortedCustomers = useMemo(() => {
@@ -84,6 +86,18 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
         });
     };
 
+    const handleDeleteCustomer = () => {
+        if (!customerToDelete) return;
+
+        setCustomers(prev => prev.filter(c => c.id !== customerToDelete.id));
+        setCustomerToDelete(null);
+        toast({
+            title: "Customer Deleted",
+            description: `${customerToDelete.name} has been removed.`,
+            variant: "destructive"
+        });
+    };
+
 
     return (
         <div className="space-y-4">
@@ -128,9 +142,11 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                                     <div className="text-sm">{customer.email}</div>
                                     <div className="text-xs text-muted-foreground">{customer.phone}</div>
                                 </TableCell>
-                                <TableCell className="flex items-center">
-                                    <Rupee className="inline-block h-4 w-4 mr-1" />
-                                    {formatNumber(customer.transactionHistory.totalSpent)}
+                                <TableCell>
+                                    <div className="flex items-center">
+                                        <Rupee className="inline-block h-4 w-4 mr-1" />
+                                        {formatNumber(customer.transactionHistory.totalSpent)}
+                                    </div>
                                 </TableCell>
                                 <TableCell>{new Date(customer.transactionHistory.lastPurchaseDate).toLocaleDateString()}</TableCell>
                                 <TableCell>
@@ -144,7 +160,7 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                                         <DropdownMenuContent align="end">
                                             <DropdownMenuItem>Edit</DropdownMenuItem>
                                             <DropdownMenuItem>View Details</DropdownMenuItem>
-                                            <DropdownMenuItem className="text-red-600">Delete</DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => setCustomerToDelete(customer)} className="text-red-600">Delete</DropdownMenuItem>
                                         </DropdownMenuContent>
                                     </DropdownMenu>
                                 </TableCell>
@@ -189,6 +205,20 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                 </DialogContent>
             </Dialog>
 
+            <AlertDialog open={!!customerToDelete} onOpenChange={(open) => !open && setCustomerToDelete(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        This action cannot be undone. This will permanently delete the customer "{customerToDelete?.name}".
+                    </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => setCustomerToDelete(null)}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteCustomer}>Delete</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }
