@@ -100,10 +100,7 @@ function MobileHeader() {
     <header className="sticky top-0 z-40 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild>
-          <Button size="icon" variant="outline" className="sm:hidden">
-            <SidebarTrigger />
-            <span className="sr-only">Toggle Menu</span>
-          </Button>
+          <SidebarTrigger className="sm:hidden" />
         </SheetTrigger>
         <SheetContent side="left" className="sm:max-w-xs p-0 w-72">
           <nav className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
