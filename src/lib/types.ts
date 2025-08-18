@@ -15,7 +15,7 @@ export interface Product {
   name: string;
   sku: string;
   stock: number;
-  location: string;
+  location?: string;
   price: number;
   historicalData?: { date: string; quantity: number }[];
 }
@@ -38,3 +38,5 @@ export interface Order {
   items: OrderItem[];
   total: number;
 }
+
+    

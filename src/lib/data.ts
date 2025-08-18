@@ -49,7 +49,6 @@ const products: Product[] = [
     name: 'Premium Widget',
     sku: 'PW-1000',
     stock: 150,
-    location: 'Warehouse A',
     price: 150.00,
     historicalData: [
         { date: '2023-01-15', quantity: 20 },
@@ -64,7 +63,6 @@ const products: Product[] = [
     name: 'Standard Gadget',
     sku: 'SG-2000',
     stock: 300,
-    location: 'Warehouse B',
     price: 75.50,
      historicalData: [
         { date: '2023-01-20', quantity: 50 },
@@ -79,7 +77,6 @@ const products: Product[] = [
     name: 'Advanced Gizmo',
     sku: 'AG-3000',
     stock: 80,
-    location: 'Warehouse A',
     price: 220.00,
      historicalData: [
         { date: '2023-01-05', quantity: 10 },
@@ -94,7 +91,6 @@ const products: Product[] = [
     name: 'Basic Thingamajig',
     sku: 'BT-4000',
     stock: 500,
-    location: 'Warehouse C',
     price: 25.00,
      historicalData: [
         { date: '2023-01-25', quantity: 100 },
@@ -199,3 +195,5 @@ export const getDashboardData = async () => {
         recentOrders: orders.slice(0, 5),
     }), 500));
 };
+
+    

@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState } from 'react';
@@ -68,7 +69,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             name: formData.get('name') as string,
             sku: formData.get('sku') as string,
             stock: Number(formData.get('stock')),
-            location: formData.get('location') as string,
+            location: '',
             price: Number(formData.get('price')),
             historicalData: [],
         };
@@ -91,7 +92,6 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             name: formData.get('name') as string,
             sku: formData.get('sku') as string,
             stock: Number(formData.get('stock')),
-            location: formData.get('location') as string,
             price: Number(formData.get('price')),
         };
 
@@ -133,7 +133,6 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                     <TableHead>Product</TableHead>
                                     <TableHead>SKU</TableHead>
                                     <TableHead>Stock</TableHead>
-                                    <TableHead>Location</TableHead>
                                     <TableHead className="text-right">Price</TableHead>
                                     <TableHead>Actions</TableHead>
                                 </TableRow>
@@ -144,7 +143,6 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                         <TableCell className="font-medium">{product.name}</TableCell>
                                         <TableCell>{product.sku}</TableCell>
                                         <TableCell>{product.stock}</TableCell>
-                                        <TableCell>{product.location}</TableCell>
                                         <TableCell className="text-right">{formatCurrency(product.price)}</TableCell>
                                         <TableCell>
                                             <DropdownMenu>
@@ -231,10 +229,6 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                 <Label htmlFor="price" className="text-right">Price</Label>
                                 <Input id="price" name="price" type="number" step="0.01" className="col-span-3" required />
                             </div>
-                             <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="location" className="text-right">Location</Label>
-                                <Input id="location" name="location" className="col-span-3" />
-                            </div>
                         </div>
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
@@ -270,10 +264,6 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                 <Label htmlFor="price" className="text-right">Price</Label>
                                 <Input id="price" name="price" type="number" step="0.01" className="col-span-3" defaultValue={productToEdit?.price} required />
                             </div>
-                             <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="location" className="text-right">Location</Label>
-                                <Input id="location" name="location" className="col-span-3" defaultValue={productToEdit?.location} />
-                            </div>
                         </div>
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => { setIsEditDialogOpen(false); setProductToEdit(null);}}>Cancel</Button>
@@ -299,4 +289,5 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             </AlertDialog>
         </div>
     );
-}
+
+    
