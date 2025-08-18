@@ -357,19 +357,21 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             </Tabs>
             
              <Dialog open={isInvoiceModalOpen} onOpenChange={setIsInvoiceModalOpen}>
-                <DialogContent className="max-w-4xl">
+                <DialogContent className="max-w-4xl h-[90vh]">
                     <DialogHeader>
                         <DialogTitle>Invoice for {selectedOrder?.id}</DialogTitle>
                     </DialogHeader>
-                    <div className="p-4 bg-gray-50">
-                        {selectedOrder && customers && (
-                           <InvoiceTemplate 
-                                ref={invoiceRef}
-                                order={selectedOrder} 
-                                customer={customers.find(c => c.id === selectedOrder.customerId)}
-                            />
-                        )}
-                    </div>
+                     <ScrollArea className="h-full">
+                        <div className="p-4 bg-gray-50">
+                            {selectedOrder && customers && (
+                               <InvoiceTemplate 
+                                    ref={invoiceRef}
+                                    order={selectedOrder} 
+                                    customer={customers.find(c => c.id === selectedOrder.customerId)}
+                                />
+                            )}
+                        </div>
+                    </ScrollArea>
                     <DialogFooter>
                         <Button onClick={handleDownloadPdf}><Download className="mr-2 h-4 w-4" /> Download PDF</Button>
                         <Button variant="outline" onClick={() => setIsInvoiceModalOpen(false)}>Close</Button>
