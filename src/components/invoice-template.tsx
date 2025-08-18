@@ -1,7 +1,9 @@
 
 import React from 'react';
 import type { Order, Customer } from '@/lib/types';
-import { Icons, Rupee } from '@/components/icons';
+import { Rupee } from '@/components/icons';
+import { AbLogo } from '@/components/ab-logo';
+
 
 interface InvoiceTemplateProps {
   order: Order | null;
@@ -20,18 +22,23 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
     }
 
     const subtotal = order.items.reduce((acc, item) => acc + item.price * item.quantity, 0);
-
     const invoiceTitle = order.paymentTerm === 'Credit' ? 'CREDIT INVOICE' : 'INVOICE';
 
     return (
       <div ref={ref} style={{ backgroundColor: 'white', color: 'black', padding: '40px', fontFamily: 'sans-serif', fontSize: '12px', width: '210mm', height: '297mm', boxSizing: 'border-box' }}>
         
         {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <h1 style={{ color: '#4A90E2', fontSize: '2.5rem', fontWeight: 'bold', margin: '0' }}>AB AGENCY</h1>
-          <p style={{ margin: '0' }}>1, AYYANCHERY MAIN ROAD, AYYANCHERY URAPAKKAM</p>
-          <p style={{ margin: '0' }}>Chennai, Tamil Nadu, 603210</p>
-          <p style={{ margin: '0' }}>MOB: +91 9551195505 | Email: abagency1977@gmail.com</p>
+         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
+            <div style={{ flex: '1' }}>
+                <AbLogo style={{ width: '120px', height: 'auto' }} />
+            </div>
+            <div style={{ flex: '2', textAlign: 'center' }}>
+                 <h1 style={{ color: '#4A90E2', fontSize: '2.5rem', fontWeight: 'bold', margin: '0' }}>AB AGENCY</h1>
+                 <p style={{ margin: '0' }}>1, AYYANCHERY MAIN ROAD, AYYANCHERY URAPAKKAM</p>
+                 <p style={{ margin: '0' }}>Chennai, Tamil Nadu, 603210</p>
+                 <p style={{ margin: '0' }}>MOB: +91 9551195505 | Email: abagency1977@gmail.com</p>
+            </div>
+            <div style={{ flex: '1' }}></div>
         </div>
 
         {/* Title */}
@@ -91,73 +98,87 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
                    <tr key={`spacer-${i}`}><td colSpan={4} style={{ padding: '16px', borderLeft: '1px solid black', borderRight: '1px solid black' }}>&nbsp;</td></tr>
                 ))}
             </tbody>
-            <tfoot>
-              {/* This closing border for the table body */}
-               <tr>
-                  <td colSpan={4} style={{ borderTop: '1px solid black', padding: 0 }}></td>
-               </tr>
+             <tfoot>
+                <tr>
+                    <td colSpan={4} style={{ borderTop: '1px solid black', padding: 0 }}></td>
+                </tr>
             </tfoot>
         </table>
 
         {/* Totals Section */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1rem', fontSize: '11px' }}>
-            <div style={{ width: '50%', verticalAlign: 'top' }}>
-                {order.paymentTerm === 'Full Payment' && <p><span style={{ fontWeight: 'bold' }}>Payment Mode:</span>&nbsp;{order.paymentMode}</p>}
-            </div>
-            <div style={{ width: '45%' }}>
-                <table style={{ width: '100%'}}>
-                    <tbody>
-                        <tr>
-                            <td style={{ textAlign: 'right', padding: '2px 8px', fontWeight: 'bold' }}>Subtotal:</td>
-                            <td style={{ textAlign: 'right', padding: '2px 8px', width: '40%' }}>{formatNumber(subtotal)}</td>
-                        </tr>
-                        {order.isGstInvoice && order.items.map((item, index) => {
-                            if(item.gst > 0) {
-                                return (
-                                    <tr key={index}>
-                                        <td style={{ textAlign: 'right', padding: '2px 8px' }}>GST ({item.gst}%) on {formatNumber(item.price * item.quantity)}:</td>
-                                        <td style={{ textAlign: 'right', padding: '2px 8px' }}>{formatNumber(item.price * item.quantity * (item.gst / 100))}</td>
+        <table style={{ width: '100%', marginTop: '1rem', fontSize: '11px' }}>
+            <tbody>
+                <tr>
+                    <td style={{ width: '50%', verticalAlign: 'top', paddingRight: '1rem' }}>
+                         {order.paymentTerm === 'Full Payment' && <p><span style={{ fontWeight: 'bold' }}>Payment Mode:</span>&nbsp;{order.paymentMode}</p>}
+                    </td>
+                    <td style={{ width: '50%', verticalAlign: 'top' }}>
+                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <tbody>
+                                <tr>
+                                    <td style={{ textAlign: 'right', padding: '2px 8px', fontWeight: 'bold' }}>Subtotal:</td>
+                                    <td style={{ textAlign: 'right', padding: '2px 8px', width: '40%' }}>{formatNumber(subtotal)}</td>
+                                </tr>
+                                {order.isGstInvoice && order.items.map((item, index) => {
+                                    if(item.gst > 0) {
+                                        const gstAmount = item.price * item.quantity * (item.gst / 100);
+                                        return (
+                                            <tr key={`gst-${index}`}>
+                                                <td style={{ textAlign: 'right', padding: '2px 8px' }}>GST ({item.gst}%) on {formatNumber(item.price * item.quantity)}:</td>
+                                                <td style={{ textAlign: 'right', padding: '2px 8px' }}>{formatNumber(gstAmount)}</td>
+                                            </tr>
+                                        )
+                                    }
+                                    return null;
+                                })}
+                                {order.discount > 0 && (
+                                    <tr>
+                                        <td style={{ textAlign: 'right', padding: '2px 8px', fontWeight: 'bold' }}>Discount:</td>
+                                        <td style={{ textAlign: 'right', padding: '2px 8px' }}>-{formatNumber(order.discount)}</td>
                                     </tr>
-                                )
-                            }
-                            return null;
-                        })}
-                        {order.discount > 0 && (
-                            <tr>
-                                <td style={{ textAlign: 'right', padding: '2px 8px', fontWeight: 'bold' }}>Discount:</td>
-                                <td style={{ textAlign: 'right', padding: '2px 8px' }}>-{formatNumber(order.discount)}</td>
-                            </tr>
-                        )}
-                        <tr>
-                            <td colSpan={2} style={{padding: '4px 0'}}>
-                                <div style={{ borderTop: '1px solid black', marginLeft: 'auto', width: '100%' }}></div>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style={{ textAlign: 'right', padding: '2px 8px', fontWeight: 'bold' }}>GRAND TOTAL:</td>
-                            <td style={{ textAlign: 'right', padding: '2px 8px', fontWeight: 'bold' }}>{formatNumber(order.grandTotal)}</td>
-                        </tr>
-                        {order.paymentTerm === 'Credit' && order.dueDate && (
-                            <>
-                                <tr>
-                                    <td style={{ color: 'red', textAlign: 'right', padding: '2px 8px', fontWeight: 'bold' }}>Amount Due:</td>
-                                    <td style={{ color: 'red', textAlign: 'right', padding: '2px 8px', fontWeight: 'bold' }}>{formatNumber(order.grandTotal)}</td>
+                                )}
+                                 <tr>
+                                    <td colSpan={2} style={{padding: '4px 0'}}>
+                                        <div style={{ borderTop: '1px solid black' }}></div>
+                                    </td>
                                 </tr>
                                 <tr>
-                                    <td style={{ color: 'red', textAlign: 'right', padding: '2px 8px', fontWeight: 'bold' }}>Due Date:</td>
-                                    <td style={{ color: 'red', textAlign: 'right', padding: '2px 8px', fontWeight: 'bold' }}>{new Date(order.dueDate).toLocaleDateString()}</td>
+                                    <td style={{ textAlign: 'right', padding: '2px 8px', fontWeight: 'bold' }}>GRAND TOTAL:</td>
+                                    <td style={{ textAlign: 'right', padding: '2px 8px', fontWeight: 'bold' }}>{formatNumber(order.grandTotal)}</td>
                                 </tr>
-                            </>
-                        )}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+                                {order.paymentTerm === 'Credit' && order.dueDate && (
+                                    <>
+                                        <tr>
+                                            <td style={{ color: 'red', textAlign: 'right', padding: '2px 8px', fontWeight: 'bold' }}>Amount Due:</td>
+                                            <td style={{ color: 'red', textAlign: 'right', padding: '2px 8px', fontWeight: 'bold' }}>{formatNumber(order.grandTotal)}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style={{ color: 'red', textAlign: 'right', padding: '2px 8px', fontWeight: 'bold' }}>Due Date:</td>
+                                            <td style={{ color: 'red', textAlign: 'right', padding: '2px 8px', fontWeight: 'bold' }}>{new Date(order.dueDate).toLocaleDateString()}</td>
+                                        </tr>
+                                    </>
+                                )}
+                            </tbody>
+                        </table>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
 
         {/* Footer */}
-        <div style={{ position: 'absolute', bottom: '40px', right: '40px', textAlign: 'right' }}>
-            <div style={{marginBottom: '0.5rem', borderTop: '1px solid black', width: '150px', marginLeft: 'auto'}}></div>
-            <p style={{margin: '0'}}>Authorized Signatory</p>
+        <div style={{ position: 'absolute', bottom: '40px', right: '40px', width: 'calc(100% - 80px)' }}>
+             <table style={{ width: '100%' }}>
+                <tbody>
+                    <tr>
+                        <td style={{ textAlign: 'right' }}>
+                            <div style={{ display: 'inline-block', textAlign: 'center' }}>
+                                <div style={{ borderTop: '1px solid black', width: '150px', margin: '0 auto 0.5rem auto' }}></div>
+                                <p style={{margin: '0'}}>Authorized Signatory</p>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
       </div>
     );

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
@@ -26,6 +27,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { InvoiceTemplate } from '@/components/invoice-template';
+import { AbLogo } from '@/components/ab-logo';
+
 
 const formatNumber = (value: number) => {
     if (isNaN(value)) return '0.00';
@@ -793,3 +796,4 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         </>
     );
 }
+
