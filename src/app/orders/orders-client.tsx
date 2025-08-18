@@ -11,6 +11,8 @@ import { MoreHorizontal, FileText, Receipt, Loader2, PlusCircle, Trash2, Downloa
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { generateFullPaymentInvoice } from '@/ai/flows/generate-full-payment-invoice';
+import { generateCreditInvoice } from '@/ai/flows/generate-credit-invoice';
 import { generateReceipt } from '@/ai/flows/generate-receipt';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -24,17 +26,15 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
-import { InvoiceTemplate } from '@/components/invoice-template';
-import { AbLogo } from '@/components/ab-logo';
-
 
 const formatNumber = (value: number) => {
     if (isNaN(value)) return '0.00';
     return new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 };
 
+function pad(str: string, length: number) {
+    return str.padEnd(length);
+}
 
 export function OrdersClient({ orders: initialOrders, customers: initialCustomers }: { orders: Order[], customers: Customer[] }) {
     const [orders, setOrders] = useState<Order[]>(initialOrders);
@@ -42,6 +42,8 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     const [products, setProducts] = useState<Product[]>([]);
     const [statusFilter, setStatusFilter] = useState('All');
     const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
+    const [invoiceContent, setInvoiceContent] = useState('');
+    const [invoiceTitle, setInvoiceTitle] = useState('');
     const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
     const [receiptContent, setReceiptContent] = useState('');
     const [receiptTitle, setReceiptTitle] = useState('');
@@ -60,10 +62,65 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         if (statusFilter === 'All') return orders;
         return orders.filter(order => order.status === statusFilter);
     }, [orders, statusFilter]);
+    
+    const handleGenerateInvoice = async (order: Order) => {
+        const customer = customers.find(c => c.id === order.customerId);
+        if (!customer) return;
 
-    const handleGenerateInvoice = (order: Order) => {
-        setSelectedOrder(order);
+        setIsLoading(true);
+        setInvoiceTitle(`Generating Invoice for ${order.id}`);
+        setInvoiceContent('');
         setIsInvoiceModalOpen(true);
+        
+        try {
+            let result;
+            const orderData = order.items
+                .map(item => {
+                    const name = pad(item.productName, 35);
+                    const qty = pad(String(item.quantity), 8);
+                    const rate = pad(formatNumber(item.price), 10);
+                    const total = formatNumber(item.price * item.quantity);
+                    return `| ${name} | ${qty} | ${rate} | ${total} |`;
+                })
+                .join('\n');
+
+            if (order.paymentTerm === 'Credit') {
+                result = await generateCreditInvoice({
+                    orderData,
+                    customerName: customer.name,
+                    customerAddress: customer.address,
+                    invoiceNumber: order.id.replace('ORD', 'INV'),
+                    invoiceDate: new Date(order.orderDate).toLocaleDateString(),
+                    companyName: 'AB Agency',
+                    companyAddress: '1, AYYANCHERY MAIN ROAD, AYYANCHERY URAPAKKAM',
+                    grandTotal: order.grandTotal,
+                    dueDate: order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'N/A',
+                    orderId: order.id,
+                    deliveryDate: order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : 'N/A',
+                });
+            } else {
+                 result = await generateFullPaymentInvoice({
+                    orderData,
+                    customerName: customer.name,
+                    customerAddress: customer.address,
+                    invoiceNumber: order.id.replace('ORD', 'INV'),
+                    invoiceDate: new Date(order.orderDate).toLocaleDateString(),
+                    companyName: 'AB Agency',
+                    companyAddress: '1, AYYANCHERY MAIN ROAD, AYYANCHERY URAPAKKAM',
+                    grandTotal: order.grandTotal,
+                    paymentMode: order.paymentMode || 'N/A',
+                    orderId: order.id,
+                    deliveryDate: order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : 'N/A',
+                });
+            }
+            setInvoiceTitle(`Invoice for ${order.id}`);
+            setInvoiceContent(result.invoice);
+        } catch (e) {
+            setInvoiceContent('Failed to generate invoice.');
+            console.error(e);
+        } finally {
+            setIsLoading(false);
+        }
     };
     
     const handleGenerateReceipt = async (order: Order) => {
@@ -106,32 +163,6 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             title: "Customer Added",
             description: `${newCustomer.name} has been successfully added.`,
         });
-    };
-
-    const handleDownloadPdf = async () => {
-        const input = invoiceRef.current;
-        if (!input || !selectedOrder) return;
-
-        const canvas = await html2canvas(input, { scale: 2 });
-        const imgData = canvas.toDataURL('image/png');
-        
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-        let heightLeft = pdfHeight;
-        let position = 0;
-
-        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-        heightLeft -= pdf.internal.pageSize.getHeight();
-
-        while (heightLeft > 0) {
-            position = heightLeft - pdfHeight;
-            pdf.addPage();
-            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-            heightLeft -= pdf.internal.pageSize.getHeight();
-        }
-
-        pdf.save(`Invoice_${selectedOrder.id}.pdf`);
     };
 
     return (
@@ -359,24 +390,24 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 </TabsContent>
             </Tabs>
             
-             <Dialog open={isInvoiceModalOpen} onOpenChange={setIsInvoiceModalOpen}>
-                <DialogContent className="max-w-4xl h-[90vh]">
+            <Dialog open={isInvoiceModalOpen} onOpenChange={setIsInvoiceModalOpen}>
+                <DialogContent className="sm:max-w-4xl">
                     <DialogHeader>
-                        <DialogTitle>Invoice for {selectedOrder?.id}</DialogTitle>
+                        <DialogTitle>{invoiceTitle}</DialogTitle>
                     </DialogHeader>
-                     <ScrollArea className="h-full">
-                        <div className="p-4 bg-gray-50">
-                            {selectedOrder && customers && (
-                               <InvoiceTemplate 
-                                    ref={invoiceRef}
-                                    order={selectedOrder} 
-                                    customer={customers.find(c => c.id === selectedOrder.customerId)}
-                                />
-                            )}
-                        </div>
-                    </ScrollArea>
+                    <div className="py-4">
+                        {isLoading ? (
+                            <div className="flex justify-center items-center h-48">
+                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                            </div>
+                        ) : (
+                            <div className="p-4 bg-white text-black font-mono text-sm overflow-x-auto">
+                                <pre>{invoiceContent}</pre>
+                            </div>
+                        )}
+                    </div>
                     <DialogFooter>
-                        <Button onClick={handleDownloadPdf}><Download className="mr-2 h-4 w-4" /> Download PDF</Button>
+                         <Button onClick={() => navigator.clipboard.writeText(invoiceContent)} disabled={isLoading}>Copy Text</Button>
                         <Button variant="outline" onClick={() => setIsInvoiceModalOpen(false)}>Close</Button>
                     </DialogFooter>
                 </DialogContent>

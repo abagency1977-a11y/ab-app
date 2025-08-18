@@ -86,4 +86,3 @@ const generateFullPaymentInvoiceFlow = ai.defineFlow(
     return output!;
   }
 );
-
