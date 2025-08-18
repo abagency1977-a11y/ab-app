@@ -23,6 +23,7 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
 
     const subtotal = order.items.reduce((acc, item) => acc + item.price * item.quantity, 0);
     const invoiceTitle = order.paymentTerm === 'Credit' ? 'CREDIT INVOICE' : 'INVOICE';
+    const totalGst = order.items.reduce((acc, item) => acc + (item.price * item.quantity * (item.gst / 100)), 0);
 
     return (
       <div ref={ref} style={{ backgroundColor: 'white', color: 'black', padding: '40px', fontFamily: 'sans-serif', fontSize: '12px', width: '210mm', height: '297mm', boxSizing: 'border-box' }}>
@@ -119,18 +120,12 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
                                     <td style={{ textAlign: 'right', padding: '2px 8px', fontWeight: 'bold' }}>Subtotal:</td>
                                     <td style={{ textAlign: 'right', padding: '2px 8px', width: '40%' }}>{formatNumber(subtotal)}</td>
                                 </tr>
-                                {order.isGstInvoice && order.items.map((item, index) => {
-                                    if(item.gst > 0) {
-                                        const gstAmount = item.price * item.quantity * (item.gst / 100);
-                                        return (
-                                            <tr key={`gst-${index}`}>
-                                                <td style={{ textAlign: 'right', padding: '2px 8px' }}>GST ({item.gst}%) on {formatNumber(item.price * item.quantity)}:</td>
-                                                <td style={{ textAlign: 'right', padding: '2px 8px' }}>{formatNumber(gstAmount)}</td>
-                                            </tr>
-                                        )
-                                    }
-                                    return null;
-                                })}
+                                {order.isGstInvoice && order.items.some(item => item.gst > 0) && (
+                                    <tr>
+                                        <td style={{ textAlign: 'right', padding: '2px 8px' }}>Total GST:</td>
+                                        <td style={{ textAlign: 'right', padding: '2px 8px' }}>{formatNumber(totalGst)}</td>
+                                    </tr>
+                                )}
                                 {order.discount > 0 && (
                                     <tr>
                                         <td style={{ textAlign: 'right', padding: '2px 8px', fontWeight: 'bold' }}>Discount:</td>
