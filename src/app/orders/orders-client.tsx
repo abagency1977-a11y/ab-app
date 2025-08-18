@@ -67,8 +67,15 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         setIsModalOpen(true);
 
         const orderData = order.items.map(item => {
-            const total = item.price * item.quantity * (order.isGstInvoice ? (1 + item.gst/100) : 1);
-            return `${item.productName.padEnd(30)} ${String(item.quantity).padStart(8)} ${formatNumber(item.price).padStart(10)} ${formatNumber(total).padStart(10)}`;
+             const total = item.price * item.quantity * (order.isGstInvoice ? (1 + item.gst/100) : 1);
+            // | Item Description               | Quantity | Rate     | Total      |
+            // |--------------------------------|----------|----------|------------|
+            // | Premium Widget                 | 20       | 150.00   | 3,000.00   |
+            const desc = `| ${item.productName.padEnd(30)} |`;
+            const qty = ` ${String(item.quantity).padEnd(8)} |`;
+            const rate = ` ${formatNumber(item.price).padEnd(8)} |`;
+            const itemTotal = ` ${formatNumber(total).padEnd(10)} |`;
+            return `${desc}${qty}${rate}${itemTotal}`;
         }).join('\n');
         
         try {

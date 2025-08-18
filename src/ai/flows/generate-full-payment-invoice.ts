@@ -12,7 +12,7 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const GenerateFullPaymentInvoiceInputSchema = z.object({
-  orderData: z.string().describe('The line items of the order to generate the invoice from. Each item should be on a new line.'),
+  orderData: z.string().describe('The line items of the order to generate the invoice from. Each item should be on a new line and pre-formatted to fit the table layout.'),
   customerName: z.string().describe('The name of the customer.'),
   customerAddress: z.string().describe('The address of the customer.'),
   invoiceNumber: z.string().describe('The invoice number.'),
@@ -40,69 +40,60 @@ const prompt = ai.definePrompt({
   name: 'generateFullPaymentInvoicePrompt',
   input: {schema: GenerateFullPaymentInvoiceInputSchema},
   output: {schema: GenerateFullPaymentInvoiceOutputSchema},
-  prompt: `You are an expert accountant. Generate a professional invoice for a FULLY PAID order based on the provided format.
-  Use plain text and spacing to create a layout that closely resembles the example.
+  prompt: `You are an expert accountant. Your task is to generate a professional invoice for a FULLY PAID order.
+You MUST replicate the provided format EXACTLY using plain text, spaces, and the characters +, -, and |. Do not deviate from the structure.
 
-  **Format Example:**
+**Strict Format to Follow:**
 
-  [Centered]
-  AB AGENCY
-  1, AYYANCHERY MAIN ROAD, AYYANCHERY URAPAKKAM
-  Chennai, Tamil Nadu, 603210
-  MOB: +91 9551195505
-  Email: abagency1977@gmail.com
+                              AB AGENCY
+        1, AYYANCHERY MAIN ROAD, AYYANCHERY URAPAKKAM
+                     Chennai, Tamil Nadu, 603210
+                       MOB: +91 9551195505
+                    Email: abagency1977@gmail.com
 
-  [Centered]
-  INVOICE
+                                INVOICE
 
-  +-------------------------------------+--------------------------------+
-  | Billed to:                          | Date: [invoiceDate]            |
-  | [customerName]                      |                                |
-  |                                     | Invoice No: [invoiceNumber]    |
-  +-------------------------------------+--------------------------------+
-  | Delivery Address:                   | Order No: [orderId]            |
-  | [customerAddress]                   | Delivery Date: [deliveryDate]  |
-  +-------------------------------------+--------------------------------+
-
-  +--------------------------------+----------+----------+----------+
-  | Item Description               | Quantity | Rate     | Total    |
-  +--------------------------------+----------+----------+----------+
-  {{{orderData}}}
-  +--------------------------------+----------+----------+----------+
-
-  [Right Aligned Totals]
-                                                    Subtotal: [subtotal]
-                                                    Discount: [discount]
-                                                 GRAND TOTAL: [grandTotal]
++-------------------------------------+--------------------------------+
+| Billed to:                          | Date: {{{invoiceDate}}}
+| {{{customerName}}}                  | Invoice No: {{{invoiceNumber}}}
++-------------------------------------+--------------------------------+
+| Delivery Address:                   | Order No: {{{orderId}}}
+| {{{customerAddress}}}                   | Delivery Date: {{{deliveryDate}}}
++-------------------------------------+--------------------------------+
+| Item Description               | Quantity | Rate     | Total      |
++--------------------------------+----------+----------+------------+
+{{{orderData}}}
++--------------------------------+----------+----------+------------+
+                                                    Subtotal: {{{subtotal}}}
+                                                    Discount: {{{discount}}}
+                                                 GRAND TOTAL: {{{grandTotal}}}
 
 
-  Payment Mode: [paymentMode]
+Payment Mode: {{{paymentMode}}}
 
 
-  [Right Aligned]
-  ------------------------
-  Authorized Signatory
+                                                    ------------------------
+                                                    Authorized Signatory
 
+**Instructions:**
+-   The 'orderData' variable is ALREADY FORMATTED. You must insert it directly into the table without modification.
+-   Calculate 'Subtotal' by adding the 'grandTotal' and 'discount' values.
+-   Use the exact labels like "Billed to:", "Invoice No:", "GRAND TOTAL".
+-   Ensure all alignment (centering, right-alignment) is done with spaces.
+-   The final output must be a single string.
 
-  **Instructions:**
-  - The 'orderData' will be a string of items. Format each item to fit within the table columns: Item Description, Quantity, Rate, Total.
-  - Calculate the Subtotal by adding the 'grandTotal' and 'discount'.
-  - Use the exact labels like "Billed to:", "Invoice No:", "GRAND TOTAL".
-  - Use spaces for alignment. Do not use markdown tables. Create a text-based table using +, -, and | characters.
-  - Ensure the final output is a single string.
-
-  **Invoice Data:**
-  - Customer Name: {{{customerName}}}
-  - Delivery Address: {{{customerAddress}}}
-  - Invoice Date: {{{invoiceDate}}}
-  - Invoice Number: {{{invoiceNumber}}}
-  - Order ID: {{{orderId}}}
-  - Delivery Date: {{{deliveryDate}}}
-  - Order Items (format this into the table):
-  {{{orderData}}}
-  - Discount: {{{discount}}}
-  - Grand Total: {{{grandTotal}}}
-  - Payment Mode: {{{paymentMode}}}
+**Invoice Data:**
+-   Customer Name: {{{customerName}}}
+-   Delivery Address: {{{customerAddress}}}
+-   Invoice Date: {{{invoiceDate}}}
+-   Invoice Number: {{{invoiceNumber}}}
+-   Order ID: {{{orderId}}}
+-   Delivery Date: {{{deliveryDate}}}
+-   Order Items (pre-formatted):
+{{{orderData}}}
+-   Discount: {{{discount}}}
+-   Grand Total: {{{grandTotal}}}
+-   Payment Mode: {{{paymentMode}}}
   `,
 });
 
@@ -112,8 +103,9 @@ const generateFullPaymentInvoiceFlow = ai.defineFlow(
     inputSchema: GenerateFullPaymentInvoiceInputSchema,
     outputSchema: GenerateFullPaymentInvoiceOutputSchema,
   },
-  async input => {
-    const {output} = await prompt(input);
+  async (input) => {
+    const subtotal = input.grandTotal + input.discount;
+    const {output} = await prompt({...input, subtotal});
     return output!;
   }
 );
