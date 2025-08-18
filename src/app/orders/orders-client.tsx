@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import type { Order, Customer, Product, PaymentTerm, PaymentMode } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -20,8 +20,13 @@ import { getProducts } from '@/lib/data';
 import { Rupee } from '@/components/icons';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Card, CardContent } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 
-const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(value).replace('₹', '');
+const formatNumber = (value: number) => {
+    if (isNaN(value)) return '0.00';
+    return new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+};
 
 
 export function OrdersClient({ orders: initialOrders, customers: initialCustomers }: { orders: Order[], customers: Customer[] }) {
@@ -154,9 +159,11 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                                 <TableCell>
                                     <Badge variant={order.status === 'Fulfilled' ? 'default' : order.status === 'Pending' ? 'secondary' : 'destructive'} className="capitalize">{order.status}</Badge>
                                 </TableCell>
-                                <TableCell className="text-right flex items-center justify-end">
-                                    <Rupee className="inline-block h-4 w-4 mr-1" />
-                                    {formatNumber(order.grandTotal)}
+                                <TableCell className="text-right">
+                                    <div className="flex items-center justify-end">
+                                      <Rupee className="inline-block h-4 w-4 mr-1" />
+                                      {formatNumber(order.grandTotal)}
+                                    </div>
                                 </TableCell>
                                 <TableCell>
                                     <DropdownMenu>
@@ -217,6 +224,9 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     );
 }
 
+const initialItemState = { productId: '', quantity: 1, price: 0, gst: 0, stock: 0 };
+type OrderItemState = { productId: string, quantity: number, price: number, gst: number, stock: number };
+
 function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdded, onCustomerAdded, orderCount, customerCount }: {
     isOpen: boolean,
     onOpenChange: (open: boolean) => void,
@@ -228,7 +238,10 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     customerCount: number,
 }) {
     const [customerId, setCustomerId] = useState<string>('');
-    const [items, setItems] = useState<{ productId: string, quantity: number, price: number, gst: number }[]>([]);
+    const [items, setItems] = useState<OrderItemState[]>([]);
+    const [currentItem, setCurrentItem] = useState<OrderItemState>(initialItemState);
+    const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
+
     const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
     const [paymentTerm, setPaymentTerm] = useState<PaymentTerm>('Full Payment');
     const [paymentMode, setPaymentMode] = useState<PaymentMode>('Cash');
@@ -237,28 +250,74 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     const [deliveryDate, setDeliveryDate] = useState('');
     const [deliveryAddress, setDeliveryAddress] = useState('');
     const [isGstInvoice, setIsGstInvoice] = useState(true);
+    const [enableDiscount, setEnableDiscount] = useState(false);
     const [discount, setDiscount] = useState(0);
 
-    const handleAddItem = () => {
-        setItems([...items, { productId: '', quantity: 1, price: 0, gst: 0 }]);
-    };
+    const { toast } = useToast();
 
-    const handleItemChange = (index: number, field: 'productId' | 'quantity', value: string | number) => {
-        const newItems = [...items];
-        const product = products.find(p => p.id === (field === 'productId' ? value : newItems[index].productId));
+    const resetForm = useCallback(() => {
+        setCustomerId('');
+        setItems([]);
+        setCurrentItem(initialItemState);
+        setEditingItemIndex(null);
+        setPaymentTerm('Full Payment');
+        setPaymentMode('Cash');
+        setPaymentRemarks('');
+        setDueDate('');
+        setDeliveryDate('');
+        setDeliveryAddress('');
+        setIsGstInvoice(true);
+        setEnableDiscount(false);
+        setDiscount(0);
+        onOpenChange(false);
+    }, [onOpenChange]);
 
-        if (field === 'quantity') {
-            newItems[index][field] = parseInt(value as string, 10) || 1;
-        } else if (field === 'productId') {
-            newItems[index][field] = value as string;
-            if (product) {
-                newItems[index].price = product.price;
-                newItems[index].gst = product.gst;
-            }
+    const handleProductSelect = (productId: string) => {
+        const product = products.find(p => p.id === productId);
+        if (product) {
+            setCurrentItem({
+                productId: product.id,
+                quantity: 1,
+                price: product.price,
+                gst: product.gst,
+                stock: product.stock
+            });
         }
+    };
+    
+    const handleAddItem = () => {
+        if (!currentItem.productId) {
+            toast({ title: 'Error', description: 'Please select an item.', variant: 'destructive' });
+            return;
+        }
+        if (currentItem.quantity > currentItem.stock) {
+            toast({ title: 'Stock Error', description: `Not enough stock for ${products.find(p=>p.id===currentItem.productId)?.name}. Available: ${currentItem.stock}`, variant: 'destructive' });
+            return;
+        }
+        setItems([...items, currentItem]);
+        setCurrentItem(initialItemState);
+    };
+    
+    const handleUpdateItem = () => {
+        if (editingItemIndex === null) return;
+        if (currentItem.quantity > currentItem.stock) {
+            toast({ title: 'Stock Error', description: `Not enough stock for ${products.find(p=>p.id===currentItem.productId)?.name}. Available: ${currentItem.stock}`, variant: 'destructive' });
+            return;
+        }
+        const newItems = [...items];
+        newItems[editingItemIndex] = currentItem;
         setItems(newItems);
+        setCurrentItem(initialItemState);
+        setEditingItemIndex(null);
     };
 
+    const handleEditItemClick = (index: number) => {
+        setEditingItemIndex(index);
+        const itemToEdit = items[index];
+        const product = products.find(p => p.id === itemToEdit.productId);
+        setCurrentItem({ ...itemToEdit, stock: product?.stock || 0 });
+    };
+    
     const handleRemoveItem = (index: number) => {
         setItems(items.filter((_, i) => i !== index));
     };
@@ -288,13 +347,12 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
 
     const grandTotal = useMemo(() => total - discount, [total, discount]);
 
-
     const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        if (!customerId || items.length === 0 || items.some(i => !i.productId)) {
+        if (!customerId || items.length === 0) {
             toast({
                 title: "Validation Error",
-                description: 'Please select a customer and add at least one valid item.',
+                description: 'Please select a customer and add at least one item.',
                 variant: 'destructive'
             });
             return;
@@ -315,8 +373,8 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                     productId: item.productId,
                     productName: product?.name || 'Unknown',
                     quantity: item.quantity,
-                    price: product?.price || 0,
-                    gst: product?.gst || 0
+                    price: item.price,
+                    gst: item.gst
                 };
             }),
             total,
@@ -330,156 +388,159 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
             deliveryAddress,
             isGstInvoice,
         };
-
         onOrderAdded(newOrder);
-        onOpenChange(false);
-        // Reset form
-        setCustomerId('');
-        setItems([]);
-        setPaymentTerm('Full Payment');
-        setPaymentMode('Cash');
-        setPaymentRemarks('');
-        setDueDate('');
-        setDeliveryDate('');
-        setDeliveryAddress('');
-        setIsGstInvoice(true);
-        setDiscount(0);
+        resetForm();
     };
 
     return (
         <>
             <Dialog open={isOpen} onOpenChange={onOpenChange}>
-                <DialogContent className="sm:max-w-4xl">
+                <DialogContent className="max-w-6xl">
                     <DialogHeader>
                         <DialogTitle>Place New Order</DialogTitle>
-                        <DialogDescription>Select a customer and add products to the order.</DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleSubmit}>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
-                            {/* Left Column */}
-                            <div className="space-y-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="customer">Customer</Label>
-                                    <div className="flex gap-2">
-                                        <Select value={customerId} onValueChange={setCustomerId}>
-                                            <SelectTrigger id="customer">
-                                                <SelectValue placeholder="Select a customer" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {customers.map(customer => (
-                                                    <SelectItem key={customer.id} value={customer.id}>{customer.name}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <Button type="button" variant="outline" onClick={() => setIsAddCustomerOpen(true)}>
-                                            <PlusCircle className="mr-2 h-4 w-4" /> Add New
-                                        </Button>
-                                    </div>
-                                </div>
-                                
-                                <div className="space-y-2">
-                                    <Label>Order Items</Label>
-                                    <div className="space-y-2 max-h-60 overflow-y-auto pr-2 border rounded-md p-2">
-                                        {items.map((item, index) => (
-                                            <div key={index} className="flex items-center gap-2">
-                                                <Select value={item.productId} onValueChange={(value) => handleItemChange(index, 'productId', value)}>
-                                                    <SelectTrigger>
-                                                        <SelectValue placeholder="Select product" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {products.map(product => (
-                                                            <SelectItem key={product.id} value={product.id}>{product.name}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
+                        <div className="space-y-4 p-4">
+
+                            {/* Order Details */}
+                            <Card>
+                                <CardContent className="p-4 space-y-4">
+                                    <DialogTitle className="text-lg">Order Details</DialogTitle>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                       <div className="space-y-2">
+                                            <Label htmlFor="customer">Customer Name</Label>
+                                            <div className="flex gap-2">
+                                                <Select value={customerId} onValueChange={setCustomerId}>
+                                                    <SelectTrigger id="customer"><SelectValue placeholder="Select a customer" /></SelectTrigger>
+                                                    <SelectContent>{customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
                                                 </Select>
-                                                <Input
-                                                    type="number"
-                                                    min="1"
-                                                    value={item.quantity}
-                                                    onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                                                    className="w-24"
-                                                />
-                                                <Button type="button" variant="outline" size="icon" onClick={() => handleRemoveItem(index)}>
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
+                                                <Button type="button" variant="outline" onClick={() => setIsAddCustomerOpen(true)}>Add New</Button>
                                             </div>
-                                        ))}
+                                        </div>
                                     </div>
-                                    <Button type="button" variant="outline" size="sm" onClick={handleAddItem}>
-                                        <PlusCircle className="mr-2 h-4 w-4" /> Add Item
-                                    </Button>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Payment Term</Label>
-                                    <RadioGroup value={paymentTerm} onValueChange={(v) => setPaymentTerm(v as PaymentTerm)} className="flex gap-4">
-                                        <div className="flex items-center space-x-2">
-                                            <RadioGroupItem value="Full Payment" id="full_payment" />
-                                            <Label htmlFor="full_payment">Full Payment</Label>
-                                        </div>
-                                        <div className="flex items-center space-x-2">
-                                            <RadioGroupItem value="Credit" id="credit" />
-                                            <Label htmlFor="credit">Credit</Label>
-                                        </div>
-                                    </RadioGroup>
-                                </div>
-                                {paymentTerm === 'Full Payment' ? (
-                                    <>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="payment_mode">Payment Mode</Label>
-                                            <Select value={paymentMode} onValueChange={(v) => setPaymentMode(v as PaymentMode)}>
-                                                <SelectTrigger id="payment_mode"><SelectValue /></SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="Cash">Cash</SelectItem>
-                                                    <SelectItem value="Card">Card</SelectItem>
-                                                    <SelectItem value="UPI">UPI</SelectItem>
-                                                    <SelectItem value="Cheque">Cheque</SelectItem>
-                                                    <SelectItem value="Online Transfer">Online Transfer</SelectItem>
-                                                </SelectContent>
+                                    <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+                                        <div className="space-y-2 col-span-2">
+                                            <Label>Item Name</Label>
+                                            <Select value={currentItem.productId} onValueChange={handleProductSelect}>
+                                                <SelectTrigger><SelectValue placeholder="Select an item" /></SelectTrigger>
+                                                <SelectContent>{products.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
                                             </Select>
                                         </div>
                                         <div className="space-y-2">
-                                            <Label htmlFor="payment_remarks">Payment Remarks</Label>
-                                            <Input id="payment_remarks" value={paymentRemarks} onChange={(e) => setPaymentRemarks(e.target.value)} />
+                                            <Label>Stock Left</Label>
+                                            <Input value={currentItem.stock} readOnly disabled />
                                         </div>
-                                    </>
-                                ) : (
-                                     <div className="space-y-2">
-                                        <Label htmlFor="due_date">Due Date</Label>
-                                        <Input id="due_date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+                                        <div className="space-y-2">
+                                            <Label>Quantity</Label>
+                                            <Input type="number" value={currentItem.quantity} onChange={e => setCurrentItem(s => ({ ...s, quantity: parseInt(e.target.value) || 1 }))} min="1" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Rate</Label>
+                                            <Input type="number" value={currentItem.price} onChange={e => setCurrentItem(s => ({ ...s, price: parseFloat(e.target.value) || 0 }))} />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>GST %</Label>
+                                            <Input type="number" value={currentItem.gst} onChange={e => setCurrentItem(s => ({ ...s, gst: parseFloat(e.target.value) || 0 }))} />
+                                        </div>
                                     </div>
-                                )}
-                            </div>
+                                    <div className="flex justify-end">
+                                        {editingItemIndex !== null ? (
+                                            <Button type="button" onClick={handleUpdateItem}>Update Item</Button>
+                                        ) : (
+                                            <Button type="button" onClick={handleAddItem}>Add Item</Button>
+                                        )}
+                                    </div>
+                                </CardContent>
+                            </Card>
 
-                            {/* Right Column */}
-                            <div className="space-y-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="delivery_date">Delivery Date</Label>
-                                    <Input id="delivery_date" type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="delivery_address">Delivery Address</Label>
-                                    <Textarea id="delivery_address" value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} />
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                    <Checkbox id="is_gst" checked={isGstInvoice} onCheckedChange={(c) => setIsGstInvoice(c as boolean)} />
-                                    <Label htmlFor="is_gst">Is GST Invoice?</Label>
-                                </div>
-                                <div className="border-t pt-4 space-y-2">
-                                    <div className="flex justify-between"><span>Subtotal:</span> <span className="flex items-center"><Rupee className="inline-block h-4 w-4 mr-1" />{formatNumber(subTotal)}</span></div>
-                                    <div className="flex justify-between"><span>Total GST:</span> <span className="flex items-center"><Rupee className="inline-block h-4 w-4 mr-1" />{formatNumber(totalGst)}</span></div>
-                                    <div className="flex justify-between font-bold"><span>Total:</span> <span className="flex items-center"><Rupee className="inline-block h-4 w-4 mr-1" />{formatNumber(total)}</span></div>
-                                    <div className="flex items-center gap-2">
-                                        <Label htmlFor="discount">Discount:</Label>
-                                        <Input id="discount" type="number" value={discount} onChange={(e) => setDiscount(Number(e.target.value))} className="w-32" />
+                            {/* Items Table */}
+                            <Card>
+                                <CardContent className="p-4">
+                                    <Table>
+                                        <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Qty</TableHead><TableHead>Rate</TableHead><TableHead>GST</TableHead><TableHead>Total</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+                                        <TableBody>
+                                            {items.map((item, index) => {
+                                                const product = products.find(p => p.id === item.productId);
+                                                const itemTotal = (item.price * item.quantity) * (1 + item.gst / 100);
+                                                return (
+                                                    <TableRow key={index}>
+                                                        <TableCell>{product?.name}</TableCell>
+                                                        <TableCell>{item.quantity}</TableCell>
+                                                        <TableCell>{formatNumber(item.price)}</TableCell>
+                                                        <TableCell>{item.gst}%</TableCell>
+                                                        <TableCell>{formatNumber(itemTotal)}</TableCell>
+                                                        <TableCell className="space-x-2">
+                                                            <Button type="button" size="sm" variant="outline" onClick={() => handleEditItemClick(index)}>Edit</Button>
+                                                            <Button type="button" size="sm" variant="destructive" onClick={() => handleRemoveItem(index)}>Delete</Button>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                );
+                                            })}
+                                        </TableBody>
+                                    </Table>
+                                </CardContent>
+                            </Card>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {/* Payment Details */}
+                                <Card><CardContent className="p-4 space-y-4">
+                                    <DialogTitle className="text-lg">Payment Details</DialogTitle>
+                                    <div className="space-y-2">
+                                        <Label>Payment Term</Label>
+                                        <RadioGroup value={paymentTerm} onValueChange={(v) => setPaymentTerm(v as PaymentTerm)} className="flex gap-4">
+                                            <div className="flex items-center space-x-2"><RadioGroupItem value="Full Payment" id="full_payment" /><Label htmlFor="full_payment">Full Payment</Label></div>
+                                            <div className="flex items-center space-x-2"><RadioGroupItem value="Credit" id="credit" /><Label htmlFor="credit">Credit</Label></div>
+                                        </RadioGroup>
                                     </div>
-                                    <div className="flex justify-between text-xl font-bold text-primary"><span>Grand Total:</span> <span className="flex items-center"><Rupee className="inline-block h-5 w-5 mr-1" />{formatNumber(grandTotal)}</span></div>
+                                    {paymentTerm === 'Full Payment' ? (<>
+                                        <div className="space-y-2">
+                                            <Label>Payment Mode</Label>
+                                            <Select value={paymentMode} onValueChange={v => setPaymentMode(v as PaymentMode)}>
+                                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                                <SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="Card">Card</SelectItem><SelectItem value="UPI">UPI</SelectItem><SelectItem value="Cheque">Cheque</SelectItem><SelectItem value="Online Transfer">Online Transfer</SelectItem></SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-2"><Label>Payment Remarks</Label><Input value={paymentRemarks} onChange={e => setPaymentRemarks(e.target.value)} /></div>
+                                    </>) : (<>
+                                        <div className="space-y-2"><Label>Due Date</Label><Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} /></div>
+                                    </>)}
+                                    <Separator />
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox id="enable_discount" checked={enableDiscount} onCheckedChange={c => setEnableDiscount(c as boolean)} />
+                                        <Label htmlFor="enable_discount">Enable Discount Input</Label>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Input type="number" placeholder="Discount Amount" value={discount} onChange={e => setDiscount(parseFloat(e.target.value) || 0)} disabled={!enableDiscount} />
+                                    </div>
+                                </CardContent></Card>
+
+                                {/* Summary & Delivery */}
+                                <div className="space-y-4">
+                                    <Card><CardContent className="p-4 space-y-2">
+                                        <DialogTitle className="text-lg">Order Summary</DialogTitle>
+                                        <div className="flex justify-between"><span>Total Order Value:</span> <span className="font-semibold flex items-center"><Rupee className="inline-block h-4 w-4 mr-1" />{formatNumber(total)}</span></div>
+                                        <div className="flex justify-between"><span>Discount Applied:</span> <span className="font-semibold flex items-center"><Rupee className="inline-block h-4 w-4 mr-1" />{formatNumber(discount)}</span></div>
+                                        <Separator />
+                                        <div className="flex justify-between text-lg">
+                                            <span className="font-bold">Grand Total Value to be Paid:</span>
+                                            <span className="font-bold text-primary flex items-center"><Rupee className="inline-block h-5 w-5 mr-1" />{formatNumber(grandTotal)}</span>
+                                        </div>
+                                    </CardContent></Card>
+                                    <Card><CardContent className="p-4 space-y-4">
+                                        <DialogTitle className="text-lg">Delivery Details</DialogTitle>
+                                        <div className="space-y-2"><Label>Delivery Date</Label><Input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} /></div>
+                                        <div className="space-y-2"><Label>Delivery Address</Label><Textarea value={deliveryAddress} onChange={e => setDeliveryAddress(e.target.value)} /></div>
+                                        <div className="flex items-center space-x-2">
+                                            <Checkbox id="is_gst_invoice" checked={isGstInvoice} onCheckedChange={c => setIsGstInvoice(c as boolean)} />
+                                            <Label htmlFor="is_gst_invoice">Generate GST Invoice?</Label>
+                                        </div>
+                                    </CardContent></Card>
                                 </div>
                             </div>
                         </div>
-
                         <DialogFooter>
-                            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                            <Button type="submit">Place Order</Button>
+                            <Button type="button" variant="outline" onClick={() => resetForm()}>Cancel</Button>
+                            <Button type="submit">Submit Order</Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>
@@ -487,30 +548,13 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
 
             <Dialog open={isAddCustomerOpen} onOpenChange={setIsAddCustomerOpen}>
                 <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Add New Customer</DialogTitle>
-                        <DialogDescription>
-                            Fill in the details below to add a new customer to the system.
-                        </DialogDescription>
-                    </DialogHeader>
+                    <DialogHeader><DialogTitle>Add New Customer</DialogTitle><DialogDescription>Fill in the details below to add a new customer.</DialogDescription></DialogHeader>
                     <form onSubmit={handleAddCustomerSubmit}>
                         <div className="grid gap-4 py-4">
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="name" className="text-right">Name</Label>
-                                <Input id="name" name="name" className="col-span-3" required />
-                            </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="email" className="text-right">Email</Label>
-                                <Input id="email" name="email" type="email" className="col-span-3" required />
-                            </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="phone" className="text-right">Phone</Label>
-                                <Input id="phone" name="phone" className="col-span-3" />
-                            </div>
-                             <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="address" className="text-right">Address</Label>
-                                <Input id="address" name="address" className="col-span-3" />
-                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="name" className="text-right">Name</Label><Input id="name" name="name" className="col-span-3" required /></div>
+                            <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="email" className="text-right">Email</Label><Input id="email" name="email" type="email" className="col-span-3" required /></div>
+                            <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="phone" className="text-right">Phone</Label><Input id="phone" name="phone" className="col-span-3" /></div>
+                            <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="address" className="text-right">Address</Label><Input id="address" name="address" className="col-span-3" /></div>
                         </div>
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setIsAddCustomerOpen(false)}>Cancel</Button>
