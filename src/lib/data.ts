@@ -1,3 +1,4 @@
+
 import { Customer, Product, Order } from './types';
 
 const customers: Customer[] = [
@@ -123,7 +124,8 @@ const orders: Order[] = [
     paymentTerm: 'Full Payment',
     paymentMode: 'Card',
     isGstInvoice: true,
-    deliveryAddress: '123 Innovation Drive, Tech City, 12345'
+    deliveryAddress: '123 Innovation Drive, Tech City, 12345',
+    deliveryDate: '2023-05-16',
   },
   {
     id: 'ORD-002',
@@ -156,6 +158,7 @@ const orders: Order[] = [
     paymentTerm: 'Full Payment',
     paymentMode: 'Online Transfer',
     isGstInvoice: true,
+    deliveryDate: '2023-04-30',
   },
     {
     id: 'ORD-004',
@@ -173,6 +176,7 @@ const orders: Order[] = [
     paymentTerm: 'Credit',
     dueDate: '2023-06-22',
     isGstInvoice: false,
+    deliveryDate: '2023-05-25',
   },
   {
     id: 'ORD-005',

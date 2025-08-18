@@ -10,8 +10,6 @@ import { MoreHorizontal, FileText, Receipt, Loader2, PlusCircle, Trash2, Downloa
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { generateFullPaymentInvoice } from '@/ai/flows/generate-full-payment-invoice';
-import { generateCreditInvoice } from '@/ai/flows/generate-credit-invoice';
 import { generateReceipt } from '@/ai/flows/generate-receipt';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -27,6 +25,7 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { InvoiceTemplate } from '@/components/invoice-template';
 
 const formatNumber = (value: number) => {
     if (isNaN(value)) return '0.00';
@@ -39,9 +38,11 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
     const [products, setProducts] = useState<Product[]>([]);
     const [statusFilter, setStatusFilter] = useState('All');
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [modalContent, setModalContent] = useState('');
-    const [modalTitle, setModalTitle] = useState('');
+    const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
+    const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+    const [receiptContent, setReceiptContent] = useState('');
+    const [receiptTitle, setReceiptTitle] = useState('');
+    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [isAddOrderOpen, setIsAddOrderOpen] = useState(false);
     const { toast } = useToast();
@@ -57,65 +58,9 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         return orders.filter(order => order.status === statusFilter);
     }, [orders, statusFilter]);
 
-    const handleGenerateInvoice = async (order: Order) => {
-        const customer = customers.find(c => c.id === order.customerId);
-        if (!customer) return;
-
-        setIsLoading(true);
-        setModalTitle(`Generating Invoice for ${order.id}`);
-        setModalContent('');
-        setIsModalOpen(true);
-
-        const orderData = order.items.map(item => {
-             const total = item.price * item.quantity * (order.isGstInvoice ? (1 + item.gst/100) : 1);
-            // | Item Description               | Quantity | Rate     | Total      |
-            // |--------------------------------|----------|----------|------------|
-            // | Premium Widget                 | 20       | 150.00   | 3,000.00   |
-            const desc = `| ${item.productName.padEnd(30)} |`;
-            const qty = ` ${String(item.quantity).padEnd(8)} |`;
-            const rate = ` ${formatNumber(item.price).padEnd(8)} |`;
-            const itemTotal = ` ${formatNumber(total).padEnd(10)} |`;
-            return `${desc}${qty}${rate}${itemTotal}`;
-        }).join('\n');
-        
-        try {
-            let result;
-            if (order.paymentTerm === 'Credit') {
-                result = await generateCreditInvoice({
-                    orderData,
-                    customerName: customer.name,
-                    customerAddress: order.deliveryAddress || customer.address,
-                    invoiceNumber: order.id.replace('ORD', 'CRN'), // Example for credit note
-                    invoiceDate: new Date(order.orderDate).toISOString().split('T')[0],
-                    companyName: 'AB Agency',
-                    companyAddress: '1, AYYANCHERY MAIN ROAD, AYYANCHERY URAPAKKAM, Chennai, Tamil Nadu, 603210',
-                    grandTotal: order.grandTotal,
-                    dueDate: order.dueDate || 'N/A',
-                });
-            } else {
-                 result = await generateFullPaymentInvoice({
-                    orderData,
-                    customerName: customer.name,
-                    customerAddress: order.deliveryAddress || customer.address,
-                    invoiceNumber: order.id.replace('ORD', 'FPI'), // Example for full payment invoice
-                    invoiceDate: new Date(order.orderDate).toISOString().split('T')[0],
-                    companyName: 'AB Agency',
-                    companyAddress: '1, AYYANCHERY MAIN ROAD, AYYANCHERY URAPAKKAM, Chennai, Tamil Nadu, 603210',
-                    grandTotal: order.grandTotal,
-                    paymentMode: order.paymentMode || 'N/A',
-                    discount: order.discount,
-                    orderId: order.id,
-                    deliveryDate: order.deliveryDate
-                });
-            }
-            setModalTitle(`Invoice for ${order.id}`);
-            setModalContent(result.invoice);
-        } catch (e) {
-            setModalContent('Failed to generate invoice.');
-            console.error(e);
-        } finally {
-            setIsLoading(false);
-        }
+    const handleGenerateInvoice = (order: Order) => {
+        setSelectedOrder(order);
+        setIsInvoiceModalOpen(true);
     };
     
     const handleGenerateReceipt = async (order: Order) => {
@@ -123,9 +68,9 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         if (!customer) return;
 
         setIsLoading(true);
-        setModalTitle(`Generating Receipt for ${order.id}`);
-        setModalContent('');
-        setIsModalOpen(true);
+        setReceiptTitle(`Generating Receipt for ${order.id}`);
+        setReceiptContent('');
+        setIsReceiptModalOpen(true);
 
         try {
             const result = await generateReceipt({
@@ -135,10 +80,10 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 date: new Date().toISOString().split('T')[0],
                 transactionId: `TRANS-${order.id}`,
             });
-            setModalTitle(`Receipt for ${order.id}`);
-            setModalContent(result.receipt);
+            setReceiptTitle(`Receipt for ${order.id}`);
+            setReceiptContent(result.receipt);
         } catch (e) {
-            setModalContent('Failed to generate receipt.');
+            setReceiptContent('Failed to generate receipt.');
         } finally {
             setIsLoading(false);
         }
@@ -162,7 +107,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
 
     const handleDownloadPdf = async () => {
         const input = invoiceRef.current;
-        if (!input) return;
+        if (!input || !selectedOrder) return;
 
         const canvas = await html2canvas(input, { scale: 2 });
         const imgData = canvas.toDataURL('image/png');
@@ -183,7 +128,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             heightLeft -= pdf.internal.pageSize.getHeight();
         }
 
-        pdf.save(`${modalTitle.replace(/\s/g, '_')}.pdf`);
+        pdf.save(`Invoice_${selectedOrder.id}.pdf`);
     };
 
     return (
@@ -411,10 +356,31 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 </TabsContent>
             </Tabs>
             
-             <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+             <Dialog open={isInvoiceModalOpen} onOpenChange={setIsInvoiceModalOpen}>
+                <DialogContent className="max-w-4xl">
+                    <DialogHeader>
+                        <DialogTitle>Invoice for {selectedOrder?.id}</DialogTitle>
+                    </DialogHeader>
+                    <div className="p-4 bg-gray-50">
+                        {selectedOrder && customers && (
+                           <InvoiceTemplate 
+                                ref={invoiceRef}
+                                order={selectedOrder} 
+                                customer={customers.find(c => c.id === selectedOrder.customerId)}
+                            />
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button onClick={handleDownloadPdf}><Download className="mr-2 h-4 w-4" /> Download PDF</Button>
+                        <Button variant="outline" onClick={() => setIsInvoiceModalOpen(false)}>Close</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isReceiptModalOpen} onOpenChange={setIsReceiptModalOpen}>
                 <DialogContent className="sm:max-w-2xl">
                     <DialogHeader>
-                        <DialogTitle>{modalTitle}</DialogTitle>
+                        <DialogTitle>{receiptTitle}</DialogTitle>
                     </DialogHeader>
                     <div className="py-4">
                         {isLoading ? (
@@ -422,15 +388,14 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
                             </div>
                         ) : (
-                            <div ref={invoiceRef} className="p-4 bg-white text-black font-mono text-sm">
-                                <pre className="whitespace-pre-wrap">{modalContent}</pre>
+                            <div className="p-4 bg-white text-black font-mono text-sm">
+                                <pre className="whitespace-pre-wrap">{receiptContent}</pre>
                             </div>
                         )}
                     </div>
                     <DialogFooter>
-                        <Button onClick={() => navigator.clipboard.writeText(modalContent)} disabled={isLoading}>Copy Text</Button>
-                        <Button onClick={handleDownloadPdf} disabled={isLoading}><Download className="mr-2 h-4 w-4" /> Download PDF</Button>
-                        <Button variant="outline" onClick={() => setIsModalOpen(false)}>Close</Button>
+                        <Button onClick={() => navigator.clipboard.writeText(receiptContent)} disabled={isLoading}>Copy Text</Button>
+                        <Button variant="outline" onClick={() => setIsReceiptModalOpen(false)}>Close</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -627,7 +592,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
             paymentRemarks: paymentTerm === 'Full Payment' ? paymentRemarks : undefined,
             dueDate: paymentTerm === 'Credit' ? dueDate : undefined,
             deliveryDate,
-            deliveryAddress,
+            deliveryAddress: deliveryAddress || customer.address,
             isGstInvoice,
         };
         onOrderAdded(newOrder);
@@ -741,7 +706,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                                   <div className="flex items-center space-x-2"><RadioGroupItem value="Credit" id="credit" /><Label htmlFor="credit">Credit</Label></div>
                                               </RadioGroup>
                                           </div>
-                                          {paymentTerm === 'Full Payment' ? (
+                                          {paymentTerm === 'Full Payment' && (
                                             <>
                                               <div className="space-y-2">
                                                   <Label>Payment Mode</Label>
@@ -757,7 +722,8 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                                   </div>
                                               )}
                                             </>
-                                          ) : (
+                                          )}
+                                          {paymentTerm === 'Credit' && (
                                             <div className="space-y-2">
                                                 <Label>Due Date</Label>
                                                 <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
@@ -770,7 +736,8 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                     <div className="space-y-4">
                                         <Card><CardContent className="p-4 space-y-2">
                                             <DialogTitle className="text-lg">Order Summary</DialogTitle>
-                                            <div className="flex justify-between"><span>Total Order Value:</span> <span className="font-semibold flex items-center"><Rupee className="inline-block h-4 w-4 mr-1" />{formatNumber(total)}</span></div>
+                                            <div className="flex justify-between"><span>Subtotal:</span> <span className="font-semibold flex items-center"><Rupee className="inline-block h-4 w-4 mr-1" />{formatNumber(subTotal)}</span></div>
+                                            {isGstInvoice && <div className="flex justify-between"><span>Total GST:</span> <span className="font-semibold flex items-center"><Rupee className="inline-block h-4 w-4 mr-1" />{formatNumber(totalGst)}</span></div>}
                                             <Separator />
                                             <div className="flex justify-between text-lg">
                                                 <span className="font-bold">Grand Total Value:</span>
@@ -790,7 +757,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                         <Card><CardContent className="p-4 space-y-4">
                                             <DialogTitle className="text-lg">Delivery Details</DialogTitle>
                                             <div className="space-y-2"><Label>Delivery Date</Label><Input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} /></div>
-                                            <div className="space-y-2"><Label>Delivery Address</Label><Textarea value={deliveryAddress} onChange={e => setDeliveryAddress(e.target.value)} /></div>
+                                            <div className="space-y-2"><Label>Delivery Address</Label><Textarea value={deliveryAddress} onChange={e => setDeliveryAddress(e.target.value)} placeholder="Leave blank to use customer's default address" /></div>
                                         </CardContent></Card>
                                     </div>
                                 </div>
