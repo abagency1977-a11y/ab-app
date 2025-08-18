@@ -50,6 +50,7 @@ const products: Product[] = [
     sku: 'PW-1000',
     stock: 150,
     price: 150.00,
+    gst: 18,
     historicalData: [
         { date: '2023-01-15', quantity: 20 },
         { date: '2023-02-10', quantity: 25 },
@@ -64,6 +65,7 @@ const products: Product[] = [
     sku: 'SG-2000',
     stock: 300,
     price: 75.50,
+    gst: 18,
      historicalData: [
         { date: '2023-01-20', quantity: 50 },
         { date: '2023-02-15', quantity: 45 },
@@ -78,6 +80,7 @@ const products: Product[] = [
     sku: 'AG-3000',
     stock: 80,
     price: 220.00,
+    gst: 18,
      historicalData: [
         { date: '2023-01-05', quantity: 10 },
         { date: '2023-02-08', quantity: 12 },
@@ -92,6 +95,7 @@ const products: Product[] = [
     sku: 'BT-4000',
     stock: 500,
     price: 25.00,
+    gst: 18,
      historicalData: [
         { date: '2023-01-25', quantity: 100 },
         { date: '2023-02-20', quantity: 120 },

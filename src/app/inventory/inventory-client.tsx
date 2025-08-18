@@ -71,6 +71,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             sku: formData.get('sku') as string,
             stock: Number(formData.get('stock')),
             price: Number(formData.get('price')),
+            gst: Number(formData.get('gst')),
             historicalData: [],
         };
 
@@ -93,6 +94,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             sku: formData.get('sku') as string,
             stock: Number(formData.get('stock')),
             price: Number(formData.get('price')),
+            gst: Number(formData.get('gst')),
         };
 
         setProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p));
@@ -134,6 +136,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                     <TableHead>SKU</TableHead>
                                     <TableHead>Stock</TableHead>
                                     <TableHead className="text-right">Price</TableHead>
+                                    <TableHead>GST %</TableHead>
                                     <TableHead>Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -143,10 +146,10 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                         <TableCell className="font-medium">{product.name}</TableCell>
                                         <TableCell>{product.sku}</TableCell>
                                         <TableCell>{product.stock}</TableCell>
-                                        <TableCell className="text-right flex items-center justify-end">
-                                            <Rupee className="inline-block h-4 w-4 mr-1" />
-                                            {formatNumber(product.price)}
+                                        <TableCell className="text-right">
+                                            <span className="flex items-center justify-end"><Rupee className="inline-block h-4 w-4 mr-1" />{formatNumber(product.price)}</span>
                                         </TableCell>
+                                        <TableCell>{product.gst}%</TableCell>
                                         <TableCell>
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
@@ -232,6 +235,10 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                 <Label htmlFor="price" className="text-right">Price</Label>
                                 <Input id="price" name="price" type="number" step="0.01" className="col-span-3" required />
                             </div>
+                             <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="gst" className="text-right">GST %</Label>
+                                <Input id="gst" name="gst" type="number" step="0.01" className="col-span-3" required />
+                            </div>
                         </div>
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
@@ -266,6 +273,10 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                             <div className="grid grid-cols-4 items-center gap-4">
                                 <Label htmlFor="price" className="text-right">Price</Label>
                                 <Input id="price" name="price" type="number" step="0.01" className="col-span-3" defaultValue={productToEdit?.price} required />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="gst" className="text-right">GST %</Label>
+                                <Input id="gst" name="gst" type="number" step="0.01" className="col-span-3" defaultValue={productToEdit?.gst} required />
                             </div>
                         </div>
                         <DialogFooter>

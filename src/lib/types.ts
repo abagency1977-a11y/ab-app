@@ -15,8 +15,8 @@ export interface Product {
   name: string;
   sku: string;
   stock: number;
-  location?: string;
   price: number;
+  gst: number;
   historicalData?: { date: string; quantity: number }[];
 }
 
