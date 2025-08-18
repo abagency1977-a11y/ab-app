@@ -21,8 +21,9 @@ import { Rupee } from '@/components/icons';
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-IN').format(value);
 
-export function OrdersClient({ orders: initialOrders, customers }: { orders: Order[], customers: Customer[] }) {
+export function OrdersClient({ orders: initialOrders, customers: initialCustomers }: { orders: Order[], customers: Customer[] }) {
     const [orders, setOrders] = useState<Order[]>(initialOrders);
+    const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
     const [products, setProducts] = useState<Product[]>([]);
     const [statusFilter, setStatusFilter] = useState('All');
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -104,6 +105,14 @@ export function OrdersClient({ orders: initialOrders, customers }: { orders: Ord
             description: `Order ${newOrder.id} has been successfully created.`,
         });
     }
+
+    const handleAddCustomer = (newCustomer: Customer) => {
+        setCustomers(prev => [...prev, newCustomer]);
+        toast({
+            title: "Customer Added",
+            description: `${newCustomer.name} has been successfully added.`,
+        });
+    };
 
     return (
         <div className="space-y-4">
@@ -197,22 +206,27 @@ export function OrdersClient({ orders: initialOrders, customers }: { orders: Ord
                 customers={customers}
                 products={products}
                 onOrderAdded={handleAddOrder}
+                onCustomerAdded={handleAddCustomer}
                 orderCount={orders.length}
+                customerCount={customers.length}
             />
         </div>
     );
 }
 
-function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdded, orderCount }: {
+function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdded, onCustomerAdded, orderCount, customerCount }: {
     isOpen: boolean,
     onOpenChange: (open: boolean) => void,
     customers: Customer[],
     products: Product[],
     onOrderAdded: (order: Order) => void,
+    onCustomerAdded: (customer: Customer) => void,
     orderCount: number,
+    customerCount: number,
 }) {
     const [customerId, setCustomerId] = useState<string>('');
     const [items, setItems] = useState<{ productId: string, quantity: number }[]>([]);
+    const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
 
     const handleAddItem = () => {
         setItems([...items, { productId: '', quantity: 1 }]);
@@ -230,6 +244,22 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
 
     const handleRemoveItem = (index: number) => {
         setItems(items.filter((_, i) => i !== index));
+    };
+
+    const handleAddCustomerSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        const formData = new FormData(event.currentTarget);
+        const newCustomer: Customer = {
+            id: `CUST-${String(customerCount + 1).padStart(3, '0')}`,
+            name: formData.get('name') as string,
+            email: formData.get('email') as string,
+            phone: formData.get('phone') as string,
+            address: formData.get('address') as string,
+            transactionHistory: { totalSpent: 0, lastPurchaseDate: new Date().toISOString().split('T')[0] },
+        };
+        onCustomerAdded(newCustomer);
+        setIsAddCustomerOpen(false);
+        setCustomerId(newCustomer.id);
     };
 
     const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -279,69 +309,111 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     }, [items, products]);
 
     return (
-        <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-3xl">
-                <DialogHeader>
-                    <DialogTitle>Place New Order</DialogTitle>
-                    <DialogDescription>Select a customer and add products to the order.</DialogDescription>
-                </DialogHeader>
-                <form onSubmit={handleSubmit}>
-                    <div className="grid gap-6 py-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="customer">Customer</Label>
-                            <Select value={customerId} onValueChange={setCustomerId}>
-                                <SelectTrigger id="customer">
-                                    <SelectValue placeholder="Select a customer" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {customers.map(customer => (
-                                        <SelectItem key={customer.id} value={customer.id}>{customer.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Order Items</Label>
-                            <div className="space-y-4 max-h-60 overflow-y-auto pr-2">
-                                {items.map((item, index) => (
-                                    <div key={index} className="flex items-center gap-2">
-                                        <Select value={item.productId} onValueChange={(value) => handleItemChange(index, 'productId', value)}>
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Select product" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {products.map(product => (
-                                                    <SelectItem key={product.id} value={product.id}>{product.name}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <Input
-                                            type="number"
-                                            min="1"
-                                            value={item.quantity}
-                                            onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                                            className="w-24"
-                                        />
-                                        <Button variant="outline" size="icon" onClick={() => handleRemoveItem(index)}>
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                    </div>
-                                ))}
+        <>
+            <Dialog open={isOpen} onOpenChange={onOpenChange}>
+                <DialogContent className="sm:max-w-3xl">
+                    <DialogHeader>
+                        <DialogTitle>Place New Order</DialogTitle>
+                        <DialogDescription>Select a customer and add products to the order.</DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleSubmit}>
+                        <div className="grid gap-6 py-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="customer">Customer</Label>
+                                <div className="flex gap-2">
+                                    <Select value={customerId} onValueChange={setCustomerId}>
+                                        <SelectTrigger id="customer">
+                                            <SelectValue placeholder="Select a customer" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {customers.map(customer => (
+                                                <SelectItem key={customer.id} value={customer.id}>{customer.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <Button type="button" variant="outline" onClick={() => setIsAddCustomerOpen(true)}>
+                                        <PlusCircle className="mr-2 h-4 w-4" /> Add New
+                                    </Button>
+                                </div>
                             </div>
-                            <Button type="button" variant="outline" size="sm" onClick={handleAddItem}>
-                                <PlusCircle className="mr-2 h-4 w-4" /> Add Item
-                            </Button>
+                            <div className="space-y-2">
+                                <Label>Order Items</Label>
+                                <div className="space-y-4 max-h-60 overflow-y-auto pr-2">
+                                    {items.map((item, index) => (
+                                        <div key={index} className="flex items-center gap-2">
+                                            <Select value={item.productId} onValueChange={(value) => handleItemChange(index, 'productId', value)}>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select product" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {products.map(product => (
+                                                        <SelectItem key={product.id} value={product.id}>{product.name}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <Input
+                                                type="number"
+                                                min="1"
+                                                value={item.quantity}
+                                                onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                                                className="w-24"
+                                            />
+                                            <Button variant="outline" size="icon" onClick={() => handleRemoveItem(index)}>
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <Button type="button" variant="outline" size="sm" onClick={handleAddItem}>
+                                    <PlusCircle className="mr-2 h-4 w-4" /> Add Item
+                                </Button>
+                            </div>
+                            <div className="text-right text-xl font-bold flex items-center justify-end">
+                                Total: <Rupee className="inline-block h-5 w-5 ml-2 mr-1" />{formatNumber(total)}
+                            </div>
                         </div>
-                        <div className="text-right text-xl font-bold flex items-center justify-end">
-                            Total: <Rupee className="inline-block h-5 w-5 ml-2 mr-1" />{formatNumber(total)}
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                            <Button type="submit">Place Order</Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isAddCustomerOpen} onOpenChange={setIsAddCustomerOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Add New Customer</DialogTitle>
+                        <DialogDescription>
+                            Fill in the details below to add a new customer to the system.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleAddCustomerSubmit}>
+                        <div className="grid gap-4 py-4">
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="name" className="text-right">Name</Label>
+                                <Input id="name" name="name" className="col-span-3" required />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="email" className="text-right">Email</Label>
+                                <Input id="email" name="email" type="email" className="col-span-3" required />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="phone" className="text-right">Phone</Label>
+                                <Input id="phone" name="phone" className="col-span-3" />
+                            </div>
+                             <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="address" className="text-right">Address</Label>
+                                <Input id="address" name="address" className="col-span-3" />
+                            </div>
                         </div>
-                    </div>
-                    <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                        <Button type="submit">Place Order</Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={() => setIsAddCustomerOpen(false)}>Cancel</Button>
+                            <Button type="submit">Save Customer</Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+        </>
     );
 }
