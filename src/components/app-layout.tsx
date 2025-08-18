@@ -23,6 +23,7 @@ import { BarChart3, Boxes, LayoutDashboard, LogOut, Settings, ShoppingCart, User
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -144,7 +145,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <MainSidebar />
       <SidebarInset className="flex flex-col">
         <MobileHeader />
-        <main className="flex-1 p-4 md:p-6">{children}</main>
+        <ScrollArea className="flex-1">
+          <main className="flex-1 p-4 md:p-6">{children}</main>
+        </ScrollArea>
       </SidebarInset>
     </SidebarProvider>
   );
