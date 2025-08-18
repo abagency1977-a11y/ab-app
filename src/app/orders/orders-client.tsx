@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
@@ -674,31 +675,40 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {/* Payment Details */}
-                                    <Card><CardContent className="p-4 space-y-4">
-                                        <DialogTitle className="text-lg">Payment Details</DialogTitle>
-                                        <div className="space-y-2">
-                                            <Label>Payment Term</Label>
-                                            <RadioGroup value={paymentTerm} onValueChange={(v) => setPaymentTerm(v as PaymentTerm)} className="flex gap-4">
-                                                <div className="flex items-center space-x-2"><RadioGroupItem value="Full Payment" id="full_payment" /><Label htmlFor="full_payment">Full Payment</Label></div>
-                                                <div className="flex items-center space-x-2"><RadioGroupItem value="Credit" id="credit" /><Label htmlFor="credit">Credit</Label></div>
-                                            </RadioGroup>
-                                        </div>
-                                        {paymentTerm === 'Full Payment' ? (<>
+                                    <Card>
+                                      <CardContent className="p-4 space-y-4">
+                                          <DialogTitle className="text-lg">Payment Details</DialogTitle>
+                                          <div className="space-y-2">
+                                              <Label>Payment Term</Label>
+                                              <RadioGroup value={paymentTerm} onValueChange={(v) => setPaymentTerm(v as PaymentTerm)} className="flex gap-4">
+                                                  <div className="flex items-center space-x-2"><RadioGroupItem value="Full Payment" id="full_payment" /><Label htmlFor="full_payment">Full Payment</Label></div>
+                                                  <div className="flex items-center space-x-2"><RadioGroupItem value="Credit" id="credit" /><Label htmlFor="credit">Credit</Label></div>
+                                              </RadioGroup>
+                                          </div>
+                                          {paymentTerm === 'Full Payment' ? (
+                                            <>
+                                              <div className="space-y-2">
+                                                  <Label>Payment Mode</Label>
+                                                  <Select value={paymentMode} onValueChange={v => setPaymentMode(v as PaymentMode)}>
+                                                      <SelectTrigger><SelectValue /></SelectTrigger>
+                                                      <SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="Card">Card</SelectItem><SelectItem value="UPI">UPI</SelectItem><SelectItem value="Cheque">Cheque</SelectItem><SelectItem value="Online Transfer">Online Transfer</SelectItem></SelectContent>
+                                                  </Select>
+                                              </div>
+                                              {(paymentMode === 'Card' || paymentMode === 'Cheque') && (
+                                                  <div className="space-y-2">
+                                                      <Label>Payment Remarks</Label>
+                                                      <Input value={paymentRemarks} onChange={e => setPaymentRemarks(e.target.value)} placeholder="Enter card/cheque details"/>
+                                                  </div>
+                                              )}
+                                            </>
+                                          ) : (
                                             <div className="space-y-2">
-                                                <Label>Payment Mode</Label>
-                                                <Select value={paymentMode} onValueChange={v => setPaymentMode(v as PaymentMode)}>
-                                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                                    <SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="Card">Card</SelectItem><SelectItem value="UPI">UPI</SelectItem><SelectItem value="Cheque">Cheque</SelectItem><SelectItem value="Online Transfer">Online Transfer</SelectItem></SelectContent>
-                                                </Select>
+                                                <Label>Due Date</Label>
+                                                <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
                                             </div>
-                                            {(paymentMode === 'Card' || paymentMode === 'Cheque') && (
-                                                <div className="space-y-2">
-                                                    <Label>Payment Remarks</Label>
-                                                    <Input value={paymentRemarks} onChange={e => setPaymentRemarks(e.target.value)} placeholder="Enter card/cheque details"/>
-                                                </div>
-                                            )}
-                                        </>)}
-                                    </CardContent></Card>
+                                          )}
+                                      </CardContent>
+                                    </Card>
 
                                     {/* Summary & Delivery */}
                                     <div className="space-y-4">
