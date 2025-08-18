@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 
-const formatCurrency = (value: number) => `₹${new Intl.NumberFormat('en-IN').format(value)}`;
+const formatNumber = (value: number) => new Intl.NumberFormat('en-IN').format(value);
 
 type SortKey = keyof Customer | 'transactionHistory.totalSpent';
 
@@ -127,7 +127,7 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                                     <div className="text-sm">{customer.email}</div>
                                     <div className="text-xs text-muted-foreground">{customer.phone}</div>
                                 </TableCell>
-                                <TableCell>{formatCurrency(customer.transactionHistory.totalSpent)}</TableCell>
+                                <TableCell>₹{formatNumber(customer.transactionHistory.totalSpent)}</TableCell>
                                 <TableCell>{new Date(customer.transactionHistory.lastPurchaseDate).toLocaleDateString()}</TableCell>
                                 <TableCell>
                                     <DropdownMenu>

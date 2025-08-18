@@ -10,7 +10,7 @@ import { ChartConfig, ChartContainer, ChartTooltipContent } from '@/components/u
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { generateReportNarrative } from '@/ai/flows/generate-report-narrative';
 
-const formatCurrency = (value: number) => `₹${new Intl.NumberFormat('en-IN').format(value)}`;
+const formatNumber = (value: number) => new Intl.NumberFormat('en-IN').format(value);
 
 const revenueChartConfig = {
   revenue: { label: 'Revenue', color: 'hsl(var(--primary))' },
@@ -25,7 +25,7 @@ export function ReportsClient({ reportData }: { reportData: any }) {
         setIsLoading(true);
         setNarrative('');
         const dataSummary = `
-            Total Revenue: ${formatCurrency(reportData.totalRevenue)}
+            Total Revenue: ₹${formatNumber(reportData.totalRevenue)}
             Total Customers: ${reportData.totalCustomers}
             Pending Orders: ${reportData.pendingOrders}
             Monthly Revenue: ${JSON.stringify(reportData.revenueChartData)}
@@ -64,7 +64,7 @@ export function ReportsClient({ reportData }: { reportData: any }) {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                  <Card>
                     <CardHeader><CardTitle>Total Revenue</CardTitle></CardHeader>
-                    <CardContent><p className="text-3xl font-bold">{formatCurrency(reportData.totalRevenue)}</p></CardContent>
+                    <CardContent><p className="text-3xl font-bold">₹{formatNumber(reportData.totalRevenue)}</p></CardContent>
                 </Card>
                 <Card>
                     <CardHeader><CardTitle>Total Customers</CardTitle></CardHeader>
@@ -91,8 +91,8 @@ export function ReportsClient({ reportData }: { reportData: any }) {
                             <LineChart data={reportData.revenueChartData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                                 <CartesianGrid strokeDasharray="3 3" />
                                 <XAxis dataKey="month" />
-                                <YAxis tickFormatter={(value) => formatCurrency(value)} />
-                                <Tooltip content={<ChartTooltipContent formatter={(value) => formatCurrency(value as number)}/>} />
+                                <YAxis tickFormatter={(value) => `₹${formatNumber(value as number)}`} />
+                                <Tooltip content={<ChartTooltipContent formatter={(value) => `₹${formatNumber(value as number)}`}/>} />
                                 <Line type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={2} dot={{r: 5, fill: "hsl(var(--primary))"}} activeDot={{ r: 8 }} />
                             </LineChart>
                         </ResponsiveContainer>

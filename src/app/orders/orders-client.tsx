@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { getProducts } from '@/lib/data';
 
-const formatCurrency = (value: number) => `₹${new Intl.NumberFormat('en-IN').format(value)}`;
+const formatNumber = (value: number) => new Intl.NumberFormat('en-IN').format(value);
 
 export function OrdersClient({ orders: initialOrders, customers }: { orders: Order[], customers: Customer[] }) {
     const [orders, setOrders] = useState<Order[]>(initialOrders);
@@ -49,7 +49,7 @@ export function OrdersClient({ orders: initialOrders, customers }: { orders: Ord
         setModalContent('');
         setIsModalOpen(true);
 
-        const orderData = order.items.map(item => `${item.quantity}x ${item.productName} @ ${formatCurrency(item.price)}`).join('\n');
+        const orderData = order.items.map(item => `${item.quantity}x ${item.productName} @ ₹${formatNumber(item.price)}`).join('\n');
         
         try {
             const result = await generateInvoice({
@@ -141,7 +141,7 @@ export function OrdersClient({ orders: initialOrders, customers }: { orders: Ord
                                 <TableCell>
                                     <Badge variant={order.status === 'Fulfilled' ? 'default' : order.status === 'Pending' ? 'secondary' : 'destructive'} className="capitalize">{order.status}</Badge>
                                 </TableCell>
-                                <TableCell className="text-right">{formatCurrency(order.total)}</TableCell>
+                                <TableCell className="text-right">₹{formatNumber(order.total)}</TableCell>
                                 <TableCell>
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
@@ -329,7 +329,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                             </Button>
                         </div>
                         <div className="text-right text-xl font-bold">
-                            Total: {formatCurrency(total)}
+                            Total: ₹{formatNumber(total)}
                         </div>
                     </div>
                     <DialogFooter>

@@ -30,13 +30,13 @@ const StatCard = ({ title, value, icon: Icon, description }: { title: string, va
 
 export function DashboardClient({ data }: { data: any }) {
 
-    const formatCurrency = (value: number) => `₹${new Intl.NumberFormat('en-IN').format(value)}`;
+    const formatNumber = (value: number) => new Intl.NumberFormat('en-IN').format(value);
 
     return (
         <div className="flex flex-col gap-6">
             <h1 className="text-3xl font-bold">Dashboard</h1>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <StatCard title="Total Revenue" value={formatCurrency(data.totalRevenue)} icon={DollarSign} description="Total revenue from fulfilled orders" />
+                <StatCard title="Total Revenue" value={`₹${formatNumber(data.totalRevenue)}`} icon={DollarSign} description="Total revenue from fulfilled orders" />
                 <StatCard title="Customers" value={`${data.totalCustomers}`} icon={Users} description="Total number of customers" />
                 <StatCard title="Items in Stock" value={data.itemsInStock.toLocaleString()} icon={Boxes} description="Total items across all products" />
                 <StatCard title="Pending Orders" value={`${data.pendingOrders}`} icon={ShoppingCart} description="Orders awaiting fulfillment" />
@@ -62,7 +62,7 @@ export function DashboardClient({ data }: { data: any }) {
                                 <Tooltip
                                     cursor={false}
                                     content={<ChartTooltipContent
-                                        formatter={(value) => formatCurrency(value as number)}
+                                        formatter={(value) => `₹${formatNumber(value as number)}`}
                                         indicator="dot"
                                     />}
                                 />
@@ -95,7 +95,7 @@ export function DashboardClient({ data }: { data: any }) {
                                         <TableCell>
                                                 <Badge variant={order.status === 'Fulfilled' ? 'default' : order.status === 'Pending' ? 'secondary' : 'destructive'} className="capitalize">{order.status}</Badge>
                                         </TableCell>
-                                        <TableCell className="text-right">{formatCurrency(order.total)}</TableCell>
+                                        <TableCell className="text-right">₹{formatNumber(order.total)}</TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>
