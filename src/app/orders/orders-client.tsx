@@ -514,7 +514,12 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                                     <SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="Card">Card</SelectItem><SelectItem value="UPI">UPI</SelectItem><SelectItem value="Cheque">Cheque</SelectItem><SelectItem value="Online Transfer">Online Transfer</SelectItem></SelectContent>
                                                 </Select>
                                             </div>
-                                            <div className="space-y-2"><Label>Payment Remarks</Label><Input value={paymentRemarks} onChange={e => setPaymentRemarks(e.target.value)} /></div>
+                                            {(paymentMode === 'Card' || paymentMode === 'Cheque') && (
+                                                <div className="space-y-2">
+                                                    <Label>Payment Remarks</Label>
+                                                    <Input value={paymentRemarks} onChange={e => setPaymentRemarks(e.target.value)} placeholder="Enter card/cheque details"/>
+                                                </div>
+                                            )}
                                         </>) : (<>
                                             <div className="space-y-2"><Label>Due Date</Label><Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} /></div>
                                         </>)}
