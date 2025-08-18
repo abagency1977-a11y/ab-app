@@ -8,8 +8,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { MoreHorizontal, FileText, Receipt, Loader2, PlusCircle, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { generateInvoice } from '@/ai/flows/generate-invoice';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { generateFullPaymentInvoice } from '@/ai/flows/generate-full-payment-invoice';
+import { generateCreditInvoice } from '@/ai/flows/generate-credit-invoice';
 import { generateReceipt } from '@/ai/flows/generate-receipt';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -60,22 +61,40 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         setModalContent('');
         setIsModalOpen(true);
 
-        const orderData = order.items.map(item => `${item.quantity}x ${item.productName} @ ₹${formatNumber(item.price)}`).join('\n');
+        const orderData = order.items.map(item => `${item.quantity}x ${item.productName} @ ₹${formatNumber(item.price)} (GST: ${item.gst}%) = ₹${formatNumber(item.price * item.quantity * (1 + item.gst/100))}`).join('\n');
         
         try {
-            const result = await generateInvoice({
-                orderData,
-                customerName: customer.name,
-                customerAddress: customer.address,
-                invoiceNumber: order.id,
-                invoiceDate: new Date(order.orderDate).toISOString().split('T')[0],
-                companyName: 'AB Agency',
-                companyAddress: '456 Corporate Lane, Business City, 98765',
-            });
+            let result;
+            if (order.paymentTerm === 'Credit') {
+                result = await generateCreditInvoice({
+                    orderData,
+                    customerName: customer.name,
+                    customerAddress: customer.address,
+                    invoiceNumber: order.id,
+                    invoiceDate: new Date(order.orderDate).toISOString().split('T')[0],
+                    companyName: 'AB Agency',
+                    companyAddress: '456 Corporate Lane, Business City, 98765',
+                    grandTotal: order.grandTotal,
+                    dueDate: order.dueDate || 'N/A',
+                });
+            } else {
+                 result = await generateFullPaymentInvoice({
+                    orderData,
+                    customerName: customer.name,
+                    customerAddress: customer.address,
+                    invoiceNumber: order.id,
+                    invoiceDate: new Date(order.orderDate).toISOString().split('T')[0],
+                    companyName: 'AB Agency',
+                    companyAddress: '456 Corporate Lane, Business City, 98765',
+                    grandTotal: order.grandTotal,
+                    paymentMode: order.paymentMode || 'N/A'
+                });
+            }
             setModalTitle(`Invoice for ${order.id}`);
             setModalContent(result.invoice);
         } catch (e) {
             setModalContent('Failed to generate invoice.');
+            console.error(e);
         } finally {
             setIsLoading(false);
         }
@@ -131,64 +150,222 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                     <PlusCircle className="mr-2 h-4 w-4" /> Place Order
                 </Button>
             </div>
-            <Tabs value={statusFilter} onValueChange={setStatusFilter}>
+            <Tabs value={statusFilter} onValueChange={setStatusFilter} defaultValue="All">
                 <TabsList>
                     <TabsTrigger value="All">All</TabsTrigger>
                     <TabsTrigger value="Pending">Pending</TabsTrigger>
                     <TabsTrigger value="Fulfilled">Fulfilled</TabsTrigger>
                     <TabsTrigger value="Canceled">Canceled</TabsTrigger>
                 </TabsList>
+                <TabsContent value={statusFilter}>
+                    <div className="rounded-lg border shadow-sm">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Order ID</TableHead>
+                                    <TableHead>Customer</TableHead>
+                                    <TableHead>Date</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead className="text-right">Total</TableHead>
+                                    <TableHead>Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {filteredOrders.map((order) => (
+                                    <TableRow key={order.id}>
+                                        <TableCell className="font-medium">{order.id}</TableCell>
+                                        <TableCell>{order.customerName}</TableCell>
+                                        <TableCell>{new Date(order.orderDate).toLocaleDateString()}</TableCell>
+                                        <TableCell>
+                                            <Badge variant={order.status === 'Fulfilled' ? 'default' : order.status === 'Pending' ? 'secondary' : 'destructive'} className="capitalize">{order.status}</Badge>
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <div className="flex items-center justify-end">
+                                              <Rupee className="inline-block h-4 w-4 mr-1" />
+                                              {formatNumber(order.grandTotal)}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" className="h-8 w-8 p-0">
+                                                        <span className="sr-only">Open menu</span>
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem onClick={() => handleGenerateInvoice(order)}>
+                                                        <FileText className="mr-2 h-4 w-4" /> Generate Invoice
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => handleGenerateReceipt(order)} disabled={order.status !== 'Fulfilled'}>
+                                                        <Receipt className="mr-2 h-4 w-4" /> Generate Receipt
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </TabsContent>
+                 <TabsContent value="Pending">
+                    <div className="rounded-lg border shadow-sm">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Order ID</TableHead>
+                                    <TableHead>Customer</TableHead>
+                                    <TableHead>Date</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead className="text-right">Total</TableHead>
+                                    <TableHead>Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {filteredOrders.filter(o => o.status === 'Pending').map((order) => (
+                                    <TableRow key={order.id}>
+                                        <TableCell className="font-medium">{order.id}</TableCell>
+                                        <TableCell>{order.customerName}</TableCell>
+                                        <TableCell>{new Date(order.orderDate).toLocaleDateString()}</TableCell>
+                                        <TableCell>
+                                            <Badge variant='secondary' className="capitalize">{order.status}</Badge>
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <div className="flex items-center justify-end">
+                                              <Rupee className="inline-block h-4 w-4 mr-1" />
+                                              {formatNumber(order.grandTotal)}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" className="h-8 w-8 p-0">
+                                                        <span className="sr-only">Open menu</span>
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem onClick={() => handleGenerateInvoice(order)}>
+                                                        <FileText className="mr-2 h-4 w-4" /> Generate Invoice
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => handleGenerateReceipt(order)} disabled={order.status !== 'Fulfilled'}>
+                                                        <Receipt className="mr-2 h-4 w-4" /> Generate Receipt
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </TabsContent>
+                 <TabsContent value="Fulfilled">
+                    <div className="rounded-lg border shadow-sm">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Order ID</TableHead>
+                                    <TableHead>Customer</TableHead>
+                                    <TableHead>Date</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead className="text-right">Total</TableHead>
+                                    <TableHead>Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {filteredOrders.filter(o => o.status === 'Fulfilled').map((order) => (
+                                    <TableRow key={order.id}>
+                                        <TableCell className="font-medium">{order.id}</TableCell>
+                                        <TableCell>{order.customerName}</TableCell>
+                                        <TableCell>{new Date(order.orderDate).toLocaleDateString()}</TableCell>
+                                        <TableCell>
+                                            <Badge variant='default' className="capitalize">{order.status}</Badge>
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <div className="flex items-center justify-end">
+                                              <Rupee className="inline-block h-4 w-4 mr-1" />
+                                              {formatNumber(order.grandTotal)}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" className="h-8 w-8 p-0">
+                                                        <span className="sr-only">Open menu</span>
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem onClick={() => handleGenerateInvoice(order)}>
+                                                        <FileText className="mr-2 h-4 w-4" /> Generate Invoice
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => handleGenerateReceipt(order)} disabled={order.status !== 'Fulfilled'}>
+                                                        <Receipt className="mr-2 h-4 w-4" /> Generate Receipt
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </TabsContent>
+                 <TabsContent value="Canceled">
+                    <div className="rounded-lg border shadow-sm">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Order ID</TableHead>
+                                    <TableHead>Customer</TableHead>
+                                    <TableHead>Date</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead className="text-right">Total</TableHead>
+                                    <TableHead>Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {filteredOrders.filter(o => o.status === 'Canceled').map((order) => (
+                                    <TableRow key={order.id}>
+                                        <TableCell className="font-medium">{order.id}</TableCell>
+                                        <TableCell>{order.customerName}</TableCell>
+                                        <TableCell>{new Date(order.orderDate).toLocaleDateString()}</TableCell>
+                                        <TableCell>
+                                            <Badge variant='destructive' className="capitalize">{order.status}</Badge>
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <div className="flex items-center justify-end">
+                                              <Rupee className="inline-block h-4 w-4 mr-1" />
+                                              {formatNumber(order.grandTotal)}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" className="h-8 w-8 p-0">
+                                                        <span className="sr-only">Open menu</span>
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem onClick={() => handleGenerateInvoice(order)}>
+                                                        <FileText className="mr-2 h-4 w-4" /> Generate Invoice
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => handleGenerateReceipt(order)} disabled={order.status !== 'Fulfilled'}>
+                                                        <Receipt className="mr-2 h-4 w-4" /> Generate Receipt
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </TabsContent>
             </Tabs>
-            <div className="rounded-lg border shadow-sm">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Order ID</TableHead>
-                            <TableHead>Customer</TableHead>
-                            <TableHead>Date</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="text-right">Total</TableHead>
-                            <TableHead>Actions</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {filteredOrders.map((order) => (
-                            <TableRow key={order.id}>
-                                <TableCell className="font-medium">{order.id}</TableCell>
-                                <TableCell>{order.customerName}</TableCell>
-                                <TableCell>{new Date(order.orderDate).toLocaleDateString()}</TableCell>
-                                <TableCell>
-                                    <Badge variant={order.status === 'Fulfilled' ? 'default' : order.status === 'Pending' ? 'secondary' : 'destructive'} className="capitalize">{order.status}</Badge>
-                                </TableCell>
-                                <TableCell className="text-right">
-                                    <div className="flex items-center justify-end">
-                                      <Rupee className="inline-block h-4 w-4 mr-1" />
-                                      {formatNumber(order.grandTotal)}
-                                    </div>
-                                </TableCell>
-                                <TableCell>
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button variant="ghost" className="h-8 w-8 p-0">
-                                                <span className="sr-only">Open menu</span>
-                                                <MoreHorizontal className="h-4 w-4" />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                            <DropdownMenuItem onClick={() => handleGenerateInvoice(order)}>
-                                                <FileText className="mr-2 h-4 w-4" /> Generate Invoice
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => handleGenerateReceipt(order)} disabled={order.status !== 'Fulfilled'}>
-                                                <Receipt className="mr-2 h-4 w-4" /> Generate Receipt
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </div>
             
              <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
                 <DialogContent className="sm:max-w-2xl">
@@ -520,8 +697,6 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                                     <Input value={paymentRemarks} onChange={e => setPaymentRemarks(e.target.value)} placeholder="Enter card/cheque details"/>
                                                 </div>
                                             )}
-                                        </>) : (<>
-                                            <div className="space-y-2"><Label>Due Date</Label><Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} /></div>
                                         </>)}
                                     </CardContent></Card>
 

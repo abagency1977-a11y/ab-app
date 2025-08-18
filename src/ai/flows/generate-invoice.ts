@@ -1,58 +1,73 @@
 'use server';
 
 /**
- * @fileOverview Generates invoices from order data.
+ * @fileOverview Generates invoices for orders that have been paid in full.
  *
- * - generateInvoice - A function that handles the invoice generation process.
- * - GenerateInvoiceInput - The input type for the generateInvoice function.
- * - GenerateInvoiceOutput - The return type for the generateInvoice function.
+ * - generateFullPaymentInvoice - A function that handles the invoice generation process.
+ * - GenerateFullPaymentInvoiceInput - The input type for the generateFullPaymentInvoice function.
+ * - GenerateFullPaymentInvoiceOutput - The return type for the generateFullPaymentInvoice function.
  */
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
-const GenerateInvoiceInputSchema = z.object({
-  orderData: z.string().describe('The order data to generate the invoice from.'),
+const GenerateFullPaymentInvoiceInputSchema = z.object({
+  orderData: z.string().describe('The line items of the order to generate the invoice from.'),
   customerName: z.string().describe('The name of the customer.'),
   customerAddress: z.string().describe('The address of the customer.'),
   invoiceNumber: z.string().describe('The invoice number.'),
   invoiceDate: z.string().describe('The invoice date.'),
   companyName: z.string().describe('The name of the company.'),
   companyAddress: z.string().describe('The address of the company.'),
+  grandTotal: z.number().describe('The total amount of the order.'),
+  paymentMode: z.string().describe('The mode of payment used (e.g., Cash, Card).'),
 });
-export type GenerateInvoiceInput = z.infer<typeof GenerateInvoiceInputSchema>;
+export type GenerateFullPaymentInvoiceInput = z.infer<typeof GenerateFullPaymentInvoiceInputSchema>;
 
-const GenerateInvoiceOutputSchema = z.object({
-  invoice: z.string().describe('The generated invoice.'),
+const GenerateFullPaymentInvoiceOutputSchema = z.object({
+  invoice: z.string().describe('The generated invoice text.'),
 });
-export type GenerateInvoiceOutput = z.infer<typeof GenerateInvoiceOutputSchema>;
+export type GenerateFullPaymentInvoiceOutput = z.infer<typeof GenerateFullPaymentInvoiceOutputSchema>;
 
-export async function generateInvoice(input: GenerateInvoiceInput): Promise<GenerateInvoiceOutput> {
-  return generateInvoiceFlow(input);
+export async function generateFullPaymentInvoice(input: GenerateFullPaymentInvoiceInput): Promise<GenerateFullPaymentInvoiceOutput> {
+  return generateFullPaymentInvoiceFlow(input);
 }
 
 const prompt = ai.definePrompt({
-  name: 'generateInvoicePrompt',
-  input: {schema: GenerateInvoiceInputSchema},
-  output: {schema: GenerateInvoiceOutputSchema},
-  prompt: `You are an accounting assistant. You will generate an invoice based on the provided order data. The invoice should include the customer name, customer address, invoice number, invoice date, company name, company address, and the order details.
+  name: 'generateFullPaymentInvoicePrompt',
+  input: {schema: GenerateFullPaymentInvoiceInputSchema},
+  output: {schema: GenerateFullPaymentInvoiceOutputSchema},
+  prompt: `You are an accounting assistant. Generate a professional invoice for a FULLY PAID order.
+  The invoice should be clearly marked as "PAID IN FULL".
 
-  Customer Name: {{{customerName}}}
-  Customer Address: {{{customerAddress}}}
-  Invoice Number: {{{invoiceNumber}}}
-  Invoice Date: {{{invoiceDate}}}
   Company Name: {{{companyName}}}
   Company Address: {{{companyAddress}}}
-  Order Data: {{{orderData}}}
-  \n  Please generate the invoice in a readable format.
+
+  Invoice To:
+  {{{customerName}}}
+  {{{customerAddress}}}
+
+  Invoice Number: {{{invoiceNumber}}}
+  Invoice Date: {{{invoiceDate}}}
+
+  Items:
+  {{{orderData}}}
+
+  ---
+  Grand Total: {{{grandTotal}}}
+  Payment Mode: {{{paymentMode}}}
+  Status: PAID IN FULL
+  ---
+
+  Please format the invoice clearly.
   `,
 });
 
-const generateInvoiceFlow = ai.defineFlow(
+const generateFullPaymentInvoiceFlow = ai.defineFlow(
   {
-    name: 'generateInvoiceFlow',
-    inputSchema: GenerateInvoiceInputSchema,
-    outputSchema: GenerateInvoiceOutputSchema,
+    name: 'generateFullPaymentInvoiceFlow',
+    inputSchema: GenerateFullPaymentInvoiceInputSchema,
+    outputSchema: GenerateFullPaymentInvoiceOutputSchema,
   },
   async input => {
     const {output} = await prompt(input);
