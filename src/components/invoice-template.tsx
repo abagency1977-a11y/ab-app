@@ -23,15 +23,9 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
     <div ref={ref} className="bg-white text-black p-8" style={{ width: '210mm', minHeight: '297mm', fontFamily: "'PT Sans', sans-serif" }}>
       <div className="flex justify-between items-start mb-8">
         <div>
-          {logoUrl ? (
+          {logoUrl && (
             <img src={logoUrl} alt="Company Logo" className="h-20" />
-          ) : (
-            <div className="h-20 w-40 bg-gray-200 flex items-center justify-center">
-              <span className="text-gray-500">Your Logo</span>
-            </div>
           )}
-           <h1 className="text-2xl font-bold text-blue-700 mt-2">AB Account</h1>
-           <p className="text-sm">123 Business Rd, Suite 101, Commerce City, 400001</p>
         </div>
         <div className="text-right">
           <h2 className="text-4xl font-bold uppercase text-gray-700">Invoice</h2>
@@ -44,14 +38,14 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
 
       <div className="flex justify-between mb-8">
         <div>
-          <h3 className="font-bold text-gray-600">Billed To:</h3>
-          <p>{customer.name}</p>
+          <h3 className="font-bold text-gray-600 mb-2">Billed To:</h3>
+          <p className="font-bold">{customer.name}</p>
           <p>{customer.address}</p>
           <p>{customer.email}</p>
           <p>{customer.phone}</p>
         </div>
         <div className="text-right">
-            <h3 className="font-bold text-gray-600">Delivery Address:</h3>
+            <h3 className="font-bold text-gray-600 mb-2">Delivery Address:</h3>
             <p>{order.deliveryAddress || customer.address}</p>
         </div>
       </div>
@@ -121,7 +115,7 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
           </div>
       )}
 
-      <div className="text-center text-gray-500 text-xs">
+      <div className="text-center text-gray-500 text-xs absolute bottom-8 left-1/2 -translate-x-1/2">
         <p>Thank you for your business!</p>
         <p>This is a computer-generated invoice and does not require a signature.</p>
       </div>
