@@ -233,7 +233,7 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                             Fill in the details below to add a new customer to the system.
                         </DialogDescription>
                     </DialogHeader>
-                    <form id="add-customer-form" onSubmit={handleAddCustomer}>
+                    <form id="add-customer-form" onSubmit={handleAddCustomer} className="space-y-4">
                         <div className="grid gap-4 py-4">
                             <div className="grid grid-cols-4 items-center gap-4">
                                 <Label htmlFor="name" className="text-right">Name</Label>
@@ -252,9 +252,9 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                                 <Input id="address" name="address" className="col-span-3" />
                             </div>
                         </div>
-                        <DialogFooter>
+                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
-                            <Button type="submit">Save Customer</Button>
+                            <Button type="submit" form="add-customer-form">Save Customer</Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>
