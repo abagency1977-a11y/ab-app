@@ -18,11 +18,11 @@ import { Loader2, Receipt } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { ReceiptTemplate } from '@/components/receipt-template';
-import { getCustomers } from '@/lib/data';
+import { getCustomers, getOrders } from '@/lib/data';
 
 const formatNumber = (value: number | undefined) => {
-    if (value === undefined || isNaN(value)) return '0.00';
-    return new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+    if (value === undefined || isNaN(value)) return '₹0.00';
+    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value);
 };
 
 const InvoiceTable = ({ invoices, onRowClick }: { invoices: Order[], onRowClick?: (invoice: Order) => void }) => (
@@ -48,10 +48,10 @@ const InvoiceTable = ({ invoices, onRowClick }: { invoices: Order[], onRowClick?
                             <Badge variant={invoice.status === 'Fulfilled' ? 'default' : invoice.status === 'Pending' ? 'secondary' : 'destructive'} className="capitalize">{invoice.status}</Badge>
                         </TableCell>
                         <TableCell className={`text-right font-medium ${invoice.balanceDue && invoice.balanceDue > 0 ? 'text-red-600' : ''}`}>
-                            ₹{formatNumber(invoice.balanceDue)}
+                            {formatNumber(invoice.balanceDue)}
                         </TableCell>
                         <TableCell className="text-right">
-                            ₹{formatNumber(invoice.grandTotal)}
+                            {formatNumber(invoice.grandTotal)}
                         </TableCell>
                     </TableRow>
                 ))}
@@ -61,8 +61,8 @@ const InvoiceTable = ({ invoices, onRowClick }: { invoices: Order[], onRowClick?
 );
 
 
-export function InvoicesClient({ orders, customers: initialCustomers }: { orders: Order[], customers: Customer[] }) {
-    const [allInvoices, setAllInvoices] = useState<Order[]>(orders);
+export function InvoicesClient({ orders: initialOrders, customers: initialCustomers }: { orders: Order[], customers: Customer[] }) {
+    const [allInvoices, setAllInvoices] = useState<Order[]>(initialOrders);
     const [allCustomers, setAllCustomers] = useState<Customer[]>(initialCustomers);
     const [selectedInvoice, setSelectedInvoice] = useState<Order | null>(null);
     const [receiptToPrint, setReceiptToPrint] = useState<{order: Order, payment: Payment, historicalPayments: Payment[]} | null>(null);
@@ -72,15 +72,28 @@ export function InvoicesClient({ orders, customers: initialCustomers }: { orders
     const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
 
     useEffect(() => {
+        const storedOrders = localStorage.getItem('orders');
+        if (storedOrders) {
+            setAllInvoices(JSON.parse(storedOrders));
+        }
+        const storedCustomers = localStorage.getItem('customers');
+        if (storedCustomers) {
+            setAllCustomers(JSON.parse(storedCustomers));
+        }
         const savedLogo = localStorage.getItem('companyLogo');
         if (savedLogo) {
             setLogoUrl(savedLogo);
         }
     }, []);
 
+    const updateOrders = (newOrders: Order[]) => {
+        setAllInvoices(newOrders);
+        localStorage.setItem('orders', JSON.stringify(newOrders));
+    };
+
     const { fullPaidInvoices, creditInvoices } = useMemo(() => {
-        const fullPaid = allInvoices.filter(order => order.paymentTerm === 'Full Payment' && order.balanceDue === 0);
-        const credit = allInvoices.filter(order => order.paymentTerm === 'Credit' || (order.balanceDue && order.balanceDue > 0));
+        const fullPaid = allInvoices.filter(order => order.balanceDue !== undefined && order.balanceDue <= 0);
+        const credit = allInvoices.filter(order => order.balanceDue && order.balanceDue > 0);
         return { fullPaidInvoices: fullPaid, creditInvoices: credit };
     }, [allInvoices]);
     
@@ -98,16 +111,15 @@ export function InvoicesClient({ orders, customers: initialCustomers }: { orders
         if (updatedInvoice.balanceDue <= 0) {
             updatedInvoice.balanceDue = 0;
             updatedInvoice.status = 'Fulfilled';
-            updatedInvoice.paymentTerm = 'Full Payment'; // Move to full paid
         }
 
         const newAllInvoices = allInvoices.map(inv => inv.id === updatedInvoice.id ? updatedInvoice : inv);
         
-        setAllInvoices(newAllInvoices);
+        updateOrders(newAllInvoices);
         setSelectedInvoice(updatedInvoice); // Keep sheet open with updated data
         toast({
             title: 'Payment Recorded',
-            description: `₹${formatNumber(newPayment.amount)} payment for invoice ${updatedInvoice.id.replace('ORD','INV')} has been recorded.`,
+            description: `${formatNumber(newPayment.amount)} payment for invoice ${updatedInvoice.id.replace('ORD','INV')} has been recorded.`,
         });
     };
 
@@ -191,11 +203,11 @@ export function InvoicesClient({ orders, customers: initialCustomers }: { orders
                         <div className="space-y-6 py-4 overflow-y-auto flex-1 pr-6">
                             <div className="flex justify-between text-sm">
                                 <span className="text-muted-foreground">Total Amount:</span>
-                                <span>₹{formatNumber(selectedInvoice.grandTotal)}</span>
+                                <span>{formatNumber(selectedInvoice.grandTotal)}</span>
                             </div>
                             <div className="flex justify-between font-bold text-lg">
                                 <span className="text-red-600">Balance Due:</span>
-                                <span className="text-red-600">₹{formatNumber(selectedInvoice.balanceDue)}</span>
+                                <span className="text-red-600">{formatNumber(selectedInvoice.balanceDue)}</span>
                             </div>
 
                             <Separator />
@@ -217,7 +229,7 @@ export function InvoicesClient({ orders, customers: initialCustomers }: { orders
                                         selectedInvoice.payments.map(payment => (
                                              <div key={payment.id} className="flex justify-between items-center text-sm p-2 bg-muted/50 rounded-lg">
                                                 <div>
-                                                    <p className="font-medium">₹{formatNumber(payment.amount)}</p>
+                                                    <p className="font-medium">{formatNumber(payment.amount)}</p>
                                                     <p className="text-xs text-muted-foreground">{new Date(payment.paymentDate).toLocaleDateString('en-IN')} via {payment.method}</p>
                                                 </div>
                                                 <Button size="sm" variant="outline" onClick={() => handleGenerateReceipt(payment)} disabled={isReceiptLoading}>
@@ -293,7 +305,7 @@ function PaymentForm({ balanceDue, onAddPayment }: { balanceDue: number; onAddPa
                 <CardContent className="space-y-4">
                     <div className="space-y-2">
                         <Label htmlFor="amount">Amount Received</Label>
-                        <Input id="amount" type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder={formatNumber(balanceDue)} max={balanceDue} required />
+                        <Input id="amount" type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder={String(balanceDue)} max={balanceDue} required />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">

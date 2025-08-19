@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Product } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -17,7 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 
-const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value);
 
 export function InventoryClient({ products: initialProducts }: { products: Product[] }) {
     const [products, setProducts] = useState<Product[]>(initialProducts);
@@ -30,6 +30,18 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
     const [productToEdit, setProductToEdit] = useState<Product | null>(null);
     const [productToDelete, setProductToDelete] = useState<Product | null>(null);
     const { toast } = useToast();
+
+    useEffect(() => {
+        const storedProducts = localStorage.getItem('products');
+        if (storedProducts) {
+            setProducts(JSON.parse(storedProducts));
+        }
+    }, []);
+
+    const updateProducts = (newProducts: Product[]) => {
+        setProducts(newProducts);
+        localStorage.setItem('products', JSON.stringify(newProducts));
+    };
 
     const handlePredictDemand = async () => {
         if (!selectedProduct) {
@@ -74,7 +86,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             historicalData: [],
         };
 
-        setProducts(prev => [...prev, newProduct]);
+        updateProducts([...products, newProduct]);
         setIsAddDialogOpen(false);
         toast({
             title: "Product Added",
@@ -96,7 +108,8 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             gst: Number(formData.get('gst')),
         };
 
-        setProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p));
+        const newProducts = products.map(p => p.id === updatedProduct.id ? updatedProduct : p);
+        updateProducts(newProducts);
         setIsEditDialogOpen(false);
         setProductToEdit(null);
         toast({
@@ -107,8 +120,8 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
 
     const handleDeleteProduct = () => {
         if (!productToDelete) return;
-
-        setProducts(prev => prev.filter(p => p.id !== productToDelete.id));
+        const newProducts = products.filter(p => p.id !== productToDelete.id);
+        updateProducts(newProducts);
         setProductToDelete(null);
         toast({
             title: "Product Deleted",
@@ -146,7 +159,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                         <TableCell>{product.sku}</TableCell>
                                         <TableCell>{product.stock}</TableCell>
                                         <TableCell className="text-right">
-                                            ₹{formatNumber(product.price)}
+                                            {formatNumber(product.price)}
                                         </TableCell>
                                         <TableCell>{product.gst}%</TableCell>
                                         <TableCell>
@@ -302,3 +315,4 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             </AlertDialog>
         </div>
     );
+}

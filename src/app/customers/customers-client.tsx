@@ -1,8 +1,8 @@
 
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import type { Customer } from '@/lib/types';
+import React, { useState, useMemo, useEffect } from 'react';
+import type { Customer, Order } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -13,13 +13,15 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { getOrders } from '@/lib/data';
 
-const formatNumber = (value: number) => new Intl.NumberFormat('en-IN').format(value);
+const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value);
 
 type SortKey = keyof Customer | 'transactionHistory.totalSpent';
 
 export function CustomersClient({ customers: initialCustomers }: { customers: Customer[] }) {
     const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
+    const [orders, setOrders] = useState<Order[]>([]);
     const [search, setSearch] = useState('');
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'ascending' | 'descending' } | null>(null);
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -27,6 +29,24 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
     const [isBulkPaymentOpen, setIsBulkPaymentOpen] = useState(false);
     const [customerForBulkPayment, setCustomerForBulkPayment] = useState<Customer | null>(null);
     const { toast } = useToast();
+
+     useEffect(() => {
+        const storedCustomers = localStorage.getItem('customers');
+        if (storedCustomers) {
+            setCustomers(JSON.parse(storedCustomers));
+        }
+        const storedOrders = localStorage.getItem('orders');
+        if (storedOrders) {
+            setOrders(JSON.parse(storedOrders));
+        } else {
+            getOrders().then(setOrders);
+        }
+    }, []);
+
+    const updateCustomers = (newCustomers: Customer[]) => {
+        setCustomers(newCustomers);
+        localStorage.setItem('customers', JSON.stringify(newCustomers));
+    };
 
     const sortedCustomers = useMemo(() => {
         let sortableItems = [...customers];
@@ -79,9 +99,7 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
             address: formData.get('address') as string,
             transactionHistory: { totalSpent: 0, lastPurchaseDate: new Date().toISOString().split('T')[0] },
         };
-        // Here you would typically make an API call to save the new customer to your backend.
-        // For this prototype, we'll just add it to the local state.
-        setCustomers(prev => [...prev, newCustomer]);
+        updateCustomers([...customers, newCustomer]);
         setIsAddDialogOpen(false);
         toast({
             title: "Customer Added",
@@ -91,8 +109,8 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
 
     const handleDeleteCustomer = () => {
         if (!customerToDelete) return;
-
-        setCustomers(prev => prev.filter(c => c.id !== customerToDelete.id));
+        const newCustomers = customers.filter(c => c.id !== customerToDelete.id);
+        updateCustomers(newCustomers);
         setCustomerToDelete(null);
         toast({
             title: "Customer Deleted",
@@ -102,7 +120,8 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
     };
     
     const openBulkPaymentDialog = (customer: Customer) => {
-        setCustomerForBulkPayment(customer);
+        const customerOrders = orders.filter(o => o.customerId === customer.id && o.balanceDue && o.balanceDue > 0);
+        setCustomerForBulkPayment({ ...customer, orders: customerOrders });
         setIsBulkPaymentOpen(true);
     };
 
@@ -151,7 +170,7 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                                     <div className="text-xs text-muted-foreground">{customer.phone}</div>
                                 </TableCell>
                                 <TableCell>
-                                    ₹{formatNumber(customer.transactionHistory.totalSpent)}
+                                    {formatNumber(customer.transactionHistory.totalSpent)}
                                 </TableCell>
                                 <TableCell>{new Date(customer.transactionHistory.lastPurchaseDate).toLocaleDateString('en-IN')}</TableCell>
                                 <TableCell>
@@ -242,7 +261,7 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
 function BulkPaymentDialog({ isOpen, onOpenChange, customer }: {
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;
-    customer: Customer | null;
+    customer: (Customer & { orders?: Order[] }) | null;
 }) {
     const [amount, setAmount] = useState('');
     const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);

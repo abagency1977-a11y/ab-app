@@ -1,11 +1,4 @@
 
-
-
-
-
-
-
-
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
@@ -21,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { getProducts } from '@/lib/data';
+import { getProducts, getCustomers, getOrders } from '@/lib/data';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
@@ -34,8 +27,8 @@ import { startOfWeek, startOfMonth, subMonths, isWithinInterval } from 'date-fns
 
 
 const formatNumber = (value: number) => {
-    if (isNaN(value)) return '0.00';
-    return new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+    if (isNaN(value)) return '₹0.00';
+    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value);
 };
 
 export function OrdersClient({ orders: initialOrders, customers: initialCustomers }: { orders: Order[], customers: Customer[] }) {
@@ -52,12 +45,37 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     const [dateFilter, setDateFilter] = useState('All');
     
     useEffect(() => {
-        getProducts().then(setProducts);
+        const storedOrders = localStorage.getItem('orders');
+        if (storedOrders) {
+            setOrders(JSON.parse(storedOrders));
+        }
+        const storedCustomers = localStorage.getItem('customers');
+        if (storedCustomers) {
+            setCustomers(JSON.parse(storedCustomers));
+        } else {
+            getCustomers().then(setCustomers);
+        }
+        const storedProducts = localStorage.getItem('products');
+        if (storedProducts) {
+            setProducts(JSON.parse(storedProducts));
+        } else {
+            getProducts().then(setProducts);
+        }
         const savedLogo = localStorage.getItem('companyLogo');
         if (savedLogo) {
             setLogoUrl(savedLogo);
         }
     }, []);
+
+    const updateOrders = (newOrders: Order[]) => {
+        setOrders(newOrders);
+        localStorage.setItem('orders', JSON.stringify(newOrders));
+    };
+
+     const updateCustomers = (newCustomers: Customer[]) => {
+        setCustomers(newCustomers);
+        localStorage.setItem('customers', JSON.stringify(newCustomers));
+    };
 
     const filteredOrders = useMemo(() => {
         const now = new Date();
@@ -136,7 +154,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
 
 
     const handleAddOrder = (newOrder: Order) => {
-        setOrders(prev => [newOrder, ...prev]);
+        updateOrders([newOrder, ...orders]);
         toast({
             title: "Order Placed",
             description: `Order ${newOrder.id} has been successfully created.`,
@@ -144,7 +162,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     }
 
     const handleAddCustomer = (newCustomer: Customer) => {
-        setCustomers(prev => [...prev, newCustomer]);
+        updateCustomers([...customers, newCustomer]);
         toast({
             title: "Customer Added",
             description: `${newCustomer.name} has been successfully added.`,
@@ -206,7 +224,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                                     <Badge variant={order.status === 'Fulfilled' ? 'default' : order.status === 'Pending' ? 'secondary' : 'destructive'} className="capitalize">{order.status}</Badge>
                                 </TableCell>
                                 <TableCell className="text-right">
-                                    ₹{formatNumber(order.grandTotal)}
+                                    {formatNumber(order.grandTotal)}
                                 </TableCell>
                                 <TableCell>
                                     <DropdownMenu>
@@ -429,7 +447,22 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
             deliveryDate,
             deliveryAddress: deliveryAddress || customer.address,
             isGstInvoice,
+            payments: [],
+            balanceDue: grandTotal,
         };
+
+        if (paymentTerm === 'Full Payment') {
+            newOrder.status = 'Fulfilled';
+            newOrder.balanceDue = 0;
+            newOrder.payments = [{
+                id: `PAY-${Date.now()}`,
+                paymentDate: new Date().toISOString().split('T')[0],
+                amount: grandTotal,
+                method: paymentMode || 'Cash',
+                notes: paymentRemarks,
+            }];
+        }
+
         onOrderAdded(newOrder);
         resetForm();
     };
@@ -514,9 +547,9 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                                         <TableRow key={index}>
                                                             <TableCell>{product?.name}</TableCell>
                                                             <TableCell>{item.quantity}</TableCell>
-                                                            <TableCell>₹{formatNumber(price)}</TableCell>
+                                                            <TableCell>{formatNumber(price)}</TableCell>
                                                             <TableCell>{isGstInvoice ? `${item.gst}%` : 'N/A'}</TableCell>
-                                                            <TableCell>₹{formatNumber(itemTotal)}</TableCell>
+                                                            <TableCell>{formatNumber(itemTotal)}</TableCell>
                                                             <TableCell className="space-x-2">
                                                                 <Button type="button" size="sm" variant="outline" onClick={() => handleEditItemClick(index)}>Edit</Button>
                                                                 <Button type="button" size="sm" variant="destructive" onClick={() => handleRemoveItem(index)}>Delete</Button>
@@ -571,19 +604,19 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                     <div className="space-y-4">
                                         <Card><CardContent className="p-4 space-y-2">
                                             <DialogTitle className="text-lg">Order Summary</DialogTitle>
-                                            <div className="flex justify-between"><span>Subtotal:</span> <span className="font-semibold">₹{formatNumber(subTotal)}</span></div>
-                                            {isGstInvoice && <div className="flex justify-between"><span>Total GST:</span> <span className="font-semibold">₹{formatNumber(totalGst)}</span></div>}
+                                            <div className="flex justify-between"><span>Subtotal:</span> <span className="font-semibold">{formatNumber(subTotal)}</span></div>
+                                            {isGstInvoice && <div className="flex justify-between"><span>Total GST:</span> <span className="font-semibold">{formatNumber(totalGst)}</span></div>}
                                             <Separator />
                                             <div className="flex justify-between text-lg">
                                                 <span className="font-bold">Grand Total Value:</span>
-                                                <span className="font-bold text-primary">₹{formatNumber(grandTotal)}</span>
+                                                <span className="font-bold text-primary">{formatNumber(grandTotal)}</span>
                                             </div>
                                             <div className="flex items-center space-x-2 pt-2">
                                                 <Checkbox id="enable_discount" checked={enableDiscount} onCheckedChange={c => setEnableDiscount(c as boolean)} />
                                                 <Label htmlFor="enable_discount" className="flex-1">Enable Discount</Label>
                                                 <Input type="number" placeholder="0.00" className="w-24" value={String(discount)} onChange={e => setDiscount(parseFloat(e.target.value) || 0)} disabled={!enableDiscount} />
                                             </div>
-                                            <div className="flex justify-between"><span>Discount Applied:</span> <span className="font-semibold">₹{formatNumber(discount)}</span></div>
+                                            <div className="flex justify-between"><span>Discount Applied:</span> <span className="font-semibold">{formatNumber(discount)}</span></div>
                                              <div className="flex items-center space-x-2 pt-2">
                                                 <Checkbox id="is_gst_invoice" checked={isGstInvoice} onCheckedChange={c => setIsGstInvoice(c as boolean)} />
                                                 <Label htmlFor="is_gst_invoice">Generate GST Invoice?</Label>
@@ -626,4 +659,3 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         </>
     );
 }
-

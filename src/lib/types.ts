@@ -1,5 +1,4 @@
 
-
 export interface Customer {
   id: string;
   name: string;
@@ -10,6 +9,8 @@ export interface Customer {
     totalSpent: number;
     lastPurchaseDate: string;
   };
+  // Added to support bulk payment dialog
+  orders?: Order[];
 }
 
 export interface Product {
@@ -44,7 +45,7 @@ export interface OrderItem {
 }
 
 export interface Order {
-  id: string;
+  id:string;
   customerId: string;
   customerName: string;
   orderDate: string;
