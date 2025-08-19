@@ -32,7 +32,6 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
     const [productToEdit, setProductToEdit] = useState<Product | null>(null);
     const [productToDelete, setProductToDelete] = useState<Product | null>(null);
     const [isMounted, setIsMounted] = useState(false);
-    const addProductFormRef = useRef<HTMLFormElement>(null);
     const { toast } = useToast();
 
     useEffect(() => {
@@ -286,7 +285,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                             Fill in the details below to add a new product to the inventory.
                         </DialogDescription>
                     </DialogHeader>
-                    <form ref={addProductFormRef} onSubmit={handleAddProduct} className="space-y-4">
+                    <form onSubmit={handleAddProduct} className="space-y-4">
                         <div className="grid gap-4 py-4">
                             <div className="grid grid-cols-4 items-center gap-4">
                                 <Label htmlFor="name" className="text-right">Name</Label>
@@ -309,11 +308,11 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                 <Input id="gst" name="gst" type="number" step="0.01" className="col-span-3" required />
                             </div>
                         </div>
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
+                            <Button type="submit">Add Product</Button>
+                        </DialogFooter>
                     </form>
-                    <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
-                        <Button type="button" onClick={() => addProductFormRef.current?.requestSubmit()}>Add Product</Button>
-                    </DialogFooter>
                 </DialogContent>
             </Dialog>
 

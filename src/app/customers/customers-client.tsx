@@ -30,7 +30,6 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
     const [isBulkPaymentOpen, setIsBulkPaymentOpen] = useState(false);
     const [customerForBulkPayment, setCustomerForBulkPayment] = useState<Customer | null>(null);
     const [isMounted, setIsMounted] = useState(false);
-    const addCustomerFormRef = useRef<HTMLFormElement>(null);
     const { toast } = useToast();
 
      useEffect(() => {
@@ -239,7 +238,7 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                             Fill in the details below to add a new customer to the system.
                         </DialogDescription>
                     </DialogHeader>
-                    <form ref={addCustomerFormRef} onSubmit={handleAddCustomer} className="space-y-4">
+                    <form onSubmit={handleAddCustomer} className="space-y-4">
                         <div className="grid gap-4 py-4">
                             <div className="grid grid-cols-4 items-center gap-4">
                                 <Label htmlFor="name" className="text-right">Name</Label>
@@ -258,11 +257,11 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                                 <Input id="address" name="address" className="col-span-3" />
                             </div>
                         </div>
+                         <DialogFooter>
+                            <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
+                            <Button type="submit">Save Customer</Button>
+                        </DialogFooter>
                     </form>
-                     <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
-                        <Button type="button" onClick={() => addCustomerFormRef.current?.requestSubmit()}>Save Customer</Button>
-                    </DialogFooter>
                 </DialogContent>
             </Dialog>
 
