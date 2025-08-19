@@ -33,7 +33,7 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
            <div>
             <h2 className="text-2xl font-bold">AB Agency</h2>
             <p className="text-xs">No.1, Ayyanchery main road, Ayyanchery, Urapakkam, Chennai - 603210.</p>
-            <p className="text-xs">abagency1977@gmaoil.com | 95511 95505 / 95001 82975</p>
+            <p className="text-xs">abagency1977@gmail.com | 95511 95505 / 95001 82975</p>
           </div>
         </div>
         <div className="text-right">
@@ -119,7 +119,7 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
       {order.paymentTerm === 'Credit' && (
           <div className="mb-8 p-4 bg-red-50 border border-red-200 rounded-lg">
             <h3 className="font-bold text-red-800">Payment Due</h3>
-            <p className="text-red-700 font-bold inline-flex items-center">Amount Due: <Rupee className="inline-block h-4 w-4 mx-1" />{formatNumber(order.grandTotal)}</p>
+            <p className="text-red-700 font-bold inline-flex items-center"><Rupee className="inline-block h-4 w-4 mx-1" />{formatNumber(order.grandTotal)}</p>
             {order.dueDate && <p className="text-red-700">Due Date: {new Date(order.dueDate).toLocaleDateString()}</p>}
           </div>
       )}
