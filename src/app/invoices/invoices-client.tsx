@@ -146,7 +146,7 @@ export function InvoicesClient({ orders }: { orders: Order[] }) {
             </Tabs>
 
             <Sheet open={!!selectedInvoice} onOpenChange={(open) => !open && setSelectedInvoice(null)}>
-                <SheetContent className="sm:max-w-lg w-[90vw]">
+                <SheetContent className="sm:max-w-lg w-[90vw] flex flex-col">
                     {selectedInvoice && (
                         <>
                         <SheetHeader>
@@ -155,7 +155,7 @@ export function InvoicesClient({ orders }: { orders: Order[] }) {
                                 Manage payments for {selectedInvoice.customerName}.
                             </SheetDescription>
                         </SheetHeader>
-                        <div className="space-y-6 py-4">
+                        <div className="space-y-6 py-4 overflow-y-auto flex-1 pr-6">
                             <div className="flex justify-between text-sm">
                                 <span className="text-muted-foreground">Total Amount:</span>
                                 <span>₹{formatNumber(selectedInvoice.grandTotal)}</span>
@@ -167,7 +167,7 @@ export function InvoicesClient({ orders }: { orders: Order[] }) {
 
                             <Separator />
                             
-                            {selectedInvoice.paymentTerm === 'Credit' && selectedInvoice.balanceDue > 0 && (
+                            {selectedInvoice.balanceDue > 0 && (
                                 <PaymentForm 
                                     balanceDue={selectedInvoice.balanceDue || 0}
                                     onAddPayment={handleAddPayment} 
@@ -297,7 +297,3 @@ function PaymentForm({ balanceDue, onAddPayment }: { balanceDue: number; onAddPa
         </Card>
     );
 }
-
-    
-
-    
