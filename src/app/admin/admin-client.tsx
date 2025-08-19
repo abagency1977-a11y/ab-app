@@ -8,6 +8,7 @@ import { Terminal, UploadCloud, CheckCircle, AlertCircle, Loader2, Image as Imag
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
 
 type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
 
@@ -118,7 +119,23 @@ const FileUploader = ({ title, description, requiredFilename, acceptedFileType, 
     };
 
     if (!isMounted) {
-        return null; // Or a loading spinner
+        return (
+            <Card>
+                <CardHeader>
+                    <Skeleton className="h-6 w-32" />
+                    <Skeleton className="h-4 w-full" />
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                        <Skeleton className="h-4 w-24" />
+                        <div className="flex gap-2">
+                            <Skeleton className="h-10 flex-grow" />
+                            <Skeleton className="h-10 w-24" />
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+        );
     }
 
     return (
