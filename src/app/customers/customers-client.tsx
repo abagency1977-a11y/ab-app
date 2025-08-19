@@ -94,9 +94,10 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                 description: `${newCustomer.name} has been successfully added.`,
             });
         } catch (error) {
+            console.error("Failed to add customer:", error);
             toast({
                 title: "Error",
-                description: "Failed to add customer.",
+                description: "Failed to add customer. Please try again.",
                 variant: 'destructive',
             });
         }
@@ -209,7 +210,7 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                             Fill in the details below to add a new customer to the system.
                         </DialogDescription>
                     </DialogHeader>
-                    <form onSubmit={handleAddCustomer} id="add-customer-form">
+                    <form onSubmit={handleAddCustomer}>
                         <div className="grid gap-4 py-4">
                             <div className="grid grid-cols-4 items-center gap-4">
                                 <Label htmlFor="name" className="text-right">Name</Label>
@@ -230,7 +231,7 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                         </div>
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
-                            <Button type="submit" form="add-customer-form">Save Customer</Button>
+                            <Button type="submit">Save Customer</Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>
@@ -332,3 +333,5 @@ function BulkPaymentDialog({ isOpen, onOpenChange, customer }: {
         </Dialog>
     );
 }
+
+    

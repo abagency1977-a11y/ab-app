@@ -82,9 +82,10 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                 description: `${newProduct.name} has been successfully added to inventory.`,
             });
         } catch(e) {
+             console.error("Failed to add product:", e);
              toast({
                 title: "Error",
-                description: "Failed to add product.",
+                description: "Failed to add product. Please try again.",
                 variant: 'destructive'
             });
         }
@@ -239,7 +240,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                             Fill in the details below to add a new product to the inventory.
                         </DialogDescription>
                     </DialogHeader>
-                    <form onSubmit={handleAddProduct} id="add-product-form">
+                    <form onSubmit={handleAddProduct}>
                         <div className="grid gap-4 py-4">
                             <div className="grid grid-cols-4 items-center gap-4">
                                 <Label htmlFor="name" className="text-right">Name</Label>
@@ -264,7 +265,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                         </div>
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
-                            <Button type="submit" form="add-product-form">Add Product</Button>
+                            <Button type="submit">Add Product</Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>
@@ -326,3 +327,5 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
         </div>
     );
 }
+
+    
