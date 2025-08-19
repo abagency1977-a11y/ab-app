@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -34,6 +34,27 @@ const navItems = [
   { href: '/admin', icon: ShieldCheck, label: 'Admin' },
 ];
 
+function Logo() {
+    const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+    useEffect(() => {
+        const savedLogo = localStorage.getItem('companyLogo');
+        setLogoUrl(savedLogo);
+    }, []);
+
+    if (logoUrl) {
+        return <img src={logoUrl} alt="Company Logo" className="h-10" />;
+    }
+
+    return (
+        <>
+            <Icons.logo className="w-8 h-8 text-primary" />
+            <span className="text-lg font-semibold">AB Account</span>
+        </>
+    );
+}
+
+
 function MainSidebar() {
   const pathname = usePathname();
 
@@ -41,8 +62,7 @@ function MainSidebar() {
     <Sidebar>
       <SidebarHeader>
         <Link href="/dashboard" className="flex items-center gap-2">
-          <Icons.logo className="w-8 h-8 text-primary" />
-          <span className="text-lg font-semibold">AB Account</span>
+          <Logo />
         </Link>
       </SidebarHeader>
       <SidebarContent>
@@ -112,8 +132,7 @@ function MobileHeader() {
           <nav className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
               <SidebarHeader className="p-4">
                   <Link href="/dashboard" className="flex items-center gap-2">
-                      <Icons.logo className="w-8 h-8 text-primary" />
-                      <span className="text-lg font-semibold">AB Account</span>
+                     <Logo />
                   </Link>
               </SidebarHeader>
               <SidebarContent className="p-4">
@@ -134,7 +153,7 @@ function MobileHeader() {
         </SheetContent>
       </Sheet>
       <div className="flex-1">
-        <h1 className="font-semibold text-lg">{navItems.find(item => item.href === pathname)?.label || 'Dashboard'}</h1>
+        <h1 className="font-semibold text-lg">{navItems.find(item => pathname.startsWith(item.href))?.label || 'Dashboard'}</h1>
       </div>
     </header>
   );
