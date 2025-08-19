@@ -21,6 +21,7 @@ const GenerateInvoicePdfOutputSchema = z.object({
 
 export type GenerateInvoicePdfOutput = z.infer<typeof GenerateInvoicePdfOutputSchema>;
 
+// Corrected direct download links for Google Drive
 const TEMPLATES = {
     'Credit': 'https://drive.google.com/uc?export=download&id=1aN5Fl7ne11WbWFR8plC2q5XGFSyGjYKS',
     'Full Payment': 'https://drive.google.com/uc?export=download&id=1-P5Pf-9MhTCYMCv1pxbYSUKgetkxCDBH'
@@ -30,6 +31,18 @@ const formatNumber = (value: number | undefined) => {
     if (value === undefined || isNaN(value)) return '0.00';
     return new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 };
+
+// Helper function to safely set text field value
+const setTextField = (form: any, fieldName: string, value: string | undefined) => {
+    try {
+        const field = form.getTextField(fieldName);
+        if (field && value) {
+            field.setText(value);
+        }
+    } catch (e) {
+        console.warn(`Could not find or set form field: ${fieldName}`);
+    }
+}
 
 export async function generateInvoicePdfFlow(input: GenerateInvoicePdfInput): Promise<GenerateInvoicePdfOutput> {
     const { order, customer } = input as { order: Order, customer: Customer };
@@ -45,43 +58,43 @@ export async function generateInvoicePdfFlow(input: GenerateInvoicePdfInput): Pr
     const subtotal = order.items.reduce((acc, item) => acc + item.price * item.quantity, 0);
     const totalGst = order.isGstInvoice ? order.items.reduce((acc, item) => acc + (item.price * item.quantity * (item.gst / 100)), 0) : 0;
 
-    // Fill fields
-    form.getTextField('billed_to').setText(customer.name);
-    form.getTextField('delivery_address').setText(order.deliveryAddress || customer.address);
-    form.getTextField('date').setText(new Date(order.orderDate).toLocaleDateString());
-    form.getTextField('invoice_no').setText(order.id.replace('ORD', 'INV'));
-    form.getTextField('order_no').setText(order.id);
-    if(order.deliveryDate) {
-        form.getTextField('delivery_date').setText(new Date(order.deliveryDate).toLocaleDateString());
+    // Fill fields safely
+    setTextField(form, 'billed_to', customer.name);
+    setTextField(form, 'delivery_address', order.deliveryAddress || customer.address);
+    setTextField(form, 'date', new Date(order.orderDate).toLocaleDateString());
+    setTextField(form, 'invoice_no', order.id.replace('ORD', 'INV'));
+    setTextField(form, 'order_no', order.id);
+    if (order.deliveryDate) {
+        setTextField(form, 'delivery_date', new Date(order.deliveryDate).toLocaleDateString());
     }
 
     order.items.forEach((item, index) => {
         const i = index + 1;
-        form.getTextField(`item_${i}_desc`).setText(item.productName);
-        form.getTextField(`item_${i}_qty`).setText(String(item.quantity));
-        form.getTextField(`item_${i}_rate`).setText(formatNumber(item.price));
-        form.getTextField(`item_${i}_total`).setText(formatNumber(item.price * item.quantity));
+        setTextField(form, `item_${i}_desc`, item.productName);
+        setTextField(form, `item_${i}_qty`, String(item.quantity));
+        setTextField(form, `item_${i}_rate`, formatNumber(item.price));
+        setTextField(form, `item_${i}_total`, formatNumber(item.price * item.quantity));
     });
     
-    form.getTextField('subtotal').setText(formatNumber(subtotal));
+    setTextField(form, 'subtotal', formatNumber(subtotal));
 
-    if(order.isGstInvoice) {
-        form.getTextField('total_gst').setText(formatNumber(totalGst));
+    if (order.isGstInvoice) {
+        setTextField(form, 'total_gst', formatNumber(totalGst));
     }
 
     if (order.discount > 0) {
-      form.getTextField('discount').setText(formatNumber(order.discount));
+      setTextField(form, 'discount', formatNumber(order.discount));
     }
     
-    form.getTextField('grand_total').setText(formatNumber(order.grandTotal));
+    setTextField(form, 'grand_total', formatNumber(order.grandTotal));
 
-    if(order.paymentTerm === 'Full Payment' && order.paymentMode) {
-        form.getTextField('payment_mode').setText(order.paymentMode);
+    if (order.paymentTerm === 'Full Payment' && order.paymentMode) {
+        setTextField(form, 'payment_mode', order.paymentMode);
     }
     
     if (order.paymentTerm === 'Credit' && order.dueDate) {
-      form.getTextField('amount_due').setText(formatNumber(order.grandTotal));
-      form.getTextField('due_date').setText(new Date(order.dueDate).toLocaleDateString());
+      setTextField(form, 'amount_due', formatNumber(order.grandTotal));
+      setTextField(form, 'due_date', new Date(order.dueDate).toLocaleDateString());
     }
 
     form.flatten(); // This makes the fields non-editable in the final PDF
