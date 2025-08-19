@@ -89,12 +89,17 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
         };
         
         try {
-            const newCustomer = await addCustomer(newCustomerData);
-            setCustomers(prevCustomers => [...prevCustomers, newCustomer]);
+            const newCustomerFromDB = await addCustomer(newCustomerData);
+            // Ensure the customer object added to state has all required fields for rendering
+            const completeNewCustomer: Customer = {
+                ...newCustomerFromDB,
+                orders: [] // Add the missing 'orders' property
+            };
+            setCustomers(prevCustomers => [...prevCustomers, completeNewCustomer]);
             setIsAddDialogOpen(false);
             toast({
                 title: "Customer Added",
-                description: `${newCustomer.name} has been successfully added.`,
+                description: `${newCustomerFromDB.name} has been successfully added.`,
             });
         } catch (error) {
             console.error("Failed to add customer:", error);

@@ -80,12 +80,17 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
         };
 
         try {
-            const newProduct = await addProduct(newProductData);
-            setProducts(prevProducts => [...prevProducts, newProduct]);
+            const newProductFromDB = await addProduct(newProductData);
+            // Ensure the product object added to state has all required fields for rendering
+            const completeNewProduct: Product = {
+                ...newProductFromDB,
+                historicalData: [] // Add the missing 'historicalData' property
+            };
+            setProducts(prevProducts => [...prevProducts, completeNewProduct]);
             setIsAddDialogOpen(false);
             toast({
                 title: "Product Added",
-                description: `${newProduct.name} has been successfully added to inventory.`,
+                description: `${newProductFromDB.name} has been successfully added to inventory.`,
             });
         } catch(e) {
              console.error("Failed to add product:", e);
