@@ -49,11 +49,12 @@ const TemplateUploader = ({ title, description, requiredFilename, onUpload }: {
         }
 
         setStatus('uploading');
-        setError(null); // Clear previous errors
+        setError(null);
         onUpload({ status: 'uploading', message: '' });
 
         const formData = new FormData();
-        formData.append('file', selectedFile);
+        // The key 'file' must match what the API route expects
+        formData.append('file', selectedFile, selectedFile.name);
 
         try {
             const response = await fetch('/api/upload', {
@@ -64,11 +65,16 @@ const TemplateUploader = ({ title, description, requiredFilename, onUpload }: {
             const result = await response.json();
 
             if (!response.ok) {
-                throw new Error(result.error || 'Upload failed');
+                // Use the error message from the server's JSON response
+                throw new Error(result.error || `Upload failed with status: ${response.status}`);
             }
 
             setStatus('success');
             onUpload({ status: 'success', message: `Successfully uploaded ${selectedFile.name}` });
+            if (fileInputRef.current) {
+                fileInputRef.current.value = ""; // Reset file input
+            }
+            setSelectedFile(null);
             
         } catch (e: any) {
             const errorMessage = e.message || "An unknown error occurred during upload.";
