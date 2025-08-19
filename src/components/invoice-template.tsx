@@ -26,13 +26,13 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
           {logoUrl ? (
             <img src={logoUrl} alt="Company Logo" className="h-20" />
           ) : (
-            <div className="h-20 w-40 bg-gray-200 flex items-center justify-center text-gray-500">
-                Your Logo
+            <div className="w-40">
+                {/* Placeholder for logo */}
             </div>
           )}
            <div>
             <h2 className="text-2xl font-bold">AB Agency</h2>
-            <p className="text-xs">123 Business Road, Commerce City, 12345</p>
+            <p className="text-xs">No.1, Ayyanchery main road, Ayyanchery, Urapakkam, Chennai - 603210.</p>
             <p className="text-xs">contact@abagency.com | 555-123-4567</p>
           </div>
         </div>
