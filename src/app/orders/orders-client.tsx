@@ -2,6 +2,7 @@
 
 
 
+
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
@@ -54,15 +55,18 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         }
     }, []);
 
-    useEffect(() => {
-        if (orderToPrint && invoiceRef.current) {
-            handlePrint();
-        }
-    }, [orderToPrint]);
-
     const handleGenerateInvoice = (order: Order) => {
         setOrderToPrint(order);
     };
+    
+    useEffect(() => {
+        if (orderToPrint) {
+            // Give React time to render the template off-screen
+            setTimeout(() => {
+                handlePrint();
+            }, 100);
+        }
+    }, [orderToPrint]);
 
     const handlePrint = async () => {
         if (!orderToPrint || !invoiceRef.current) return;
@@ -70,8 +74,11 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         setIsLoading(true);
         try {
             const canvas = await html2canvas(invoiceRef.current, {
-                scale: 2, // Higher scale for better quality
+                scale: 3, // Higher scale for better quality
                 useCORS: true,
+                logging: true,
+                width: invoiceRef.current.offsetWidth,
+                height: invoiceRef.current.offsetHeight,
             });
             const imgData = canvas.toDataURL('image/png');
             
@@ -83,12 +90,24 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
 
             const pdfWidth = pdf.internal.pageSize.getWidth();
             const pdfHeight = pdf.internal.pageSize.getHeight();
+            
             const canvasWidth = canvas.width;
             const canvasHeight = canvas.height;
-            const ratio = canvasWidth / canvasHeight;
-            const height = pdfWidth / ratio;
             
-            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, height);
+            const canvasAspectRatio = canvasWidth / canvasHeight;
+            const pdfAspectRatio = pdfWidth / pdfHeight;
+
+            let finalWidth, finalHeight;
+
+            if (canvasAspectRatio > pdfAspectRatio) {
+                finalWidth = pdfWidth;
+                finalHeight = pdfWidth / canvasAspectRatio;
+            } else {
+                finalHeight = pdfHeight;
+                finalWidth = pdfHeight * canvasAspectRatio;
+            }
+            
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfWidth / canvasAspectRatio);
             pdf.save(`invoice-${orderToPrint.id}.pdf`);
 
             toast({ title: 'Success', description: 'Invoice PDF has been downloaded.' });
@@ -719,3 +738,4 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         </>
     );
 }
+
