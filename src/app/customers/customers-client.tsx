@@ -7,11 +7,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { PlusCircle, MoreHorizontal, ArrowUpDown } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, ArrowUpDown, CreditCard } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-IN').format(value);
 
@@ -23,6 +24,8 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'ascending' | 'descending' } | null>(null);
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
     const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
+    const [isBulkPaymentOpen, setIsBulkPaymentOpen] = useState(false);
+    const [customerForBulkPayment, setCustomerForBulkPayment] = useState<Customer | null>(null);
     const { toast } = useToast();
 
     const sortedCustomers = useMemo(() => {
@@ -97,6 +100,11 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
             variant: "destructive"
         });
     };
+    
+    const openBulkPaymentDialog = (customer: Customer) => {
+        setCustomerForBulkPayment(customer);
+        setIsBulkPaymentOpen(true);
+    };
 
 
     return (
@@ -157,6 +165,10 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                                         <DropdownMenuContent align="end">
                                             <DropdownMenuItem>Edit</DropdownMenuItem>
                                             <DropdownMenuItem>View Details</DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => openBulkPaymentDialog(customer)}>
+                                                <CreditCard className="mr-2 h-4 w-4" />
+                                                Record Bulk Payment
+                                            </DropdownMenuItem>
                                             <DropdownMenuItem onClick={() => setCustomerToDelete(customer)} className="text-red-600">Delete</DropdownMenuItem>
                                         </DropdownMenuContent>
                                     </DropdownMenu>
@@ -216,6 +228,85 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+            
+            <BulkPaymentDialog 
+                isOpen={isBulkPaymentOpen} 
+                onOpenChange={setIsBulkPaymentOpen}
+                customer={customerForBulkPayment}
+            />
         </div>
+    );
+}
+
+
+function BulkPaymentDialog({ isOpen, onOpenChange, customer }: {
+    isOpen: boolean;
+    onOpenChange: (open: boolean) => void;
+    customer: Customer | null;
+}) {
+    const [amount, setAmount] = useState('');
+    const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+    const [paymentMethod, setPaymentMethod] = useState('Cash');
+    const [notes, setNotes] = useState('');
+    const { toast } = useToast();
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        // Placeholder for future logic
+        toast({
+            title: "Feature In Progress",
+            description: "Bulk payment allocation logic is not yet implemented.",
+        });
+        onOpenChange(false);
+    };
+
+    if (!customer) return null;
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Record Bulk Payment for {customer.name}</DialogTitle>
+                    <DialogDescription>
+                        Enter the total payment received. It will be automatically allocated to the oldest outstanding invoices first.
+                    </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleSubmit}>
+                    <div className="grid gap-4 py-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="bulk-amount">Amount Received</Label>
+                            <Input id="bulk-amount" type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" required />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="bulk-paymentDate">Payment Date</Label>
+                                <Input id="bulk-paymentDate" type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} required />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="bulk-paymentMethod">Payment Method</Label>
+                                <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Cash">Cash</SelectItem>
+                                        <SelectItem value="Card">Card</SelectItem>
+                                        <SelectItem value="UPI">UPI</SelectItem>
+                                        <SelectItem value="Cheque">Cheque</SelectItem>
+                                        <SelectItem value="Online Transfer">Online Transfer</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="bulk-notes">Notes (Optional)</Label>
+                            <Input id="bulk-notes" value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g., Consolidated payment" />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                        <Button type="submit">Allocate Payment</Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
     );
 }
