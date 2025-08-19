@@ -31,11 +31,6 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
     const [productToEdit, setProductToEdit] = useState<Product | null>(null);
     const [productToDelete, setProductToDelete] = useState<Product | null>(null);
     const { toast } = useToast();
-    const [isMounted, setIsMounted] = useState(false);
-
-    useEffect(() => {
-        setIsMounted(true);
-    }, []);
 
     const handlePredictDemand = async () => {
         if (!selectedProduct) {
@@ -145,10 +140,6 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
         }
     };
 
-    if (!isMounted) {
-        return null; // Or a loading spinner
-    }
-    
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -248,7 +239,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                             Fill in the details below to add a new product to the inventory.
                         </DialogDescription>
                     </DialogHeader>
-                    <form onSubmit={handleAddProduct}>
+                    <form onSubmit={handleAddProduct} id="add-product-form">
                         <div className="grid gap-4 py-4">
                             <div className="grid grid-cols-4 items-center gap-4">
                                 <Label htmlFor="name" className="text-right">Name</Label>
@@ -273,7 +264,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                         </div>
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
-                            <Button type="submit">Add Product</Button>
+                            <Button type="submit" form="add-product-form">Add Product</Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>
@@ -335,5 +326,3 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
         </div>
     );
 }
-
-    

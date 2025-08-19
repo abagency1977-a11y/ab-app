@@ -29,11 +29,8 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
     const [isBulkPaymentOpen, setIsBulkPaymentOpen] = useState(false);
     const [customerForBulkPayment, setCustomerForBulkPayment] = useState<Customer | null>(null);
     const { toast } = useToast();
-    const [isMounted, setIsMounted] = useState(false);
 
      useEffect(() => {
-        setIsMounted(true);
-        // Fetch initial data
         getOrders().then(setOrders);
     }, []);
 
@@ -132,10 +129,6 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
         setIsBulkPaymentOpen(true);
     };
 
-    if (!isMounted) {
-        return null; // Or a loading spinner
-    }
-
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -216,7 +209,7 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                             Fill in the details below to add a new customer to the system.
                         </DialogDescription>
                     </DialogHeader>
-                    <form onSubmit={handleAddCustomer}>
+                    <form onSubmit={handleAddCustomer} id="add-customer-form">
                         <div className="grid gap-4 py-4">
                             <div className="grid grid-cols-4 items-center gap-4">
                                 <Label htmlFor="name" className="text-right">Name</Label>
@@ -237,7 +230,7 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                         </div>
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
-                            <Button type="submit">Save Customer</Button>
+                            <Button type="submit" form="add-customer-form">Save Customer</Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>
@@ -339,5 +332,3 @@ function BulkPaymentDialog({ isOpen, onOpenChange, customer }: {
         </Dialog>
     );
 }
-
-    
