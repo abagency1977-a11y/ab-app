@@ -1,4 +1,3 @@
-
 'use client';
 import React from 'react';
 import type { Order, Customer } from '@/lib/types';
@@ -19,7 +18,7 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
     const totalGst = order.isGstInvoice ? order.items.reduce((acc, item) => acc + (item.price * item.quantity * (item.gst / 100)), 0) : 0;
 
   return (
-    <div ref={ref} className="bg-white text-black p-8" style={{ width: '210mm', minHeight: '297mm', fontFamily: "'PT Sans', sans-serif" }}>
+    <div ref={ref} className="bg-white text-black p-8" style={{ width: '210mm', minHeight: '297mm', fontFamily: "'Inter', sans-serif" }}>
       <div className="flex justify-between items-start mb-8">
         <div className="flex items-center gap-4">
           {logoUrl && (
