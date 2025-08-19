@@ -29,8 +29,10 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
     const [isBulkPaymentOpen, setIsBulkPaymentOpen] = useState(false);
     const [customerForBulkPayment, setCustomerForBulkPayment] = useState<Customer | null>(null);
     const { toast } = useToast();
+    const [isMounted, setIsMounted] = useState(false);
 
      useEffect(() => {
+        setIsMounted(true);
         const storedCustomers = localStorage.getItem('customers');
         if (storedCustomers) {
             setCustomers(JSON.parse(storedCustomers));
@@ -125,6 +127,9 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
         setIsBulkPaymentOpen(true);
     };
 
+    if (!isMounted) {
+        return null; // Or a loading spinner
+    }
 
     return (
         <div className="space-y-4">

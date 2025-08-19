@@ -21,7 +21,7 @@ const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 
 
 export function InventoryClient({ products: initialProducts }: { products: Product[] }) {
     const [products, setProducts] = useState<Product[]>(initialProducts);
-    const [selectedProduct, setSelectedProduct] = useState<string | undefined>(products[0]?.id);
+    const [selectedProduct, setSelectedProduct] = useState<string | undefined>(initialProducts[0]?.id);
     const [prediction, setPrediction] = useState<PredictProductDemandOutput | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -30,11 +30,17 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
     const [productToEdit, setProductToEdit] = useState<Product | null>(null);
     const [productToDelete, setProductToDelete] = useState<Product | null>(null);
     const { toast } = useToast();
+    const [isMounted, setIsMounted] = useState(false);
 
     useEffect(() => {
+        setIsMounted(true);
         const storedProducts = localStorage.getItem('products');
         if (storedProducts) {
-            setProducts(JSON.parse(storedProducts));
+            const parsedProducts = JSON.parse(storedProducts);
+            setProducts(parsedProducts);
+            if (parsedProducts.length > 0 && !selectedProduct) {
+                setSelectedProduct(parsedProducts[0].id);
+            }
         }
     }, []);
 
@@ -129,6 +135,10 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             variant: "destructive"
         });
     };
+
+    if (!isMounted) {
+        return null; // Or a loading spinner
+    }
     
     return (
         <div className="space-y-4">

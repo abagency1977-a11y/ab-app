@@ -43,8 +43,10 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState('');
     const [dateFilter, setDateFilter] = useState('All');
+    const [isMounted, setIsMounted] = useState(false);
     
     useEffect(() => {
+        setIsMounted(true);
         const storedOrders = localStorage.getItem('orders');
         if (storedOrders) {
             setOrders(JSON.parse(storedOrders));
@@ -174,6 +176,9 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         return customers.find(c => c.id === orderToPrint.customerId) || null;
     }, [orderToPrint, customers]);
 
+    if (!isMounted) {
+        return null; // Or a loading spinner
+    }
 
     return (
         <div className="space-y-4">

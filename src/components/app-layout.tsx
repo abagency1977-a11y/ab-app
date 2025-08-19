@@ -38,22 +38,32 @@ const navItems = [
 
 function Logo() {
     const [logoUrl, setLogoUrl] = useState<string | null>(null);
+    const [isMounted, setIsMounted] = useState(false);
 
     useEffect(() => {
+        setIsMounted(true);
         const savedLogo = localStorage.getItem('companyLogo');
         setLogoUrl(savedLogo);
     }, []);
-
-    if (logoUrl) {
-        return <img src={logoUrl} alt="Company Logo" className="h-16" />;
-    }
-
-    return (
+    
+    // On the server, or before the client has mounted, we can't know the logo.
+    // We render the default to prevent hydration errors.
+    const renderDefaultLogo = () => (
         <>
             <Icons.logo className="w-8 h-8 text-primary" />
             <span className="text-lg font-semibold">AB Account</span>
         </>
     );
+
+    if (!isMounted) {
+        return renderDefaultLogo();
+    }
+
+    if (logoUrl) {
+        return <img src={logoUrl} alt="Company Logo" className="h-16" />;
+    }
+
+    return renderDefaultLogo();
 }
 
 

@@ -28,9 +28,11 @@ const FileUploader = ({ title, description, requiredFilename, acceptedFileType, 
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [status, setStatus] = useState<UploadStatus>('idle');
     const [error, setError] = useState<string | null>(null);
-     const [preview, setPreview] = useState<string | null>(null);
+    const [preview, setPreview] = useState<string | null>(null);
+    const [isMounted, setIsMounted] = useState(false);
 
     useEffect(() => {
+        setIsMounted(true);
         if(storageKey) {
             const savedFile = localStorage.getItem(storageKey);
             if (savedFile) {
@@ -114,6 +116,10 @@ const FileUploader = ({ title, description, requiredFilename, acceptedFileType, 
             onUpload({ status: 'error', message: errorMessage });
         }
     };
+
+    if (!isMounted) {
+        return null; // Or a loading spinner
+    }
 
     return (
         <Card>

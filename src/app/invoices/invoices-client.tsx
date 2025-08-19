@@ -70,8 +70,10 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
     const { toast } = useToast();
     const receiptRef = useRef<HTMLDivElement>(null);
     const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
+    const [isMounted, setIsMounted] = useState(false);
 
     useEffect(() => {
+        setIsMounted(true);
         const storedOrders = localStorage.getItem('orders');
         if (storedOrders) {
             setAllInvoices(JSON.parse(storedOrders));
@@ -173,6 +175,9 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
         return allCustomers.find(c => c.id === receiptToPrint.order.customerId) || null;
     }, [receiptToPrint, allCustomers]);
 
+    if (!isMounted) {
+        return null; // Or a loading spinner
+    }
 
     return (
         <div className="space-y-4">
