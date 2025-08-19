@@ -32,7 +32,8 @@ const parseForm = (req: Request): Promise<{ fields: formidable.Fields; files: fo
             filename: (name, ext, part) => {
                 // This is a common source of errors if part.originalFilename is null.
                 if (part.originalFilename) {
-                    return part.originalFilename;
+                    // Sanitize the filename to prevent directory traversal issues
+                    return part.originalFilename.replace(/[^a-zA-Z0-9_.-]/g, '_');
                 }
                 // Provide a fallback name if originalFilename is missing.
                 return `template-${Date.now()}${ext}`;
@@ -43,29 +44,38 @@ const parseForm = (req: Request): Promise<{ fields: formidable.Fields; files: fo
             }
         });
 
-        const formidableStream = new Writable({
+        // This is the key part to bridge web streams with Node.js streams
+        const chunks: Uint8Array[] = [];
+        const writable = new Writable({
             write(chunk, encoding, callback) {
-              form.write(chunk, callback);
+                chunks.push(chunk);
+                callback();
             },
             final(callback) {
-              form.end(callback);
-            },
-            destroy(error, callback) {
-              callback(error);
-            }
-          });
-          
-        form.parse(req as any, (err, fields, files) => {
-            if (err) {
-                reject(err);
-            } else {
-                resolve({ fields, files });
+                const buffer = Buffer.concat(chunks);
+                form.parse(buffer as any, (err, fields, files) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve({ fields, files });
+                    }
+                });
+                callback();
             }
         });
 
         if (req.body) {
-            const readable = new Readable().wrap(req.body);
-            readable.pipe(form);
+            const reader = req.body.getReader();
+            const read = async () => {
+                const { done, value } = await reader.read();
+                if (done) {
+                    writable.end();
+                    return;
+                }
+                writable.write(value);
+                read();
+            };
+            read().catch(reject);
         } else {
             reject(new Error('Request body is null'));
         }
@@ -85,6 +95,10 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'No file uploaded or file was not a PDF.' }, { status: 400 });
         }
         
+        // Ensure the file is saved with the correct name by renaming it if necessary
+        const finalPath = path.join(TEMPLATES_DIR, uploadedFile.originalFilename as string);
+        await fs.rename(uploadedFile.filepath, finalPath);
+
         return NextResponse.json({
             success: true,
             message: `File '${uploadedFile.originalFilename}' uploaded successfully.`,
@@ -95,11 +109,17 @@ export async function POST(req: Request) {
         console.error('File upload error:', error);
         
         let errorMessage = 'Failed to process file upload.';
+        let statusCode = 500;
+
         if (error instanceof formidableErrors.default) {
-             // You can check for specific formidable errors here if needed
-            errorMessage = error.message;
+             errorMessage = error.message;
+             statusCode = error.httpCode || 400;
+        } else if (error.code === 'ENOENT') {
+            errorMessage = "File system error: Couldn't save the file.";
+            statusCode = 500;
         }
 
-        return NextResponse.json({ error: errorMessage }, { status: 500 });
+
+        return NextResponse.json({ error: errorMessage }, { status: statusCode });
     }
 }
