@@ -24,6 +24,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { InvoiceTemplate } from '@/components/invoice-template';
 import { startOfWeek, startOfMonth, subMonths, isWithinInterval } from 'date-fns';
+import { Skeleton } from '@/components/ui/skeleton';
 
 
 const formatNumber = (value: number) => {
@@ -43,8 +44,10 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState('');
     const [dateFilter, setDateFilter] = useState('All');
+    const [isMounted, setIsMounted] = useState(false);
     
     useEffect(() => {
+        setIsMounted(true);
         const savedLogo = localStorage.getItem('companyLogo');
         if (savedLogo) {
             setLogoUrl(savedLogo);
@@ -127,21 +130,8 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     };
 
 
-    const handleAddOrder = async (newOrderData: Omit<Order, 'id' | 'customerName'>) => {
-       try {
-            const newOrder = await addOrder(newOrderData);
-            setOrders(prevOrders => [newOrder, ...prevOrders]);
-            toast({
-                title: "Order Placed",
-                description: `Order ${newOrder.id} has been successfully created.`,
-            });
-       } catch (e) {
-           toast({
-               title: "Error Placing Order",
-               description: "Failed to save the new order.",
-               variant: "destructive"
-           });
-       }
+    const handleAddOrder = (newOrder: Order) => {
+        setOrders(prevOrders => [newOrder, ...prevOrders]);
     }
 
     const handleAddCustomer = async (newCustomerData: Omit<Customer, 'id' | 'transactionHistory'>) => {
@@ -167,6 +157,27 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         if (!orderToPrint) return null;
         return customers.find(c => c.id === orderToPrint.customerId) || null;
     }, [orderToPrint, customers]);
+
+    if (!isMounted) {
+        return (
+            <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                    <Skeleton className="h-10 w-48" />
+                    <Skeleton className="h-10 w-32" />
+                </div>
+                <div className="flex items-center gap-4">
+                    <Skeleton className="h-10 w-64" />
+                    <Skeleton className="h-10 w-48" />
+                </div>
+                <div className="rounded-lg border shadow-sm p-4">
+                    <Skeleton className="h-8 w-full mb-4" />
+                    <Skeleton className="h-8 w-full mb-2" />
+                    <Skeleton className="h-8 w-full mb-2" />
+                    <Skeleton className="h-8 w-full" />
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-4">
@@ -266,7 +277,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     onOpenChange: (open: boolean) => void,
     customers: Customer[],
     products: Product[],
-    onOrderAdded: (order: Omit<Order, 'id' | 'customerName'>) => void,
+    onOrderAdded: (order: Order) => void,
     onCustomerAdded: (customer: Omit<Customer, 'id'|'transactionHistory'>) => Promise<Customer | null>,
 }) {
     const [customerId, setCustomerId] = useState<string>('');
@@ -396,7 +407,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
 
     const grandTotal = useMemo(() => total - discount, [total, discount]);
 
-    const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (!customerId || items.length === 0) {
             toast({
@@ -450,8 +461,21 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
             }];
         }
 
-        onOrderAdded(newOrderData);
-        resetForm();
+        try {
+            const newOrder = await addOrder(newOrderData);
+            onOrderAdded(newOrder);
+            toast({
+                title: "Order Placed",
+                description: `Order ${newOrder.id} has been successfully created.`,
+            });
+            resetForm();
+       } catch (e) {
+           toast({
+               title: "Error Placing Order",
+               description: "Failed to save the new order.",
+               variant: "destructive"
+           });
+       }
     };
 
     return (
@@ -646,5 +670,3 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         </>
     );
 }
-
-    

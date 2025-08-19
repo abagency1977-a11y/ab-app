@@ -19,6 +19,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { ReceiptTemplate } from '@/components/receipt-template';
 import { getCustomers, getOrders, updateOrder } from '@/lib/data';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const formatNumber = (value: number | undefined) => {
     if (value === undefined || isNaN(value)) return '₹0.00';
@@ -171,7 +172,18 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
     }, [receiptToPrint, allCustomers]);
 
     if (!isMounted) {
-        return null; // Or a loading spinner
+        return (
+            <div className="space-y-4">
+                <Skeleton className="h-10 w-48" />
+                <Skeleton className="h-8 w-64" />
+                <div className="rounded-lg border shadow-sm p-4">
+                    <Skeleton className="h-8 w-full mb-4" />
+                    <Skeleton className="h-8 w-full mb-2" />
+                    <Skeleton className="h-8 w-full mb-2" />
+                    <Skeleton className="h-8 w-full" />
+                </div>
+            </div>
+        );
     }
 
     return (

@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -14,11 +15,11 @@ export default function LoginPage() {
   const [email, setEmail] = useState('admin@abagency.com');
   const [password, setPassword] = useState('password');
   const [year, setYear] = useState<number | null>(null);
-  const [isClient, setIsClient] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
     setYear(new Date().getFullYear());
-    setIsClient(true);
+    setIsMounted(true);
   }, []);
 
   const handleLogin = (e: React.FormEvent) => {
@@ -40,7 +41,7 @@ export default function LoginPage() {
             <CardDescription>Welcome back! Please log in to your account.</CardDescription>
           </CardHeader>
           <CardContent>
-            {!isClient ? (
+            {!isMounted ? (
               <div className="space-y-6">
                 <div className="space-y-2">
                   <Skeleton className="h-4 w-16" />
