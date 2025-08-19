@@ -55,7 +55,7 @@ export const ReceiptTemplate = React.forwardRef<HTMLDivElement, ReceiptTemplateP
       
       <div className="text-center my-8">
         <p className="text-sm text-gray-600">Amount Paid</p>
-        <p className="text-5xl font-bold tracking-tight">₹{formatNumber(payment.amount)}</p>
+        <p className="text-4xl font-bold tracking-tight">₹{formatNumber(payment.amount)}</p>
       </div>
 
 
