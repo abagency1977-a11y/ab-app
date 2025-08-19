@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server';
 import path from 'path';
 import fs from 'fs/promises';
 import { formidable, errors as formidableErrors } from 'formidable';
-import type { NextApiRequest } from 'next';
 
 // Disable the default body parser
 export const config = {
@@ -23,39 +22,51 @@ async function ensureTemplatesDirExists() {
     }
 }
 
+// This function will handle the file parsing using promises
+const parseForm = (req: Request): Promise<{ fields: formidable.Fields; files: formidable.Files }> => {
+    return new Promise((resolve, reject) => {
+        const form = formidable({
+            uploadDir: TEMPLATES_DIR,
+            keepExtensions: true,
+            filename: (name, ext, part) => {
+                // This is a common source of errors if part.originalFilename is null.
+                if (part.originalFilename) {
+                    return part.originalFilename;
+                }
+                // Provide a fallback name if originalFilename is missing.
+                return `template-${Date.now()}${ext}`;
+            },
+            filter: function ({ mimetype }) {
+                // Keep only pdfs
+                return mimetype === 'application/pdf';
+            }
+        });
+
+        // The 'any' cast is a common workaround for formidable's type mismatch with Next.js's Request object
+        form.parse(req as any, (err, fields, files) => {
+            if (err) {
+                reject(err);
+            } else {
+                resolve({ fields, files });
+            }
+        });
+    });
+};
+
+
 export async function POST(req: Request) {
     await ensureTemplatesDirExists();
-    
-    const form = formidable({
-        uploadDir: TEMPLATES_DIR,
-        keepExtensions: true,
-        filename: (name, ext, part) => {
-            // formidable expects the part to have an originalFilename property.
-            if (part.originalFilename) {
-                return part.originalFilename;
-            }
-            // Fallback for cases where originalFilename might be missing
-            return name + ext; 
-        },
-        // Force the filename to be the original uploaded filename
-        filter: function ({ name, originalFilename, mimetype }) {
-            // keep only pdfs
-            return mimetype === 'application/pdf';
-        }
-    });
 
     try {
-        // The `req` object in App Router's route handlers is a standard Request object.
-        // We can pass it to formidable's parse method.
-        const [fields, files] = await form.parse(req as any);
-        
+        const { files } = await parseForm(req);
+
         const uploadedFile = files.file?.[0];
 
         if (!uploadedFile) {
             return NextResponse.json({ error: 'No file uploaded or file was not a PDF.' }, { status: 400 });
         }
-        
-        // Formidable with the `filename` option should have already saved it with the correct name.
+
+        // Formidable already saved the file to the correct location with the correct name due to the 'filename' option.
         // The file is now at uploadedFile.filepath
         
         return NextResponse.json({
@@ -69,11 +80,10 @@ export async function POST(req: Request) {
         
         let errorMessage = 'Failed to process file upload.';
         if (error instanceof formidableErrors.default) {
-            if (error.code === 1009) { // formidable's code for max file size exceeded
-                errorMessage = 'File size is too large.';
-            }
+             // You can check for specific formidable errors here if needed
+            errorMessage = error.message;
         }
 
-        return NextResponse.json({ error: errorMessage, details: error.message }, { status: 500 });
+        return NextResponse.json({ error: errorMessage }, { status: 500 });
     }
 }

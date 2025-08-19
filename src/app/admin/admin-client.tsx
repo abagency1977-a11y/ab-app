@@ -49,6 +49,7 @@ const TemplateUploader = ({ title, description, requiredFilename, onUpload }: {
         }
 
         setStatus('uploading');
+        setError(null); // Clear previous errors
         onUpload({ status: 'uploading', message: '' });
 
         const formData = new FormData();
@@ -70,9 +71,10 @@ const TemplateUploader = ({ title, description, requiredFilename, onUpload }: {
             onUpload({ status: 'success', message: `Successfully uploaded ${selectedFile.name}` });
             
         } catch (e: any) {
+            const errorMessage = e.message || "An unknown error occurred during upload.";
             setStatus('error');
-            setError(e.message);
-            onUpload({ status: 'error', message: e.message });
+            setError(errorMessage);
+            onUpload({ status: 'error', message: errorMessage });
         }
     };
 
@@ -110,7 +112,7 @@ const TemplateUploader = ({ title, description, requiredFilename, onUpload }: {
                  {error && (
                     <Alert variant="destructive">
                         <AlertCircle className="h-4 w-4" />
-                        <AlertTitle>Error</AlertTitle>
+                        <AlertTitle>Upload Failed</AlertTitle>
                         <AlertDescription>{error}</AlertDescription>
                     </Alert>
                 )}
