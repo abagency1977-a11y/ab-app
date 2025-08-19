@@ -33,7 +33,7 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
            <div>
             <h2 className="text-2xl font-bold">AB Agency</h2>
             <p className="text-xs">No.1, Ayyanchery main road, Ayyanchery, Urapakkam, Chennai - 603210.</p>
-            <p className="text-xs">contact@abagency.com | 555-123-4567</p>
+            <p className="text-xs">abagency1977@gmaoil.com | 95511 95505 / 95001 82975</p>
           </div>
         </div>
         <div className="text-right">
@@ -74,9 +74,9 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
             <tr key={index} className="border-b">
               <td className="p-3">{item.productName}</td>
               <td className="p-3 text-right">{item.quantity}</td>
-              <td className="p-3 text-right"><span className="inline-flex items-center justify-end w-full"><Rupee className="inline-block h-3 w-3 mr-1" />{formatNumber(item.price)}</span></td>
+              <td className="p-3 text-right"><span className="inline-flex items-center"><Rupee className="inline-block h-3 w-3 mr-1" />{formatNumber(item.price)}</span></td>
               {order.isGstInvoice && <td className="p-3 text-right">{item.gst}%</td>}
-              <td className="p-3 text-right"><span className="inline-flex items-center justify-end w-full"><Rupee className="inline-block h-3 w-3 mr-1" />{formatNumber(item.price * item.quantity)}</span></td>
+              <td className="p-3 text-right"><span className="inline-flex items-center"><Rupee className="inline-block h-3 w-3 mr-1" />{formatNumber(item.price * item.quantity)}</span></td>
             </tr>
           ))}
         </tbody>
