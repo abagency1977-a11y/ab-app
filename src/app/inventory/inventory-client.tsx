@@ -16,6 +16,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
+import { addProduct, deleteProduct as deleteProductFromDB } from '@/lib/data';
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value);
 
@@ -34,20 +35,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
 
     useEffect(() => {
         setIsMounted(true);
-        const storedProducts = localStorage.getItem('products');
-        if (storedProducts) {
-            const parsedProducts = JSON.parse(storedProducts);
-            setProducts(parsedProducts);
-            if (parsedProducts.length > 0 && !selectedProduct) {
-                setSelectedProduct(parsedProducts[0].id);
-            }
-        }
     }, []);
-
-    const updateProducts = (newProducts: Product[]) => {
-        setProducts(newProducts);
-        localStorage.setItem('products', JSON.stringify(newProducts));
-    };
 
     const handlePredictDemand = async () => {
         if (!selectedProduct) {
@@ -79,25 +67,32 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
         }
     };
 
-    const handleAddProduct = (event: React.FormEvent<HTMLFormElement>) => {
+    const handleAddProduct = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         const formData = new FormData(event.currentTarget);
-        const newProduct: Product = {
-            id: `PROD-${String(products.length + 1).padStart(3, '0')}`,
+        const newProductData = {
             name: formData.get('name') as string,
             sku: formData.get('sku') as string,
             stock: Number(formData.get('stock')),
             price: Number(formData.get('price')),
             gst: Number(formData.get('gst')),
-            historicalData: [],
         };
 
-        updateProducts([...products, newProduct]);
-        setIsAddDialogOpen(false);
-        toast({
-            title: "Product Added",
-            description: `${newProduct.name} has been successfully added to inventory.`,
-        });
+        try {
+            const newProduct = await addProduct(newProductData);
+            setProducts([...products, newProduct]);
+            setIsAddDialogOpen(false);
+            toast({
+                title: "Product Added",
+                description: `${newProduct.name} has been successfully added to inventory.`,
+            });
+        } catch(e) {
+             toast({
+                title: "Error",
+                description: "Failed to add product.",
+                variant: 'destructive'
+            });
+        }
     };
 
     const handleEditProduct = (event: React.FormEvent<HTMLFormElement>) => {
@@ -114,8 +109,13 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             gst: Number(formData.get('gst')),
         };
 
+        // Here you would call an updateProduct function to update the database
+        // For now, we update the local state
         const newProducts = products.map(p => p.id === updatedProduct.id ? updatedProduct : p);
-        updateProducts(newProducts);
+        setProducts(newProducts);
+        // localStorage.setItem('products', JSON.stringify(newProducts));
+
+
         setIsEditDialogOpen(false);
         setProductToEdit(null);
         toast({
@@ -124,16 +124,25 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
         });
     };
 
-    const handleDeleteProduct = () => {
-        if (!productToDelete) return;
-        const newProducts = products.filter(p => p.id !== productToDelete.id);
-        updateProducts(newProducts);
-        setProductToDelete(null);
-        toast({
-            title: "Product Deleted",
-            description: `${productToDelete.name} has been removed from inventory.`,
-            variant: "destructive"
-        });
+    const handleDeleteProduct = async () => {
+        if (!productToDelete || !productToDelete.id) return;
+        try {
+            await deleteProductFromDB(productToDelete.id);
+            const newProducts = products.filter(p => p.id !== productToDelete.id);
+            setProducts(newProducts);
+            setProductToDelete(null);
+            toast({
+                title: "Product Deleted",
+                description: `${productToDelete.name} has been removed from inventory.`,
+                variant: "destructive"
+            });
+        } catch(e) {
+            toast({
+                title: "Error",
+                description: "Failed to delete product.",
+                variant: "destructive"
+            });
+        }
     };
 
     if (!isMounted) {

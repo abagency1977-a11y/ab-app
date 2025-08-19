@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { getProducts, getCustomers, getOrders } from '@/lib/data';
+import { getProducts, getCustomers, getOrders, addOrder, addCustomer } from '@/lib/data';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
@@ -31,10 +31,10 @@ const formatNumber = (value: number) => {
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value);
 };
 
-export function OrdersClient({ orders: initialOrders, customers: initialCustomers }: { orders: Order[], customers: Customer[] }) {
+export function OrdersClient({ orders: initialOrders, customers: initialCustomers, products: initialProducts }: { orders: Order[], customers: Customer[], products: Product[] }) {
     const [orders, setOrders] = useState<Order[]>(initialOrders);
     const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
-    const [products, setProducts] = useState<Product[]>([]);
+    const [products, setProducts] = useState<Product[]>(initialProducts);
     const [isLoading, setIsLoading] = useState(false);
     const [isAddOrderOpen, setIsAddOrderOpen] = useState(false);
     const [orderToPrint, setOrderToPrint] = useState<Order | null>(null);
@@ -47,37 +47,11 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     
     useEffect(() => {
         setIsMounted(true);
-        const storedOrders = localStorage.getItem('orders');
-        if (storedOrders) {
-            setOrders(JSON.parse(storedOrders));
-        }
-        const storedCustomers = localStorage.getItem('customers');
-        if (storedCustomers) {
-            setCustomers(JSON.parse(storedCustomers));
-        } else {
-            getCustomers().then(setCustomers);
-        }
-        const storedProducts = localStorage.getItem('products');
-        if (storedProducts) {
-            setProducts(JSON.parse(storedProducts));
-        } else {
-            getProducts().then(setProducts);
-        }
         const savedLogo = localStorage.getItem('companyLogo');
         if (savedLogo) {
             setLogoUrl(savedLogo);
         }
     }, []);
-
-    const updateOrders = (newOrders: Order[]) => {
-        setOrders(newOrders);
-        localStorage.setItem('orders', JSON.stringify(newOrders));
-    };
-
-     const updateCustomers = (newCustomers: Customer[]) => {
-        setCustomers(newCustomers);
-        localStorage.setItem('customers', JSON.stringify(newCustomers));
-    };
 
     const filteredOrders = useMemo(() => {
         const now = new Date();
@@ -103,7 +77,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             });
         }
         
-        return filtered;
+        return filtered.sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
     }, [orders, searchQuery, dateFilter]);
 
     const handleGenerateInvoice = (order: Order) => {
@@ -155,20 +129,40 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     };
 
 
-    const handleAddOrder = (newOrder: Order) => {
-        updateOrders([newOrder, ...orders]);
-        toast({
-            title: "Order Placed",
-            description: `Order ${newOrder.id} has been successfully created.`,
-        });
+    const handleAddOrder = async (newOrderData: Omit<Order, 'id' | 'customerName'>) => {
+       try {
+            const newOrder = await addOrder(newOrderData);
+            setOrders([newOrder, ...orders]);
+            toast({
+                title: "Order Placed",
+                description: `Order ${newOrder.id} has been successfully created.`,
+            });
+       } catch (e) {
+           toast({
+               title: "Error Placing Order",
+               description: "Failed to save the new order.",
+               variant: "destructive"
+           });
+       }
     }
 
-    const handleAddCustomer = (newCustomer: Customer) => {
-        updateCustomers([...customers, newCustomer]);
-        toast({
-            title: "Customer Added",
-            description: `${newCustomer.name} has been successfully added.`,
-        });
+    const handleAddCustomer = async (newCustomerData: Omit<Customer, 'id' | 'transactionHistory'>) => {
+        try {
+            const newCustomer = await addCustomer(newCustomerData);
+            setCustomers([...customers, newCustomer]);
+            toast({
+                title: "Customer Added",
+                description: `${newCustomer.name} has been successfully added.`,
+            });
+            return newCustomer;
+        } catch(e) {
+             toast({
+                title: "Error Adding Customer",
+                description: "Failed to save the new customer.",
+                variant: "destructive"
+            });
+            return null;
+        }
     };
 
     const customerForOrderToPrint = useMemo(() => {
@@ -265,8 +259,6 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 products={products}
                 onOrderAdded={handleAddOrder}
                 onCustomerAdded={handleAddCustomer}
-                orderCount={orders.length}
-                customerCount={customers.length}
             />
         </div>
     );
@@ -275,15 +267,13 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
 const initialItemState = { productId: '', quantity: '', price: '', gst: '', stock: 0 };
 type OrderItemState = { productId: string, quantity: string, price: string, gst: string, stock: number };
 
-function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdded, onCustomerAdded, orderCount, customerCount }: {
+function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdded, onCustomerAdded }: {
     isOpen: boolean,
     onOpenChange: (open: boolean) => void,
     customers: Customer[],
     products: Product[],
-    onOrderAdded: (order: Order) => void,
-    onCustomerAdded: (customer: Customer) => void,
-    orderCount: number,
-    customerCount: number,
+    onOrderAdded: (order: Omit<Order, 'id' | 'customerName'>) => void,
+    onCustomerAdded: (customer: Omit<Customer, 'id'|'transactionHistory'>) => Promise<Customer | null>,
 }) {
     const [customerId, setCustomerId] = useState<string>('');
     const [items, setItems] = useState<OrderItemState[]>([]);
@@ -382,20 +372,20 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         setItems(items.filter((_, i) => i !== index));
     };
 
-    const handleAddCustomerSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    const handleAddCustomerSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         const formData = new FormData(event.currentTarget);
-        const newCustomer: Customer = {
-            id: `CUST-${String(customerCount + 1).padStart(3, '0')}`,
+        const newCustomerData = {
             name: formData.get('name') as string,
             email: formData.get('email') as string,
             phone: formData.get('phone') as string,
             address: formData.get('address') as string,
-            transactionHistory: { totalSpent: 0, lastPurchaseDate: new Date().toISOString().split('T')[0] },
         };
-        onCustomerAdded(newCustomer);
-        setIsAddCustomerOpen(false);
-        setCustomerId(newCustomer.id);
+        const newCustomer = await onCustomerAdded(newCustomerData);
+        if (newCustomer) {
+            setIsAddCustomerOpen(false);
+            setCustomerId(newCustomer.id);
+        }
     };
 
     const { subTotal, totalGst, total } = useMemo(() => {
@@ -406,8 +396,8 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
             totalGst = items.reduce((sum, item) => sum + ((parseFloat(item.price) || 0) * (parseInt(item.quantity) || 0) * ((parseFloat(item.gst) || 0) / 100)), 0);
         }
         
-        const total = subTotal + totalGst;
-        return { subTotal, totalGst, total };
+        const totalValue = subTotal + totalGst;
+        return { subTotal, totalGst, total: totalValue };
     }, [items, isGstInvoice]);
 
     const grandTotal = useMemo(() => total - discount, [total, discount]);
@@ -426,10 +416,8 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         const customer = customers.find(c => c.id === customerId);
         if (!customer) return;
 
-        const newOrder: Order = {
-            id: `ORD-${String(orderCount + 1).padStart(3, '0')}`,
+        const newOrderData: Omit<Order, 'id' | 'customerName'> = {
             customerId,
-            customerName: customer.name,
             orderDate: new Date().toISOString().split('T')[0],
             status: 'Pending',
             items: items.map(item => {
@@ -457,9 +445,9 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         };
 
         if (paymentTerm === 'Full Payment') {
-            newOrder.status = 'Fulfilled';
-            newOrder.balanceDue = 0;
-            newOrder.payments = [{
+            newOrderData.status = 'Fulfilled';
+            newOrderData.balanceDue = 0;
+            newOrderData.payments = [{
                 id: `PAY-${Date.now()}`,
                 paymentDate: new Date().toISOString().split('T')[0],
                 amount: grandTotal,
@@ -468,7 +456,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
             }];
         }
 
-        onOrderAdded(newOrder);
+        onOrderAdded(newOrderData);
         resetForm();
     };
 

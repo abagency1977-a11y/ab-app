@@ -13,7 +13,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getOrders } from '@/lib/data';
+import { getOrders, addCustomer, deleteCustomer as deleteCustomerFromDB } from '@/lib/data';
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value);
 
@@ -33,22 +33,10 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
 
      useEffect(() => {
         setIsMounted(true);
-        const storedCustomers = localStorage.getItem('customers');
-        if (storedCustomers) {
-            setCustomers(JSON.parse(storedCustomers));
-        }
-        const storedOrders = localStorage.getItem('orders');
-        if (storedOrders) {
-            setOrders(JSON.parse(storedOrders));
-        } else {
-            getOrders().then(setOrders);
-        }
+        // Fetch initial data
+        getOrders().then(setOrders);
     }, []);
 
-    const updateCustomers = (newCustomers: Customer[]) => {
-        setCustomers(newCustomers);
-        localStorage.setItem('customers', JSON.stringify(newCustomers));
-    };
 
     const sortedCustomers = useMemo(() => {
         let sortableItems = [...customers];
@@ -90,35 +78,52 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
         customer.email.toLowerCase().includes(search.toLowerCase())
     );
     
-    const handleAddCustomer = (event: React.FormEvent<HTMLFormElement>) => {
+    const handleAddCustomer = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         const formData = new FormData(event.currentTarget);
-        const newCustomer: Customer = {
-            id: `CUST-${String(customers.length + 1).padStart(3, '0')}`,
+        const newCustomerData = {
             name: formData.get('name') as string,
             email: formData.get('email') as string,
             phone: formData.get('phone') as string,
             address: formData.get('address') as string,
-            transactionHistory: { totalSpent: 0, lastPurchaseDate: new Date().toISOString().split('T')[0] },
         };
-        updateCustomers([...customers, newCustomer]);
-        setIsAddDialogOpen(false);
-        toast({
-            title: "Customer Added",
-            description: `${newCustomer.name} has been successfully added.`,
-        });
+        
+        try {
+            const newCustomer = await addCustomer(newCustomerData);
+            setCustomers([...customers, newCustomer]);
+            setIsAddDialogOpen(false);
+            toast({
+                title: "Customer Added",
+                description: `${newCustomer.name} has been successfully added.`,
+            });
+        } catch (error) {
+            toast({
+                title: "Error",
+                description: "Failed to add customer.",
+                variant: 'destructive',
+            });
+        }
     };
 
-    const handleDeleteCustomer = () => {
-        if (!customerToDelete) return;
-        const newCustomers = customers.filter(c => c.id !== customerToDelete.id);
-        updateCustomers(newCustomers);
-        setCustomerToDelete(null);
-        toast({
-            title: "Customer Deleted",
-            description: `${customerToDelete.name} has been removed.`,
-            variant: "destructive"
-        });
+    const handleDeleteCustomer = async () => {
+        if (!customerToDelete || !customerToDelete.id) return;
+        try {
+            await deleteCustomerFromDB(customerToDelete.id);
+            const newCustomers = customers.filter(c => c.id !== customerToDelete.id);
+            setCustomers(newCustomers);
+            setCustomerToDelete(null);
+            toast({
+                title: "Customer Deleted",
+                description: `${customerToDelete.name} has been removed.`,
+                variant: "destructive"
+            });
+        } catch(e) {
+             toast({
+                title: "Error deleting customer",
+                description: "Could not delete customer.",
+                variant: "destructive"
+            });
+        }
     };
     
     const openBulkPaymentDialog = (customer: Customer) => {

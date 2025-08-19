@@ -18,7 +18,7 @@ import { Loader2, Receipt } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { ReceiptTemplate } from '@/components/receipt-template';
-import { getCustomers, getOrders } from '@/lib/data';
+import { getCustomers, getOrders, updateOrder } from '@/lib/data';
 
 const formatNumber = (value: number | undefined) => {
     if (value === undefined || isNaN(value)) return '₹0.00';
@@ -74,24 +74,11 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
 
     useEffect(() => {
         setIsMounted(true);
-        const storedOrders = localStorage.getItem('orders');
-        if (storedOrders) {
-            setAllInvoices(JSON.parse(storedOrders));
-        }
-        const storedCustomers = localStorage.getItem('customers');
-        if (storedCustomers) {
-            setAllCustomers(JSON.parse(storedCustomers));
-        }
         const savedLogo = localStorage.getItem('companyLogo');
         if (savedLogo) {
             setLogoUrl(savedLogo);
         }
     }, []);
-
-    const updateOrders = (newOrders: Order[]) => {
-        setAllInvoices(newOrders);
-        localStorage.setItem('orders', JSON.stringify(newOrders));
-    };
 
     const { fullPaidInvoices, creditInvoices } = useMemo(() => {
         const fullPaid = allInvoices.filter(order => order.balanceDue !== undefined && order.balanceDue <= 0);
@@ -99,7 +86,7 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
         return { fullPaidInvoices: fullPaid, creditInvoices: credit };
     }, [allInvoices]);
     
-    const handleAddPayment = (payment: Omit<Payment, 'id'>) => {
+    const handleAddPayment = async (payment: Omit<Payment, 'id'>) => {
         if (!selectedInvoice) return;
 
         const newPayment: Payment = { ...payment, id: `PAY-${Date.now()}` };
@@ -114,15 +101,23 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
             updatedInvoice.balanceDue = 0;
             updatedInvoice.status = 'Fulfilled';
         }
-
-        const newAllInvoices = allInvoices.map(inv => inv.id === updatedInvoice.id ? updatedInvoice : inv);
         
-        updateOrders(newAllInvoices);
-        setSelectedInvoice(updatedInvoice); // Keep sheet open with updated data
-        toast({
-            title: 'Payment Recorded',
-            description: `${formatNumber(newPayment.amount)} payment for invoice ${updatedInvoice.id.replace('ORD','INV')} has been recorded.`,
-        });
+        try {
+            await updateOrder(updatedInvoice);
+            const newAllInvoices = allInvoices.map(inv => inv.id === updatedInvoice.id ? updatedInvoice : inv);
+            setAllInvoices(newAllInvoices);
+            setSelectedInvoice(updatedInvoice); // Keep sheet open with updated data
+            toast({
+                title: 'Payment Recorded',
+                description: `${formatNumber(newPayment.amount)} payment for invoice ${updatedInvoice.id.replace('ORD','INV')} has been recorded.`,
+            });
+        } catch(e) {
+            toast({
+                title: 'Error',
+                description: 'Failed to record payment.',
+                variant: 'destructive'
+            });
+        }
     };
 
     const handleGenerateReceipt = async (payment: Payment) => {

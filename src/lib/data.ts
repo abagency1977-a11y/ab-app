@@ -1,10 +1,11 @@
 
+import { db } from './firebase';
+import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, query, where, writeBatch, getDoc } from 'firebase/firestore';
+import type { Customer, Product, Order, Payment } from './types';
 
-import { Customer, Product, Order, Payment } from './types';
-
-const customers: Customer[] = [
+// MOCK DATA - This will be used to seed the database for the first time.
+const mockCustomers: Omit<Customer, 'id'>[] = [
   {
-    id: 'CUST-001',
     name: 'Innovate Inc.',
     email: 'contact@innovate.com',
     phone: '555-0101',
@@ -12,7 +13,6 @@ const customers: Customer[] = [
     transactionHistory: { totalSpent: 15300, lastPurchaseDate: '2023-05-15' },
   },
   {
-    id: 'CUST-002',
     name: 'Synergy Solutions',
     email: 'info@synergysolutions.com',
     phone: '555-0102',
@@ -20,7 +20,6 @@ const customers: Customer[] = [
     transactionHistory: { totalSpent: 8250, lastPurchaseDate: '2023-05-20' },
   },
   {
-    id: 'CUST-003',
     name: 'Quantum Creations',
     email: 'support@quantum.com',
     phone: '555-0103',
@@ -28,7 +27,6 @@ const customers: Customer[] = [
     transactionHistory: { totalSpent: 22400, lastPurchaseDate: '2023-04-28' },
   },
     {
-    id: 'CUST-004',
     name: 'Apex Enterprises',
     email: 'sales@apex.com',
     phone: '555-0104',
@@ -36,7 +34,6 @@ const customers: Customer[] = [
     transactionHistory: { totalSpent: 5600, lastPurchaseDate: '2023-05-18' },
   },
   {
-    id: 'CUST-005',
     name: 'Nexus Corp',
     email: 'admin@nexuscorp.com',
     phone: '555-0105',
@@ -45,9 +42,8 @@ const customers: Customer[] = [
   },
 ];
 
-const products: Product[] = [
+const mockProducts: Omit<Product, 'id'>[] = [
   {
-    id: 'PROD-001',
     name: 'Premium Widget',
     sku: 'PW-1000',
     stock: 150,
@@ -62,7 +58,6 @@ const products: Product[] = [
     ]
   },
   {
-    id: 'PROD-002',
     name: 'Standard Gadget',
     sku: 'SG-2000',
     stock: 300,
@@ -77,7 +72,6 @@ const products: Product[] = [
     ]
   },
   {
-    id: 'PROD-003',
     name: 'Advanced Gizmo',
     sku: 'AG-3000',
     stock: 80,
@@ -92,7 +86,6 @@ const products: Product[] = [
     ]
   },
   {
-    id: 'PROD-004',
     name: 'Basic Thingamajig',
     sku: 'BT-4000',
     stock: 500,
@@ -108,9 +101,8 @@ const products: Product[] = [
   },
 ];
 
-const orders: Order[] = [
+const mockOrders: Omit<Order, 'id'>[] = [
   {
-    id: 'ORD-001',
     customerId: 'CUST-001',
     customerName: 'Innovate Inc.',
     orderDate: '2023-05-15',
@@ -129,7 +121,6 @@ const orders: Order[] = [
     deliveryDate: '2023-05-16',
   },
   {
-    id: 'ORD-002',
     customerId: 'CUST-002',
     customerName: 'Synergy Solutions',
     orderDate: '2023-05-20',
@@ -148,7 +139,6 @@ const orders: Order[] = [
     balanceDue: 1596,
   },
   {
-    id: 'ORD-003',
     customerId: 'CUST-003',
     customerName: 'Quantum Creations',
     orderDate: '2023-04-28',
@@ -166,7 +156,6 @@ const orders: Order[] = [
     deliveryDate: '2023-04-30',
   },
     {
-    id: 'ORD-004',
     customerId: 'CUST-005',
     customerName: 'Nexus Corp',
     orderDate: '2023-05-22',
@@ -186,7 +175,6 @@ const orders: Order[] = [
     balanceDue: 16699,
   },
   {
-    id: 'ORD-005',
     customerId: 'CUST-001',
     customerName: 'Innovate Inc.',
     orderDate: '2023-05-25',
@@ -201,19 +189,105 @@ const orders: Order[] = [
 ];
 
 
+// Function to seed the database
+async function seedDatabase() {
+  const customersSnapshot = await getDocs(collection(db, 'customers'));
+  if (customersSnapshot.empty) {
+    console.log('Seeding database...');
+    const batch = writeBatch(db);
+
+    // Seed Customers
+    mockCustomers.forEach(customerData => {
+        const docRef = doc(collection(db, 'customers'));
+        batch.set(docRef, customerData);
+    });
+
+    // Seed Products
+    mockProducts.forEach(productData => {
+        const docRef = doc(collection(db, 'products'));
+        batch.set(docRef, productData);
+    });
+    
+    // Seed Orders
+    mockOrders.forEach(orderData => {
+        const docRef = doc(collection(db, 'orders'));
+        batch.set(docRef, orderData);
+    });
+
+    await batch.commit();
+    console.log('Database seeded.');
+  }
+}
+
+// Seed the database on startup if it's empty
+seedDatabase().catch(console.error);
+
+
+// CUSTOMER FUNCTIONS
 export const getCustomers = async (): Promise<Customer[]> => {
-    return new Promise(resolve => setTimeout(() => resolve(customers), 500));
+    const snapshot = await getDocs(collection(db, 'customers'));
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
 };
 
+export const addCustomer = async (customerData: Omit<Customer, 'id' | 'transactionHistory'>): Promise<Customer> => {
+    const newCustomer: Omit<Customer, 'id'> = {
+        ...customerData,
+        transactionHistory: { totalSpent: 0, lastPurchaseDate: new Date().toISOString().split('T')[0] },
+    };
+    const docRef = await addDoc(collection(db, 'customers'), newCustomer);
+    return { id: docRef.id, ...newCustomer };
+};
+
+export const deleteCustomer = async (id: string) => {
+    await deleteDoc(doc(db, 'customers', id));
+};
+
+
+// PRODUCT FUNCTIONS
 export const getProducts = async (): Promise<Product[]> => {
-    return new Promise(resolve => setTimeout(() => resolve(products), 500));
+    const snapshot = await getDocs(collection(db, 'products'));
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
 };
 
+export const addProduct = async (productData: Omit<Product, 'id'>): Promise<Product> => {
+    const docRef = await addDoc(collection(db, 'products'), productData);
+    return { id: docRef.id, ...productData };
+};
+
+export const deleteProduct = async(id: string) => {
+    await deleteDoc(doc(db, 'products', id));
+};
+
+// ORDER FUNCTIONS
 export const getOrders = async (): Promise<Order[]> => {
-    return new Promise(resolve => setTimeout(() => resolve(orders), 500));
+    const snapshot = await getDocs(collection(db, 'orders'));
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
 };
 
+export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): Promise<Order> => {
+    const customerSnap = await getDoc(doc(db, "customers", orderData.customerId));
+    if (!customerSnap.exists()) {
+        throw new Error("Customer not found");
+    }
+    const customerName = customerSnap.data().name;
+    const newOrder = { ...orderData, customerName };
+    const docRef = await addDoc(collection(db, 'orders'), newOrder);
+    return { id: docRef.id, ...newOrder };
+};
+
+export const updateOrder = async (orderData: Order): Promise<void> => {
+    const { id, ...dataToUpdate } = orderData;
+    if (!id) throw new Error("Order ID is required to update.");
+    await setDoc(doc(db, 'orders', id), dataToUpdate);
+};
+
+
+// DASHBOARD DATA
 export const getDashboardData = async () => {
+    const orders = await getOrders();
+    const customers = await getCustomers();
+    const products = await getProducts();
+
     const totalRevenue = orders.filter(o => o.status === 'Fulfilled').reduce((sum, order) => sum + order.grandTotal, 0);
     const totalCustomers = customers.length;
     const itemsInStock = products.reduce((sum, product) => sum + product.stock, 0);
@@ -227,12 +301,12 @@ export const getDashboardData = async () => {
 
     const revenueChartData = Object.entries(monthlyRevenue).map(([month, revenue]) => ({ month, revenue: Math.round(revenue)}));
 
-    return new Promise(resolve => setTimeout(() => resolve({
+    return {
         totalRevenue,
         totalCustomers,
         itemsInStock,
         pendingOrders,
         revenueChartData,
         recentOrders: orders.slice(0, 5).map(o => ({...o, total: o.grandTotal})),
-    }), 500));
+    };
 };
