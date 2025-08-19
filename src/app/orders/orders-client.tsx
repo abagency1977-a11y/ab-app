@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { getProducts, getCustomers, getOrders, addOrder, addCustomer } from '@/lib/data';
+import { addOrder, addCustomer } from '@/lib/data';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
@@ -43,10 +43,8 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState('');
     const [dateFilter, setDateFilter] = useState('All');
-    const [isMounted, setIsMounted] = useState(false);
     
     useEffect(() => {
-        setIsMounted(true);
         const savedLogo = localStorage.getItem('companyLogo');
         if (savedLogo) {
             setLogoUrl(savedLogo);
@@ -132,7 +130,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     const handleAddOrder = async (newOrderData: Omit<Order, 'id' | 'customerName'>) => {
        try {
             const newOrder = await addOrder(newOrderData);
-            setOrders([newOrder, ...orders]);
+            setOrders(prevOrders => [newOrder, ...prevOrders]);
             toast({
                 title: "Order Placed",
                 description: `Order ${newOrder.id} has been successfully created.`,
@@ -149,7 +147,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     const handleAddCustomer = async (newCustomerData: Omit<Customer, 'id' | 'transactionHistory'>) => {
         try {
             const newCustomer = await addCustomer(newCustomerData);
-            setCustomers([...customers, newCustomer]);
+            setCustomers(prevCustomers => [...prevCustomers, newCustomer]);
             toast({
                 title: "Customer Added",
                 description: `${newCustomer.name} has been successfully added.`,
@@ -169,10 +167,6 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         if (!orderToPrint) return null;
         return customers.find(c => c.id === orderToPrint.customerId) || null;
     }, [orderToPrint, customers]);
-
-    if (!isMounted) {
-        return null; // Or a loading spinner
-    }
 
     return (
         <div className="space-y-4">
@@ -652,3 +646,5 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         </>
     );
 }
+
+    
