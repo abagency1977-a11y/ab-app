@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -43,7 +44,7 @@ function Logo() {
     }, []);
 
     if (logoUrl) {
-        return <img src={logoUrl} alt="Company Logo" className="h-10" />;
+        return <img src={logoUrl} alt="Company Logo" className="h-12" />;
     }
 
     return (
