@@ -11,7 +11,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Rupee } from '@/components/icons';
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-IN').format(value);
 
@@ -143,10 +142,7 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                                     <div className="text-xs text-muted-foreground">{customer.phone}</div>
                                 </TableCell>
                                 <TableCell>
-                                    <div className="flex items-center">
-                                        <Rupee className="inline-block h-4 w-4 mr-1" />
-                                        {formatNumber(customer.transactionHistory.totalSpent)}
-                                    </div>
+                                    ₹{formatNumber(customer.transactionHistory.totalSpent)}
                                 </TableCell>
                                 <TableCell>{new Date(customer.transactionHistory.lastPurchaseDate).toLocaleDateString()}</TableCell>
                                 <TableCell>

@@ -16,7 +16,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Rupee } from '@/components/icons';
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 
@@ -147,7 +146,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                         <TableCell>{product.sku}</TableCell>
                                         <TableCell>{product.stock}</TableCell>
                                         <TableCell className="text-right">
-                                            <span className="flex items-center justify-end"><Rupee className="inline-block h-4 w-4 mr-1" />{formatNumber(product.price)}</span>
+                                            ₹{formatNumber(product.price)}
                                         </TableCell>
                                         <TableCell>{product.gst}%</TableCell>
                                         <TableCell>

@@ -9,7 +9,6 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { ChartConfig, ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { generateReportNarrative } from '@/ai/flows/generate-report-narrative';
-import { Rupee } from '@/components/icons';
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-IN').format(value);
 
@@ -66,9 +65,8 @@ export function ReportsClient({ reportData }: { reportData: any }) {
                  <Card>
                     <CardHeader><CardTitle>Total Revenue</CardTitle></CardHeader>
                     <CardContent>
-                        <p className="text-3xl font-bold flex items-center">
-                            <Rupee className="inline-block h-7 w-7 mr-1" />
-                            {formatNumber(reportData.totalRevenue)}
+                        <p className="text-3xl font-bold">
+                            ₹{formatNumber(reportData.totalRevenue)}
                         </p>
                     </CardContent>
                 </Card>
@@ -101,15 +99,7 @@ export function ReportsClient({ reportData }: { reportData: any }) {
                                     const num = value as number;
                                     return `₹${formatNumber(num)}`;
                                 }} />
-                                <Tooltip content={<ChartTooltipContent formatter={(value) => {
-                                    const formattedValue = formatNumber(value as number);
-                                    return (
-                                        <div className="flex items-center">
-                                           <Rupee className="inline-block h-4 w-4 mr-1" />
-                                           {formattedValue}
-                                        </div>
-                                    );
-                                }}/>} />
+                                <Tooltip content={<ChartTooltipContent formatter={(value) => `₹${formatNumber(value as number)}`}/>} />
                                 <Line type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={2} dot={{r: 5, fill: "hsl(var(--primary))"}} activeDot={{ r: 8 }} />
                             </LineChart>
                         </ResponsiveContainer>

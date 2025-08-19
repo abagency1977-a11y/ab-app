@@ -18,7 +18,6 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { getProducts } from '@/lib/data';
-import { Rupee } from '@/components/icons';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
@@ -162,10 +161,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                                             <Badge variant={order.status === 'Fulfilled' ? 'default' : order.status === 'Pending' ? 'secondary' : 'destructive'} className="capitalize">{order.status}</Badge>
                                         </TableCell>
                                         <TableCell className="text-right">
-                                            <div className="flex items-center justify-end">
-                                              <Rupee className="inline-block h-4 w-4 mr-1" />
-                                              {formatNumber(order.grandTotal)}
-                                            </div>
+                                            ₹{formatNumber(order.grandTotal)}
                                         </TableCell>
                                         <TableCell>
                                             <DropdownMenu>
@@ -212,10 +208,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                                             <Badge variant='secondary' className="capitalize">{order.status}</Badge>
                                         </TableCell>
                                         <TableCell className="text-right">
-                                            <div className="flex items-center justify-end">
-                                              <Rupee className="inline-block h-4 w-4 mr-1" />
-                                              {formatNumber(order.grandTotal)}
-                                            </div>
+                                            ₹{formatNumber(order.grandTotal)}
                                         </TableCell>
                                         <TableCell>
                                             <DropdownMenu>
@@ -262,10 +255,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                                             <Badge variant='default' className="capitalize">{order.status}</Badge>
                                         </TableCell>
                                         <TableCell className="text-right">
-                                            <div className="flex items-center justify-end">
-                                              <Rupee className="inline-block h-4 w-4 mr-1" />
-                                              {formatNumber(order.grandTotal)}
-                                            </div>
+                                            ₹{formatNumber(order.grandTotal)}
                                         </TableCell>
                                         <TableCell>
                                             <DropdownMenu>
@@ -312,10 +302,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                                             <Badge variant='destructive' className="capitalize">{order.status}</Badge>
                                         </TableCell>
                                         <TableCell className="text-right">
-                                            <div className="flex items-center justify-end">
-                                              <Rupee className="inline-block h-4 w-4 mr-1" />
-                                              {formatNumber(order.grandTotal)}
-                                            </div>
+                                            ₹{formatNumber(order.grandTotal)}
                                         </TableCell>
                                         <TableCell>
                                             <DropdownMenu>
@@ -619,9 +606,9 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                                         <TableRow key={index}>
                                                             <TableCell>{product?.name}</TableCell>
                                                             <TableCell>{item.quantity}</TableCell>
-                                                            <TableCell>{formatNumber(price)}</TableCell>
+                                                            <TableCell>₹{formatNumber(price)}</TableCell>
                                                             <TableCell>{isGstInvoice ? `${item.gst}%` : 'N/A'}</TableCell>
-                                                            <TableCell>{formatNumber(itemTotal)}</TableCell>
+                                                            <TableCell>₹{formatNumber(itemTotal)}</TableCell>
                                                             <TableCell className="space-x-2">
                                                                 <Button type="button" size="sm" variant="outline" onClick={() => handleEditItemClick(index)}>Edit</Button>
                                                                 <Button type="button" size="sm" variant="destructive" onClick={() => handleRemoveItem(index)}>Delete</Button>
@@ -676,19 +663,19 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                     <div className="space-y-4">
                                         <Card><CardContent className="p-4 space-y-2">
                                             <DialogTitle className="text-lg">Order Summary</DialogTitle>
-                                            <div className="flex justify-between"><span>Subtotal:</span> <span className="font-semibold flex items-center"><Rupee className="inline-block h-4 w-4 mr-1" />{formatNumber(subTotal)}</span></div>
-                                            {isGstInvoice && <div className="flex justify-between"><span>Total GST:</span> <span className="font-semibold flex items-center"><Rupee className="inline-block h-4 w-4 mr-1" />{formatNumber(totalGst)}</span></div>}
+                                            <div className="flex justify-between"><span>Subtotal:</span> <span className="font-semibold">₹{formatNumber(subTotal)}</span></div>
+                                            {isGstInvoice && <div className="flex justify-between"><span>Total GST:</span> <span className="font-semibold">₹{formatNumber(totalGst)}</span></div>}
                                             <Separator />
                                             <div className="flex justify-between text-lg">
                                                 <span className="font-bold">Grand Total Value:</span>
-                                                <span className="font-bold text-primary flex items-center"><Rupee className="inline-block h-5 w-5 mr-1" />{formatNumber(grandTotal)}</span>
+                                                <span className="font-bold text-primary">₹{formatNumber(grandTotal)}</span>
                                             </div>
                                             <div className="flex items-center space-x-2 pt-2">
                                                 <Checkbox id="enable_discount" checked={enableDiscount} onCheckedChange={c => setEnableDiscount(c as boolean)} />
                                                 <Label htmlFor="enable_discount" className="flex-1">Enable Discount</Label>
                                                 <Input type="number" placeholder="0.00" className="w-24" value={String(discount)} onChange={e => setDiscount(parseFloat(e.target.value) || 0)} disabled={!enableDiscount} />
                                             </div>
-                                            <div className="flex justify-between"><span>Discount Applied:</span> <span className="font-semibold flex items-center"><Rupee className="inline-block h-4 w-4 mr-1" />{formatNumber(discount)}</span></div>
+                                            <div className="flex justify-between"><span>Discount Applied:</span> <span className="font-semibold">₹{formatNumber(discount)}</span></div>
                                              <div className="flex items-center space-x-2 pt-2">
                                                 <Checkbox id="is_gst_invoice" checked={isGstInvoice} onCheckedChange={c => setIsGstInvoice(c as boolean)} />
                                                 <Label htmlFor="is_gst_invoice">Generate GST Invoice?</Label>
