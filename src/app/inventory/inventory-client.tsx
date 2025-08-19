@@ -80,7 +80,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
 
         try {
             const newProduct = await addProduct(newProductData);
-            setProducts([...products, newProduct]);
+            setProducts(prevProducts => [...prevProducts, newProduct]);
             setIsAddDialogOpen(false);
             toast({
                 title: "Product Added",

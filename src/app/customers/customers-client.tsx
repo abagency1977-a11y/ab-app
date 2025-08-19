@@ -90,7 +90,7 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
         
         try {
             const newCustomer = await addCustomer(newCustomerData);
-            setCustomers([...customers, newCustomer]);
+            setCustomers(prevCustomers => [...prevCustomers, newCustomer]);
             setIsAddDialogOpen(false);
             toast({
                 title: "Customer Added",
