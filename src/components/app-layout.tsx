@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Icons } from '@/components/icons';
-import { BarChart3, Boxes, LayoutDashboard, LogOut, Settings, ShoppingCart, Users, ShieldCheck } from 'lucide-react';
+import { BarChart3, Boxes, LayoutDashboard, LogOut, Settings, ShoppingCart, Users, ShieldCheck, FileText } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
@@ -31,6 +31,7 @@ const navItems = [
   { href: '/customers', icon: Users, label: 'Customers' },
   { href: '/inventory', icon: Boxes, label: 'Inventory' },
   { href: '/orders', icon: ShoppingCart, label: 'Orders' },
+  { href: '/invoices', icon: FileText, label: 'Invoices' },
   { href: '/reports', icon: BarChart3, label: 'Reports' },
   { href: '/admin', icon: ShieldCheck, label: 'Admin' },
 ];
@@ -90,7 +91,7 @@ function MainSidebar() {
                     </Avatar>
                      <div className="text-left group-data-[collapsible=icon]:hidden">
                         <p className="font-medium text-sm">Admin User</p>
-                        <p className="text-xs text-muted-foreground">admin@abagency.com</p>
+                        <p className="text-xs text-muted-foreground">admin@abagency1977@gmail.com</p>
                     </div>
                 </Button>
             </DropdownMenuTrigger>
