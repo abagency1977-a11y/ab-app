@@ -43,7 +43,7 @@ const InvoiceTable = ({ invoices, onRowClick }: { invoices: Order[], onRowClick?
                     <TableRow key={invoice.id} onClick={() => onRowClick?.(invoice)} className={onRowClick ? 'cursor-pointer' : ''}>
                         <TableCell className="font-medium">{invoice.id.replace('ORD', 'INV')}</TableCell>
                         <TableCell>{invoice.customerName}</TableCell>
-                        <TableCell>{new Date(invoice.orderDate).toLocaleDateString()}</TableCell>
+                        <TableCell>{new Date(invoice.orderDate).toLocaleDateString('en-IN')}</TableCell>
                         <TableCell>
                             <Badge variant={invoice.status === 'Fulfilled' ? 'default' : invoice.status === 'Pending' ? 'secondary' : 'destructive'} className="capitalize">{invoice.status}</Badge>
                         </TableCell>
@@ -218,7 +218,7 @@ export function InvoicesClient({ orders, customers: initialCustomers }: { orders
                                              <div key={payment.id} className="flex justify-between items-center text-sm p-2 bg-muted/50 rounded-lg">
                                                 <div>
                                                     <p className="font-medium">₹{formatNumber(payment.amount)}</p>
-                                                    <p className="text-xs text-muted-foreground">{new Date(payment.paymentDate).toLocaleDateString()} via {payment.method}</p>
+                                                    <p className="text-xs text-muted-foreground">{new Date(payment.paymentDate).toLocaleDateString('en-IN')} via {payment.method}</p>
                                                 </div>
                                                 <Button size="sm" variant="outline" onClick={() => handleGenerateReceipt(payment)} disabled={isReceiptLoading}>
                                                     {isReceiptLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Receipt className="mr-2 h-4 w-4" />}

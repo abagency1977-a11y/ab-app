@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -144,7 +145,7 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                                 <TableCell>
                                     ₹{formatNumber(customer.transactionHistory.totalSpent)}
                                 </TableCell>
-                                <TableCell>{new Date(customer.transactionHistory.lastPurchaseDate).toLocaleDateString()}</TableCell>
+                                <TableCell>{new Date(customer.transactionHistory.lastPurchaseDate).toLocaleDateString('en-IN')}</TableCell>
                                 <TableCell>
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild>

@@ -34,9 +34,9 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
         <div className="text-right">
           <h2 className="text-4xl font-bold uppercase text-gray-700">Invoice</h2>
           <p className="mt-2"><span className="font-bold">Invoice #:</span> {order.id.replace('ORD', 'INV')}</p>
-          <p><span className="font-bold">Date:</span> {new Date(order.orderDate).toLocaleDateString()}</p>
-           {order.deliveryDate && <p><span className="font-bold">Delivery Date:</span> {new Date(order.deliveryDate).toLocaleDateString()}</p>}
-           {order.dueDate && <p className="text-red-500"><span className="font-bold">Due Date:</span> {new Date(order.dueDate).toLocaleDateString()}</p>}
+          <p><span className="font-bold">Date:</span> {new Date(order.orderDate).toLocaleDateString('en-IN')}</p>
+           {order.deliveryDate && <p><span className="font-bold">Delivery Date:</span> {new Date(order.deliveryDate).toLocaleDateString('en-IN')}</p>}
+           {order.dueDate && <p className="text-red-500"><span className="font-bold">Due Date:</span> {new Date(order.dueDate).toLocaleDateString('en-IN')}</p>}
         </div>
       </div>
 
@@ -115,7 +115,7 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
           <div className="mb-8 p-4 bg-red-50 border border-red-200 rounded-lg">
             <h3 className="font-bold text-red-800">Payment Due</h3>
             <p className="text-red-700 font-bold">₹{formatNumber(order.grandTotal)}</p>
-            {order.dueDate && <p className="text-red-700">Due Date: {new Date(order.dueDate).toLocaleDateString()}</p>}
+            {order.dueDate && <p className="text-red-700">Due Date: {new Date(order.dueDate).toLocaleDateString('en-IN')}</p>}
           </div>
       )}
 

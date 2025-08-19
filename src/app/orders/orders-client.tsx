@@ -4,6 +4,8 @@
 
 
 
+
+
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
@@ -107,6 +109,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 useCORS: true,
                 logging: true,
             });
+            const imgData = canvas.toDataURL('image/png');
             
             const pdf = new jsPDF({
                 orientation: 'portrait',
@@ -198,7 +201,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                             <TableRow key={order.id}>
                                 <TableCell className="font-medium">{order.id}</TableCell>
                                 <TableCell>{order.customerName}</TableCell>
-                                <TableCell>{new Date(order.orderDate).toLocaleDateString()}</TableCell>
+                                <TableCell>{new Date(order.orderDate).toLocaleDateString('en-IN')}</TableCell>
                                 <TableCell>
                                     <Badge variant={order.status === 'Fulfilled' ? 'default' : order.status === 'Pending' ? 'secondary' : 'destructive'} className="capitalize">{order.status}</Badge>
                                 </TableCell>
