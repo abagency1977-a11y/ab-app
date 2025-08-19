@@ -5,8 +5,9 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { PDFDocument } from 'pdf-lib';
-import fetch from 'node-fetch';
 import type { Order, Customer } from '@/lib/types';
+import fs from 'fs/promises';
+import path from 'path';
 
 const GenerateInvoicePdfInputSchema = z.object({
   order: z.any().describe('The order object.'),
@@ -21,10 +22,9 @@ const GenerateInvoicePdfOutputSchema = z.object({
 
 export type GenerateInvoicePdfOutput = z.infer<typeof GenerateInvoicePdfOutputSchema>;
 
-// Corrected direct download links for Google Drive
 const TEMPLATES = {
-    'Credit': 'https://drive.google.com/uc?export=download&id=1aN5Fl7ne11WbWFR8plC2q5XGFSyGjYKS',
-    'Full Payment': 'https://drive.google.com/uc?export=download&id=1-P5Pf-9MhTCYMCv1pxbYSUKgetkxCDBH'
+    'Credit': 'credit-invoice.pdf',
+    'Full Payment': 'full-payment-invoice.pdf'
 };
 
 const formatNumber = (value: number | undefined) => {
@@ -46,12 +46,21 @@ const setTextField = (form: any, fieldName: string, value: string | undefined) =
 
 export async function generateInvoicePdfFlow(input: GenerateInvoicePdfInput): Promise<GenerateInvoicePdfOutput> {
     const { order, customer } = input as { order: Order, customer: Customer };
-    const templateUrl = TEMPLATES[order.paymentTerm];
-    if (!templateUrl) {
+    const templateName = TEMPLATES[order.paymentTerm];
+    if (!templateName) {
       throw new Error(`No template found for payment term: ${order.paymentTerm}`);
     }
 
-    const templateBytes = await fetch(templateUrl).then(res => res.arrayBuffer());
+    const templatePath = path.join(process.cwd(), 'public', 'templates', templateName);
+    
+    let templateBytes: Buffer;
+    try {
+        templateBytes = await fs.readFile(templatePath);
+    } catch (error) {
+        console.error(`Failed to read template file: ${templatePath}`, error);
+        throw new Error(`Template file not found: ${templateName}. Please ensure it has been uploaded via the Admin page.`);
+    }
+
     const pdfDoc = await PDFDocument.load(templateBytes);
     const form = pdfDoc.getForm();
 

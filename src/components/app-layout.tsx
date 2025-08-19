@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Icons } from '@/components/icons';
-import { BarChart3, Boxes, LayoutDashboard, LogOut, Settings, ShoppingCart, Users } from 'lucide-react';
+import { BarChart3, Boxes, LayoutDashboard, LogOut, Settings, ShoppingCart, Users, ShieldCheck } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
@@ -31,6 +31,7 @@ const navItems = [
   { href: '/inventory', icon: Boxes, label: 'Inventory' },
   { href: '/orders', icon: ShoppingCart, label: 'Orders' },
   { href: '/reports', icon: BarChart3, label: 'Reports' },
+  { href: '/admin', icon: ShieldCheck, label: 'Admin' },
 ];
 
 function MainSidebar() {
@@ -48,7 +49,7 @@ function MainSidebar() {
         <SidebarMenu>
           {navItems.map((item) => (
             <SidebarMenuItem key={item.href}>
-              <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.label}>
+              <SidebarMenuButton asChild isActive={pathname.startsWith(item.href)} tooltip={item.label}>
                 <Link href={item.href}>
                   <item.icon />
                   <span>{item.label}</span>
@@ -119,7 +120,7 @@ function MobileHeader() {
                   <SidebarMenu>
                   {navItems.map((item) => (
                       <SidebarMenuItem key={item.href}>
-                      <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.label}>
+                      <SidebarMenuButton asChild isActive={pathname.startsWith(item.href)} tooltip={item.label}>
                           <Link href={item.href}>
                           <item.icon />
                           <span>{item.label}</span>
