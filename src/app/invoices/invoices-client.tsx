@@ -2,17 +2,25 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import type { Order } from '@/lib/types';
+import type { Order, Payment, PaymentMode } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import { useToast } from '@/hooks/use-toast';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 
-const formatNumber = (value: number) => {
-    if (isNaN(value)) return '0.00';
+const formatNumber = (value: number | undefined) => {
+    if (value === undefined || isNaN(value)) return '0.00';
     return new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 };
 
-const InvoiceTable = ({ invoices }: { invoices: Order[] }) => (
+const InvoiceTable = ({ invoices, onRowClick }: { invoices: Order[], onRowClick?: (invoice: Order) => void }) => (
     <div className="rounded-lg border shadow-sm">
         <Table>
             <TableHeader>
@@ -21,22 +29,20 @@ const InvoiceTable = ({ invoices }: { invoices: Order[] }) => (
                     <TableHead>Customer</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Payment Term</TableHead>
+                    {onRowClick && <TableHead className="text-right">Balance Due</TableHead>}
                     <TableHead className="text-right">Total</TableHead>
                 </TableRow>
             </TableHeader>
             <TableBody>
                 {invoices.map((invoice) => (
-                    <TableRow key={invoice.id}>
+                    <TableRow key={invoice.id} onClick={() => onRowClick?.(invoice)} className={onRowClick ? 'cursor-pointer' : ''}>
                         <TableCell className="font-medium">{invoice.id.replace('ORD', 'INV')}</TableCell>
                         <TableCell>{invoice.customerName}</TableCell>
                         <TableCell>{new Date(invoice.orderDate).toLocaleDateString()}</TableCell>
                         <TableCell>
                             <Badge variant={invoice.status === 'Fulfilled' ? 'default' : invoice.status === 'Pending' ? 'secondary' : 'destructive'} className="capitalize">{invoice.status}</Badge>
                         </TableCell>
-                        <TableCell>
-                            <Badge variant={invoice.paymentTerm === 'Full Payment' ? 'default' : 'secondary'} className="capitalize">{invoice.paymentTerm}</Badge>
-                        </TableCell>
+                        {onRowClick && <TableCell className="text-right font-medium text-red-600">₹{formatNumber(invoice.balanceDue)}</TableCell>}
                         <TableCell className="text-right">
                             ₹{formatNumber(invoice.grandTotal)}
                         </TableCell>
@@ -49,29 +55,186 @@ const InvoiceTable = ({ invoices }: { invoices: Order[] }) => (
 
 
 export function InvoicesClient({ orders }: { orders: Order[] }) {
-    const [allInvoices] = useState<Order[]>(orders);
+    const [allInvoices, setAllInvoices] = useState<Order[]>(orders);
+    const [selectedInvoice, setSelectedInvoice] = useState<Order | null>(null);
+    const { toast } = useToast();
 
     const { fullPaidInvoices, creditInvoices } = useMemo(() => {
         const fullPaid = allInvoices.filter(order => order.paymentTerm === 'Full Payment');
         const credit = allInvoices.filter(order => order.paymentTerm === 'Credit');
         return { fullPaidInvoices: fullPaid, creditInvoices: credit };
     }, [allInvoices]);
+    
+    const handleAddPayment = (payment: Omit<Payment, 'id'>) => {
+        if (!selectedInvoice) return;
+
+        const newPayment: Payment = { ...payment, id: `PAY-${Date.now()}` };
+        
+        const updatedInvoice: Order = {
+            ...selectedInvoice,
+            payments: [...(selectedInvoice.payments || []), newPayment],
+            balanceDue: (selectedInvoice.balanceDue || selectedInvoice.grandTotal) - newPayment.amount,
+        };
+        
+        if (updatedInvoice.balanceDue <= 0) {
+            updatedInvoice.balanceDue = 0;
+            updatedInvoice.status = 'Fulfilled';
+            updatedInvoice.paymentTerm = 'Full Payment'; // Move to full paid
+        }
+
+        const newAllInvoices = allInvoices.map(inv => inv.id === updatedInvoice.id ? updatedInvoice : inv);
+        
+        setAllInvoices(newAllInvoices);
+        setSelectedInvoice(updatedInvoice); // Keep sheet open with updated data
+        toast({
+            title: 'Payment Recorded',
+            description: `₹${formatNumber(newPayment.amount)} payment for invoice ${updatedInvoice.id.replace('ORD','INV')} has been recorded.`,
+        });
+    };
 
     return (
         <div className="space-y-4">
             <h1 className="text-3xl font-bold">Invoices</h1>
-            <Tabs defaultValue="full-paid">
+            <Tabs defaultValue="credit">
                 <TabsList>
-                    <TabsTrigger value="full-paid">Full Paid Invoices</TabsTrigger>
                     <TabsTrigger value="credit">Credit Invoices</TabsTrigger>
+                    <TabsTrigger value="full-paid">Full Paid Invoices</TabsTrigger>
                 </TabsList>
                 <TabsContent value="full-paid">
                     <InvoiceTable invoices={fullPaidInvoices} />
                 </TabsContent>
                 <TabsContent value="credit">
-                    <InvoiceTable invoices={creditInvoices} />
+                    <InvoiceTable invoices={creditInvoices} onRowClick={setSelectedInvoice}/>
                 </TabsContent>
             </Tabs>
+
+            <Sheet open={!!selectedInvoice} onOpenChange={(open) => !open && setSelectedInvoice(null)}>
+                <SheetContent className="sm:max-w-lg w-[90vw]">
+                    {selectedInvoice && (
+                        <>
+                        <SheetHeader>
+                            <SheetTitle>Invoice: {selectedInvoice.id.replace('ORD','INV')}</SheetTitle>
+                            <SheetDescription>
+                                Manage payments for {selectedInvoice.customerName}.
+                            </SheetDescription>
+                        </SheetHeader>
+                        <div className="space-y-6 py-4">
+                            <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">Total Amount:</span>
+                                <span>₹{formatNumber(selectedInvoice.grandTotal)}</span>
+                            </div>
+                            <div className="flex justify-between font-bold text-lg">
+                                <span className="text-red-600">Balance Due:</span>
+                                <span className="text-red-600">₹{formatNumber(selectedInvoice.balanceDue)}</span>
+                            </div>
+
+                            <Separator />
+                            
+                            <PaymentForm 
+                                balanceDue={selectedInvoice.balanceDue || 0}
+                                onAddPayment={handleAddPayment} 
+                            />
+
+                            <Separator />
+
+                            <div className="space-y-2">
+                               <h4 className="font-medium">Payment History</h4>
+                                <div className="space-y-4 max-h-[40vh] overflow-y-auto p-1">
+                                    {(selectedInvoice.payments && selectedInvoice.payments.length > 0) ? (
+                                        selectedInvoice.payments.map(payment => (
+                                             <div key={payment.id} className="flex justify-between items-center text-sm p-2 bg-muted/50 rounded-lg">
+                                                <div>
+                                                    <p className="font-medium">₹{formatNumber(payment.amount)}</p>
+                                                    <p className="text-xs text-muted-foreground">{new Date(payment.paymentDate).toLocaleDateString()} via {payment.method}</p>
+                                                </div>
+                                                <Badge variant="secondary">Recorded</Badge>
+                                             </div>
+                                        ))
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground text-center py-4">No payments recorded yet.</p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                        </>
+                    )}
+                </SheetContent>
+            </Sheet>
         </div>
     );
 }
+
+
+function PaymentForm({ balanceDue, onAddPayment }: { balanceDue: number; onAddPayment: (payment: Omit<Payment, 'id'>) => void }) {
+    const [amount, setAmount] = useState('');
+    const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+    const [paymentMethod, setPaymentMethod] = useState<PaymentMode>('Cash');
+    const [notes, setNotes] = useState('');
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const paymentAmount = parseFloat(amount);
+        if (isNaN(paymentAmount) || paymentAmount <= 0) {
+            alert('Please enter a valid amount.');
+            return;
+        }
+        if (paymentAmount > balanceDue) {
+            alert('Payment cannot be greater than the balance due.');
+            return;
+        }
+        
+        onAddPayment({
+            amount: paymentAmount,
+            paymentDate,
+            method: paymentMethod,
+            notes,
+        });
+
+        // Reset form
+        setAmount('');
+        setNotes('');
+    };
+
+    return (
+        <Card>
+            <form onSubmit={handleSubmit}>
+                <CardHeader>
+                    <CardTitle>Record a Payment</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="amount">Amount Received</Label>
+                        <Input id="amount" type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder={formatNumber(balanceDue)} max={balanceDue} required />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="paymentDate">Payment Date</Label>
+                            <Input id="paymentDate" type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} required />
+                        </div>
+                         <div className="space-y-2">
+                            <Label htmlFor="paymentMethod">Payment Method</Label>
+                            <Select value={paymentMethod} onValueChange={v => setPaymentMethod(v as PaymentMode)}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Cash">Cash</SelectItem>
+                                    <SelectItem value="Card">Card</SelectItem>
+                                    <SelectItem value="UPI">UPI</SelectItem>
+                                    <SelectItem value="Cheque">Cheque</SelectItem>
+                                    <SelectItem value="Online Transfer">Online Transfer</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="notes">Notes (Optional)</Label>
+                        <Input id="notes" value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. Cheque No. 12345" />
+                    </div>
+                </CardContent>
+                <CardFooter>
+                    <Button type="submit" className="w-full">Record Payment</Button>
+                </CardFooter>
+            </form>
+        </Card>
+    );
+}
+

@@ -1,5 +1,6 @@
 
-import { Customer, Product, Order } from './types';
+
+import { Customer, Product, Order, Payment } from './types';
 
 const customers: Customer[] = [
   {
@@ -140,7 +141,11 @@ const orders: Order[] = [
     paymentTerm: 'Credit',
     dueDate: '2023-06-20',
     isGstInvoice: true,
-    deliveryAddress: '456 Synergy Ave, Business Bay, 67890'
+    deliveryAddress: '456 Synergy Ave, Business Bay, 67890',
+    payments: [
+      { id: 'PAY-001', paymentDate: '2023-05-21', amount: 1000, method: 'Bank Transfer' }
+    ],
+    balanceDue: 1596,
   },
   {
     id: 'ORD-003',
@@ -177,6 +182,8 @@ const orders: Order[] = [
     dueDate: '2023-06-22',
     isGstInvoice: false,
     deliveryDate: '2023-05-25',
+    payments: [],
+    balanceDue: 16699,
   },
   {
     id: 'ORD-005',

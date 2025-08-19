@@ -26,6 +26,14 @@ export type OrderStatus = 'Pending' | 'Fulfilled' | 'Canceled';
 export type PaymentTerm = 'Full Payment' | 'Credit';
 export type PaymentMode = 'Cash' | 'Card' | 'UPI' | 'Cheque' | 'Online Transfer';
 
+export interface Payment {
+  id: string;
+  paymentDate: string;
+  amount: number;
+  method: PaymentMode;
+  reference?: string;
+  notes?: string;
+}
 
 export interface OrderItem {
   productId: string;
@@ -52,4 +60,6 @@ export interface Order {
   deliveryDate?: string;
   deliveryAddress?: string;
   isGstInvoice: boolean;
+  payments?: Payment[];
+  balanceDue?: number;
 }
