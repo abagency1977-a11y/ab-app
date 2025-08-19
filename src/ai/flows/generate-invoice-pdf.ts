@@ -22,8 +22,8 @@ const GenerateInvoicePdfOutputSchema = z.object({
 export type GenerateInvoicePdfOutput = z.infer<typeof GenerateInvoicePdfOutputSchema>;
 
 const TEMPLATES = {
-    'Credit': 'https://drive.google.com/uc?export=download&id=1-P5Pf-9MhTCYMCv1pxbYSUKgetkxCDBH',
-    'Full Payment': 'https://drive.google.com/uc?export=download&id=1aN5Fl7ne11WbWFR8plC2q5XGFSyGjYKS'
+    'Credit': 'https://drive.google.com/uc?export=download&id=1aN5Fl7ne11WbWFR8plC2q5XGFSyGjYKS',
+    'Full Payment': 'https://drive.google.com/uc?export=download&id=1-P5Pf-9MhTCYMCv1pxbYSUKgetkxCDBH'
 };
 
 const formatNumber = (value: number | undefined) => {
@@ -31,13 +31,8 @@ const formatNumber = (value: number | undefined) => {
     return new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 };
 
-export const generateInvoicePdf = ai.defineFlow(
-  {
-    name: 'generateInvoicePdf',
-    inputSchema: GenerateInvoicePdfInputSchema,
-    outputSchema: GenerateInvoicePdfOutputSchema,
-  },
-  async ({ order, customer }: { order: Order, customer: Customer }): Promise<GenerateInvoicePdfOutput> => {
+export async function generateInvoicePdfFlow(input: GenerateInvoicePdfInput): Promise<GenerateInvoicePdfOutput> {
+    const { order, customer } = input as { order: Order, customer: Customer };
     const templateUrl = TEMPLATES[order.paymentTerm];
     if (!templateUrl) {
       throw new Error(`No template found for payment term: ${order.paymentTerm}`);
@@ -95,5 +90,13 @@ export const generateInvoicePdf = ai.defineFlow(
     const pdfBase64 = Buffer.from(pdfBytes).toString('base64');
 
     return { pdfBase64 };
-  }
+}
+
+export const generateInvoicePdf = ai.defineFlow(
+  {
+    name: 'generateInvoicePdf',
+    inputSchema: GenerateInvoicePdfInputSchema,
+    outputSchema: GenerateInvoicePdfOutputSchema,
+  },
+  generateInvoicePdfFlow
 );
