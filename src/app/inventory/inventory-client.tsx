@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { addProduct, deleteProduct as deleteProductFromDB } from '@/lib/data';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value);
 
@@ -30,7 +31,12 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [productToEdit, setProductToEdit] = useState<Product | null>(null);
     const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+    const [isMounted, setIsMounted] = useState(false);
     const { toast } = useToast();
+
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
 
     const handlePredictDemand = async () => {
         if (!selectedProduct) {
@@ -141,6 +147,40 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
         }
     };
 
+    if (!isMounted) {
+        return (
+            <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                    <Skeleton className="h-10 w-48" />
+                    <Skeleton className="h-10 w-32" />
+                </div>
+                <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-3">
+                    <div className="lg:col-span-2 space-y-4">
+                        <div className="rounded-lg border shadow-sm p-4">
+                            <Skeleton className="h-8 w-full mb-4" />
+                            <Skeleton className="h-8 w-full mb-2" />
+                            <Skeleton className="h-8 w-full" />
+                        </div>
+                    </div>
+                    <div className="lg:col-span-1">
+                        <Card>
+                            <CardHeader>
+                                <Skeleton className="h-6 w-3/4" />
+                                <Skeleton className="h-4 w-full" />
+                            </CardHeader>
+                            <CardContent>
+                                <Skeleton className="h-10 w-full" />
+                            </CardContent>
+                            <CardFooter>
+                                <Skeleton className="h-10 w-full" />
+                            </CardFooter>
+                        </Card>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -240,7 +280,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                             Fill in the details below to add a new product to the inventory.
                         </DialogDescription>
                     </DialogHeader>
-                    <form onSubmit={handleAddProduct}>
+                    <form id="add-product-form" onSubmit={handleAddProduct}>
                         <div className="grid gap-4 py-4">
                             <div className="grid grid-cols-4 items-center gap-4">
                                 <Label htmlFor="name" className="text-right">Name</Label>
@@ -265,7 +305,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                         </div>
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
-                            <Button type="submit">Add Product</Button>
+                            <Button type="submit" form="add-product-form">Add Product</Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>
@@ -327,5 +367,3 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
         </div>
     );
 }
-
-    
