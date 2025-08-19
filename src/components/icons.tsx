@@ -28,6 +28,7 @@ export const Rupee = (props: SVGProps<SVGSVGElement>) => (
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
+      style={{ verticalAlign: 'middle' }}
       {...props}
     >
         <path d="M6 3h8" />
