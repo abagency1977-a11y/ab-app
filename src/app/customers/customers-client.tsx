@@ -339,3 +339,5 @@ function BulkPaymentDialog({ isOpen, onOpenChange, customer }: {
         </Dialog>
     );
 }
+
+    

@@ -335,3 +335,5 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
         </div>
     );
 }
+
+    
