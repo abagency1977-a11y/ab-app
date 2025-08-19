@@ -34,47 +34,8 @@ export type GenerateReceiptOutput = z.infer<typeof GenerateReceiptOutputSchema>;
 
 
 export async function generateReceipt(input: GenerateReceiptInput): Promise<GenerateReceiptOutput> {
-  return generateReceiptFlow(input);
+  // This flow is now deprecated in favor of client-side PDF generation.
+  // It is kept for potential future use or as an example.
+  // The primary receipt generation is handled in InvoicesClient.
+  return { receipt: "This flow is deprecated." };
 }
-
-const prompt = ai.definePrompt({
-  name: 'generateReceiptPrompt',
-  input: {schema: GenerateReceiptInputSchema},
-  output: {schema: GenerateReceiptOutputSchema},
-  prompt: `You are an accounting assistant. Generate a clear and simple receipt for a payment transaction.
-
-  **Payment Receipt**
-
-  --------------------------------
-  **Customer:** {{{customerName}}}
-  **Invoice ID:** {{{invoiceId}}}
-  --------------------------------
-
-  **Payment Details:**
-  - **Payment ID:** {{{payment.id}}}
-  - **Payment Date:** {{{payment.paymentDate}}}
-  - **Amount Paid:** {{{payment.amount}}}
-  - **Payment Method:** {{{payment.method}}}
-
-  **Invoice Summary:**
-  - **Original Invoice Total:** {{{invoiceTotal}}}
-  - **Balance Due After this Payment:** {{{balanceDueAfterPayment}}}
-
-  --------------------------------
-  Thank you for your payment.
-  This is an official receipt for the amount paid.
-  `,
-});
-
-
-const generateReceiptFlow = ai.defineFlow(
-  {
-    name: 'generateReceiptFlow',
-    inputSchema: GenerateReceiptInputSchema,
-    outputSchema: GenerateReceiptOutputSchema,
-  },
-  async input => {
-    const {output} = await prompt(input);
-    return output!;
-  }
-);

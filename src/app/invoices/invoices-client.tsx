@@ -1,8 +1,8 @@
 
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import type { Order, Payment, PaymentMode } from '@/lib/types';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import type { Order, Payment, PaymentMode, Customer } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,9 +14,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { generateReceipt, GenerateReceiptOutput } from '@/ai/flows/generate-receipt';
 import { Loader2, Receipt } from 'lucide-react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import { ReceiptTemplate } from '@/components/receipt-template';
+import { getCustomers } from '@/lib/data';
 
 const formatNumber = (value: number | undefined) => {
     if (value === undefined || isNaN(value)) return '0.00';
@@ -59,16 +61,26 @@ const InvoiceTable = ({ invoices, onRowClick }: { invoices: Order[], onRowClick?
 );
 
 
-export function InvoicesClient({ orders }: { orders: Order[] }) {
+export function InvoicesClient({ orders, customers: initialCustomers }: { orders: Order[], customers: Customer[] }) {
     const [allInvoices, setAllInvoices] = useState<Order[]>(orders);
+    const [allCustomers, setAllCustomers] = useState<Customer[]>(initialCustomers);
     const [selectedInvoice, setSelectedInvoice] = useState<Order | null>(null);
-    const [generatedReceipt, setGeneratedReceipt] = useState<GenerateReceiptOutput | null>(null);
+    const [receiptToPrint, setReceiptToPrint] = useState<{order: Order, payment: Payment} | null>(null);
     const [isReceiptLoading, setIsReceiptLoading] = useState(false);
     const { toast } = useToast();
+    const receiptRef = useRef<HTMLDivElement>(null);
+    const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
+
+    useEffect(() => {
+        const savedLogo = localStorage.getItem('companyLogo');
+        if (savedLogo) {
+            setLogoUrl(savedLogo);
+        }
+    }, []);
 
     const { fullPaidInvoices, creditInvoices } = useMemo(() => {
         const fullPaid = allInvoices.filter(order => order.paymentTerm === 'Full Payment' && order.balanceDue === 0);
-        const credit = allInvoices.filter(order => order.paymentTerm === 'Credit' || order.balanceDue > 0);
+        const credit = allInvoices.filter(order => order.paymentTerm === 'Credit' || (order.balanceDue && order.balanceDue > 0));
         return { fullPaidInvoices: fullPaid, creditInvoices: credit };
     }, [allInvoices]);
     
@@ -101,33 +113,48 @@ export function InvoicesClient({ orders }: { orders: Order[] }) {
 
     const handleGenerateReceipt = async (payment: Payment) => {
         if (!selectedInvoice) return;
-
         setIsReceiptLoading(true);
-        try {
-            const balanceDueAfterPayment = selectedInvoice.grandTotal - (selectedInvoice.payments || [])
-                .filter(p => new Date(p.paymentDate) <= new Date(payment.paymentDate))
-                .reduce((sum, p) => sum + p.amount, 0);
+        setReceiptToPrint({ order: selectedInvoice, payment });
+    };
 
-            const result = await generateReceipt({
-                customerName: selectedInvoice.customerName,
-                invoiceId: selectedInvoice.id.replace('ORD', 'INV'),
-                payment: {
-                    id: payment.id,
-                    paymentDate: new Date(payment.paymentDate).toLocaleDateString(),
-                    amount: payment.amount,
-                    method: payment.method,
-                },
-                invoiceTotal: selectedInvoice.grandTotal,
-                balanceDueAfterPayment: balanceDueAfterPayment,
-            });
-            setGeneratedReceipt(result);
+    useEffect(() => {
+        if (receiptToPrint) {
+            setTimeout(() => {
+                handlePrintReceipt();
+            }, 100);
+        }
+    }, [receiptToPrint]);
+
+    const handlePrintReceipt = async () => {
+        if (!receiptToPrint || !receiptRef.current) return;
+        
+        try {
+            const canvas = await html2canvas(receiptRef.current, { scale: 3, useCORS: true });
+            const imgData = canvas.toDataURL('image/png');
+            
+            const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a5' });
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const canvasAspectRatio = canvas.width / canvas.height;
+            const pdfHeight = pdfWidth / canvasAspectRatio;
+
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            pdf.save(`receipt-${receiptToPrint.payment.id}.pdf`);
+
+            toast({ title: 'Success', description: 'Receipt PDF has been downloaded.' });
         } catch (error) {
-            console.error('Receipt generation failed:', error);
-            toast({ title: 'Error', description: 'Failed to generate receipt.', variant: 'destructive' });
+            console.error('Failed to generate receipt:', error);
+            toast({ title: 'Error', description: 'Failed to generate receipt PDF.', variant: 'destructive'});
         } finally {
             setIsReceiptLoading(false);
+            setReceiptToPrint(null);
         }
     };
+    
+    const customerForReceipt = useMemo(() => {
+        if (!receiptToPrint) return null;
+        return allCustomers.find(c => c.id === receiptToPrint.order.customerId) || null;
+    }, [receiptToPrint, allCustomers]);
+
 
     return (
         <div className="space-y-4">
@@ -167,7 +194,7 @@ export function InvoicesClient({ orders }: { orders: Order[] }) {
 
                             <Separator />
                             
-                            {selectedInvoice.balanceDue > 0 && (
+                            {selectedInvoice.balanceDue && selectedInvoice.balanceDue > 0 && (
                                 <PaymentForm 
                                     balanceDue={selectedInvoice.balanceDue || 0}
                                     onAddPayment={handleAddPayment} 
@@ -203,23 +230,18 @@ export function InvoicesClient({ orders }: { orders: Order[] }) {
                     )}
                 </SheetContent>
             </Sheet>
-
-            <AlertDialog open={!!generatedReceipt} onOpenChange={() => setGeneratedReceipt(null)}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Payment Receipt</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            This is a receipt for the selected payment.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <div className="whitespace-pre-wrap bg-gray-100 p-4 rounded-md text-sm font-mono">
-                        {generatedReceipt?.receipt}
-                    </div>
-                    <AlertDialogFooter>
-                        <AlertDialogAction onClick={() => setGeneratedReceipt(null)}>Close</AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
+            
+            {receiptToPrint && customerForReceipt && (
+                <div style={{ position: 'fixed', left: '-200vw', top: 0, zIndex: -1 }}>
+                    <ReceiptTemplate 
+                        ref={receiptRef}
+                        order={receiptToPrint.order}
+                        customer={customerForReceipt}
+                        payment={receiptToPrint.payment}
+                        logoUrl={logoUrl}
+                    />
+                </div>
+            )}
         </div>
     );
 }
