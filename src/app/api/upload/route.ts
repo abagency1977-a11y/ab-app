@@ -43,22 +43,18 @@ const parseForm = (req: Request): Promise<{ fields: formidable.Fields; files: fo
             }
         });
 
-        // This is a workaround for formidable's type mismatch with Next.js's Request object
-        // It pipes the request body to a writable stream that formidable can process.
         const formidableStream = new Writable({
             write(chunk, encoding, callback) {
-                form.write(chunk, callback);
+              form.write(chunk, callback);
             },
             final(callback) {
-                form.end(callback);
+              form.end(callback);
             },
-        });
-        
-        if (req.body) {
-            // @ts-ignore
-            await req.body.pipeTo(new WritableStream(formidableStream));
-        }
-
+            destroy(error, callback) {
+              callback(error);
+            }
+          });
+          
         form.parse(req as any, (err, fields, files) => {
             if (err) {
                 reject(err);
@@ -66,6 +62,13 @@ const parseForm = (req: Request): Promise<{ fields: formidable.Fields; files: fo
                 resolve({ fields, files });
             }
         });
+
+        if (req.body) {
+            const readable = new Readable().wrap(req.body);
+            readable.pipe(form);
+        } else {
+            reject(new Error('Request body is null'));
+        }
     });
 };
 
