@@ -67,8 +67,8 @@ export function InvoicesClient({ orders }: { orders: Order[] }) {
     const { toast } = useToast();
 
     const { fullPaidInvoices, creditInvoices } = useMemo(() => {
-        const fullPaid = allInvoices.filter(order => order.paymentTerm === 'Full Payment');
-        const credit = allInvoices.filter(order => order.paymentTerm === 'Credit');
+        const fullPaid = allInvoices.filter(order => order.paymentTerm === 'Full Payment' && order.balanceDue === 0);
+        const credit = allInvoices.filter(order => order.paymentTerm === 'Credit' || order.balanceDue > 0);
         return { fullPaidInvoices: fullPaid, creditInvoices: credit };
     }, [allInvoices]);
     
@@ -167,7 +167,7 @@ export function InvoicesClient({ orders }: { orders: Order[] }) {
 
                             <Separator />
                             
-                            {selectedInvoice.paymentTerm === 'Credit' && (
+                            {selectedInvoice.paymentTerm === 'Credit' && selectedInvoice.balanceDue > 0 && (
                                 <PaymentForm 
                                     balanceDue={selectedInvoice.balanceDue || 0}
                                     onAddPayment={handleAddPayment} 
@@ -188,8 +188,8 @@ export function InvoicesClient({ orders }: { orders: Order[] }) {
                                                     <p className="text-xs text-muted-foreground">{new Date(payment.paymentDate).toLocaleDateString()} via {payment.method}</p>
                                                 </div>
                                                 <Button size="sm" variant="outline" onClick={() => handleGenerateReceipt(payment)} disabled={isReceiptLoading}>
-                                                    {isReceiptLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Receipt className="h-4 w-4" />}
-                                                    <span className="ml-2">Receipt</span>
+                                                    {isReceiptLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Receipt className="mr-2 h-4 w-4" />}
+                                                    <span>Receipt</span>
                                                 </Button>
                                              </div>
                                         ))
@@ -297,5 +297,7 @@ function PaymentForm({ balanceDue, onAddPayment }: { balanceDue: number; onAddPa
         </Card>
     );
 }
+
+    
 
     
