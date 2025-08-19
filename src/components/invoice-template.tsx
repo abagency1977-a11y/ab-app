@@ -22,10 +22,15 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
   return (
     <div ref={ref} className="bg-white text-black p-8" style={{ width: '210mm', minHeight: '297mm', fontFamily: "'PT Sans', sans-serif" }}>
       <div className="flex justify-between items-start mb-8">
-        <div>
+        <div className="flex items-center gap-4">
           {logoUrl && (
             <img src={logoUrl} alt="Company Logo" className="h-20" />
           )}
+           <div>
+            <h2 className="text-2xl font-bold">AB Agency</h2>
+            <p className="text-xs">123 Business Road, Commerce City, 12345</p>
+            <p className="text-xs">contact@abagency.com | 555-123-4567</p>
+          </div>
         </div>
         <div className="text-right">
           <h2 className="text-4xl font-bold uppercase text-gray-700">Invoice</h2>
@@ -65,9 +70,9 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
             <tr key={index} className="border-b">
               <td className="p-3">{item.productName}</td>
               <td className="p-3 text-right">{item.quantity}</td>
-              <td className="p-3 text-right flex items-center justify-end"><Rupee className="inline-block h-3 w-3 mr-1" />{formatNumber(item.price)}</td>
+              <td className="p-3 text-right"><span className="inline-flex items-center justify-end w-full"><Rupee className="inline-block h-3 w-3 mr-1" />{formatNumber(item.price)}</span></td>
               {order.isGstInvoice && <td className="p-3 text-right">{item.gst}%</td>}
-              <td className="p-3 text-right flex items-center justify-end"><Rupee className="inline-block h-3 w-3 mr-1" />{formatNumber(item.price * item.quantity)}</td>
+              <td className="p-3 text-right"><span className="inline-flex items-center justify-end w-full"><Rupee className="inline-block h-3 w-3 mr-1" />{formatNumber(item.price * item.quantity)}</span></td>
             </tr>
           ))}
         </tbody>
@@ -75,23 +80,23 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
 
       <div className="flex justify-end mb-8">
         <div className="w-1/2">
-            <div className="flex justify-between p-2 bg-gray-100">
+            <div className="flex justify-between items-center p-2 bg-gray-100">
                 <span>Subtotal</span>
                 <span className="flex items-center"><Rupee className="inline-block h-4 w-4 mr-1" />{formatNumber(subtotal)}</span>
             </div>
             {order.isGstInvoice && (
-                <div className="flex justify-between p-2">
+                <div className="flex justify-between items-center p-2">
                     <span>Total GST</span>
                     <span className="flex items-center"><Rupee className="inline-block h-4 w-4 mr-1" />{formatNumber(totalGst)}</span>
                 </div>
             )}
              {order.discount > 0 && (
-                <div className="flex justify-between p-2">
+                <div className="flex justify-between items-center p-2">
                     <span>Discount</span>
                     <span className="text-green-600 flex items-center">- <Rupee className="inline-block h-4 w-4 mr-1" />{formatNumber(order.discount)}</span>
                 </div>
             )}
-             <div className="flex justify-between p-2 bg-gray-800 text-white font-bold text-lg">
+             <div className="flex justify-between items-center p-2 bg-gray-800 text-white font-bold text-lg">
                 <span>Grand Total</span>
                 <span className="flex items-center"><Rupee className="inline-block h-5 w-5 mr-1" />{formatNumber(order.grandTotal)}</span>
             </div>
@@ -110,7 +115,7 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
       {order.paymentTerm === 'Credit' && (
           <div className="mb-8 p-4 bg-red-50 border border-red-200 rounded-lg">
             <h3 className="font-bold text-red-800">Payment Due</h3>
-            <p className="text-red-700">Amount Due: <span className="font-bold flex items-center"><Rupee className="inline-block h-4 w-4 mr-1" />{formatNumber(order.grandTotal)}</span></p>
+            <p className="text-red-700 font-bold flex items-center">Amount Due: <Rupee className="inline-block h-4 w-4 mx-1" />{formatNumber(order.grandTotal)}</p>
             {order.dueDate && <p className="text-red-700">Due Date: {new Date(order.dueDate).toLocaleDateString()}</p>}
           </div>
       )}
