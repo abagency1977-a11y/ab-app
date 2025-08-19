@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import path from 'path';
 import fs from 'fs/promises';
 import { formidable, errors as formidableErrors } from 'formidable';
+import { Writable } from 'stream';
 
 // Disable the default body parser
 export const config = {
@@ -24,7 +25,7 @@ async function ensureTemplatesDirExists() {
 
 // This function will handle the file parsing using promises
 const parseForm = (req: Request): Promise<{ fields: formidable.Fields; files: formidable.Files }> => {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
         const form = formidable({
             uploadDir: TEMPLATES_DIR,
             keepExtensions: true,
@@ -42,7 +43,22 @@ const parseForm = (req: Request): Promise<{ fields: formidable.Fields; files: fo
             }
         });
 
-        // The 'any' cast is a common workaround for formidable's type mismatch with Next.js's Request object
+        // This is a workaround for formidable's type mismatch with Next.js's Request object
+        // It pipes the request body to a writable stream that formidable can process.
+        const formidableStream = new Writable({
+            write(chunk, encoding, callback) {
+                form.write(chunk, callback);
+            },
+            final(callback) {
+                form.end(callback);
+            },
+        });
+        
+        if (req.body) {
+            // @ts-ignore
+            await req.body.pipeTo(new WritableStream(formidableStream));
+        }
+
         form.parse(req as any, (err, fields, files) => {
             if (err) {
                 reject(err);
@@ -65,9 +81,6 @@ export async function POST(req: Request) {
         if (!uploadedFile) {
             return NextResponse.json({ error: 'No file uploaded or file was not a PDF.' }, { status: 400 });
         }
-
-        // Formidable already saved the file to the correct location with the correct name due to the 'filename' option.
-        // The file is now at uploadedFile.filepath
         
         return NextResponse.json({
             success: true,
