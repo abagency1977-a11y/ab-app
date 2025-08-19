@@ -26,14 +26,14 @@ async function uploadFileToStorageFlow(input: UploadFileToStorageInput): Promise
   
   try {
     // Correct Google Drive URL for direct download
-    const downloadUrl = url.replace('/view?usp=drive_link', '/uc?export=download');
+    const downloadUrl = url.replace('/view?usp=drive_link', '&export=download');
 
     const response = await fetch(downloadUrl);
     if (!response.ok) {
       throw new Error(`Failed to fetch file from URL: ${url}. Status: ${response.statusText}`);
     }
     
-    const fileBuffer = await response.buffer();
+    const fileBuffer = await response.arrayBuffer();
 
     const templatesDir = path.join(process.cwd(), 'public', 'templates');
     
@@ -41,7 +41,7 @@ async function uploadFileToStorageFlow(input: UploadFileToStorageInput): Promise
     await fs.mkdir(templatesDir, { recursive: true });
 
     const filePath = path.join(templatesDir, fileName);
-    await fs.writeFile(filePath, fileBuffer);
+    await fs.writeFile(filePath, Buffer.from(fileBuffer));
 
     return {
       success: true,
