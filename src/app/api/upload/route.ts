@@ -2,7 +2,8 @@
 import { NextResponse } from 'next/server';
 import path from 'path';
 import fs from 'fs/promises';
-import { formidable } from 'formidable';
+import { formidable, errors as formidableErrors } from 'formidable';
+import type { NextApiRequest } from 'next';
 
 // Disable the default body parser
 export const config = {
@@ -24,40 +25,55 @@ async function ensureTemplatesDirExists() {
 
 export async function POST(req: Request) {
     await ensureTemplatesDirExists();
-
+    
     const form = formidable({
         uploadDir: TEMPLATES_DIR,
         keepExtensions: true,
-        // The file name will be the original name of the uploaded file
-        filename: (name, ext, part, form) => {
-            return part.originalFilename!;
+        filename: (name, ext, part) => {
+            // formidable expects the part to have an originalFilename property.
+            if (part.originalFilename) {
+                return part.originalFilename;
+            }
+            // Fallback for cases where originalFilename might be missing
+            return name + ext; 
         },
+        // Force the filename to be the original uploaded filename
+        filter: function ({ name, originalFilename, mimetype }) {
+            // keep only pdfs
+            return mimetype === 'application/pdf';
+        }
     });
 
     try {
+        // The `req` object in App Router's route handlers is a standard Request object.
+        // We can pass it to formidable's parse method.
         const [fields, files] = await form.parse(req as any);
-        const file = files.file?.[0];
+        
+        const uploadedFile = files.file?.[0];
 
-        if (!file) {
-            return NextResponse.json({ error: 'No file uploaded.' }, { status: 400 });
+        if (!uploadedFile) {
+            return NextResponse.json({ error: 'No file uploaded or file was not a PDF.' }, { status: 400 });
         }
-
-        // formidable already saved the file with its original name
-        const finalPath = path.join(TEMPLATES_DIR, file.originalFilename!);
-
-        // Optional: If formidable gives it a temp name, you'd rename it.
-        // But with the filename option, this should not be necessary.
-        // If file.newFilename is different, you might need to rename.
-        // await fs.rename(file.filepath, finalPath);
-
+        
+        // Formidable with the `filename` option should have already saved it with the correct name.
+        // The file is now at uploadedFile.filepath
+        
         return NextResponse.json({
             success: true,
-            message: `File '${file.originalFilename}' uploaded successfully.`,
-            filePath: `/templates/${file.originalFilename}`,
+            message: `File '${uploadedFile.originalFilename}' uploaded successfully.`,
+            filePath: `/templates/${uploadedFile.originalFilename}`,
         });
 
     } catch (error: any) {
         console.error('File upload error:', error);
-        return NextResponse.json({ error: 'Failed to process file upload.', details: error.message }, { status: 500 });
+        
+        let errorMessage = 'Failed to process file upload.';
+        if (error instanceof formidableErrors.default) {
+            if (error.code === 1009) { // formidable's code for max file size exceeded
+                errorMessage = 'File size is too large.';
+            }
+        }
+
+        return NextResponse.json({ error: errorMessage, details: error.message }, { status: 500 });
     }
 }
