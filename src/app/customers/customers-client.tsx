@@ -254,7 +254,7 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                         </div>
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
-                            <Button type="submit" form="add-customer-form">Save Customer</Button>
+                            <Button type="submit">Save Customer</Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>

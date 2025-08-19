@@ -305,7 +305,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                         </div>
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
-                            <Button type="submit" form="add-product-form">Add Product</Button>
+                            <Button type="submit">Add Product</Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>
