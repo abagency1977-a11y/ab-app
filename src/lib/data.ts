@@ -143,7 +143,7 @@ const orders: Order[] = [
     isGstInvoice: true,
     deliveryAddress: '456 Synergy Ave, Business Bay, 67890',
     payments: [
-      { id: 'PAY-001', paymentDate: '2023-05-21', amount: 1000, method: 'Bank Transfer' }
+      { id: 'PAY-001', paymentDate: '2023-05-21', amount: 1000, method: 'Online Transfer' }
     ],
     balanceDue: 1596,
   },

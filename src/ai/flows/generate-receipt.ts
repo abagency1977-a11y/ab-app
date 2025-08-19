@@ -10,28 +10,28 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import type { Order, Customer, Payment } from '@/lib/types';
+
 
 const GenerateReceiptInputSchema = z.object({
   customerName: z.string().describe('The name of the customer.'),
-  items: z
-    .array(
-      z.object({
-        name: z.string().describe('The name of the item.'),
-        quantity: z.number().describe('The quantity of the item.'),
-        price: z.number().describe('The price of the item.'),
-      })
-    )
-    .describe('The list of items purchased.'),
-  totalAmount: z.number().describe('The total amount paid by the customer.'),
-  date: z.string().describe('The date of the transaction.'),
-  transactionId: z.string().describe('The unique identifier for the transaction.'),
+  invoiceId: z.string().describe('The ID of the invoice this payment is for.'),
+  payment: z.object({
+    id: z.string(),
+    paymentDate: z.string(),
+    amount: z.number(),
+    method: z.string(),
+  }),
+  invoiceTotal: z.number().describe('The grand total of the invoice.'),
+  balanceDueAfterPayment: z.number().describe('The remaining balance on the invoice after this payment was made.'),
 });
 export type GenerateReceiptInput = z.infer<typeof GenerateReceiptInputSchema>;
 
 const GenerateReceiptOutputSchema = z.object({
-  receipt: z.string().describe('The generated receipt in a readable format.'),
+  receipt: z.string().describe('The generated receipt in a readable, formatted text string.'),
 });
 export type GenerateReceiptOutput = z.infer<typeof GenerateReceiptOutputSchema>;
+
 
 export async function generateReceipt(input: GenerateReceiptInput): Promise<GenerateReceiptOutput> {
   return generateReceiptFlow(input);
@@ -41,22 +41,31 @@ const prompt = ai.definePrompt({
   name: 'generateReceiptPrompt',
   input: {schema: GenerateReceiptInputSchema},
   output: {schema: GenerateReceiptOutputSchema},
-  prompt: `You are an accounting assistant. Generate a receipt for the following transaction.
+  prompt: `You are an accounting assistant. Generate a clear and simple receipt for a payment transaction.
 
-  Customer Name: {{{customerName}}}
-  Date: {{{date}}}
-  Transaction ID: {{{transactionId}}}
+  **Payment Receipt**
 
-  Items:
-  {{#each items}}
-  - {{{quantity}}} x {{{name}}} @ {{{price}}}
-  {{/each}}
+  --------------------------------
+  **Customer:** {{{customerName}}}
+  **Invoice ID:** {{{invoiceId}}}
+  --------------------------------
 
-  Total Amount: {{{totalAmount}}}
+  **Payment Details:**
+  - **Payment ID:** {{{payment.id}}}
+  - **Payment Date:** {{{payment.paymentDate}}}
+  - **Amount Paid:** {{{payment.amount}}}
+  - **Payment Method:** {{{payment.method}}}
 
-  Please format the receipt in a clear and readable manner.
+  **Invoice Summary:**
+  - **Original Invoice Total:** {{{invoiceTotal}}}
+  - **Balance Due After this Payment:** {{{balanceDueAfterPayment}}}
+
+  --------------------------------
+  Thank you for your payment.
+  This is an official receipt for the amount paid.
   `,
 });
+
 
 const generateReceiptFlow = ai.defineFlow(
   {

@@ -14,6 +14,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { generateReceipt, GenerateReceiptOutput } from '@/ai/flows/generate-receipt';
+import { Loader2, Receipt } from 'lucide-react';
 
 const formatNumber = (value: number | undefined) => {
     if (value === undefined || isNaN(value)) return '0.00';
@@ -29,7 +32,7 @@ const InvoiceTable = ({ invoices, onRowClick }: { invoices: Order[], onRowClick?
                     <TableHead>Customer</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Status</TableHead>
-                    {onRowClick && <TableHead className="text-right">Balance Due</TableHead>}
+                    <TableHead className="text-right">Balance Due</TableHead>
                     <TableHead className="text-right">Total</TableHead>
                 </TableRow>
             </TableHeader>
@@ -42,7 +45,9 @@ const InvoiceTable = ({ invoices, onRowClick }: { invoices: Order[], onRowClick?
                         <TableCell>
                             <Badge variant={invoice.status === 'Fulfilled' ? 'default' : invoice.status === 'Pending' ? 'secondary' : 'destructive'} className="capitalize">{invoice.status}</Badge>
                         </TableCell>
-                        {onRowClick && <TableCell className="text-right font-medium text-red-600">₹{formatNumber(invoice.balanceDue)}</TableCell>}
+                        <TableCell className={`text-right font-medium ${invoice.balanceDue && invoice.balanceDue > 0 ? 'text-red-600' : ''}`}>
+                            ₹{formatNumber(invoice.balanceDue)}
+                        </TableCell>
                         <TableCell className="text-right">
                             ₹{formatNumber(invoice.grandTotal)}
                         </TableCell>
@@ -57,6 +62,8 @@ const InvoiceTable = ({ invoices, onRowClick }: { invoices: Order[], onRowClick?
 export function InvoicesClient({ orders }: { orders: Order[] }) {
     const [allInvoices, setAllInvoices] = useState<Order[]>(orders);
     const [selectedInvoice, setSelectedInvoice] = useState<Order | null>(null);
+    const [generatedReceipt, setGeneratedReceipt] = useState<GenerateReceiptOutput | null>(null);
+    const [isReceiptLoading, setIsReceiptLoading] = useState(false);
     const { toast } = useToast();
 
     const { fullPaidInvoices, creditInvoices } = useMemo(() => {
@@ -92,6 +99,36 @@ export function InvoicesClient({ orders }: { orders: Order[] }) {
         });
     };
 
+    const handleGenerateReceipt = async (payment: Payment) => {
+        if (!selectedInvoice) return;
+
+        setIsReceiptLoading(true);
+        try {
+            const balanceDueAfterPayment = selectedInvoice.grandTotal - (selectedInvoice.payments || [])
+                .filter(p => new Date(p.paymentDate) <= new Date(payment.paymentDate))
+                .reduce((sum, p) => sum + p.amount, 0);
+
+            const result = await generateReceipt({
+                customerName: selectedInvoice.customerName,
+                invoiceId: selectedInvoice.id.replace('ORD', 'INV'),
+                payment: {
+                    id: payment.id,
+                    paymentDate: new Date(payment.paymentDate).toLocaleDateString(),
+                    amount: payment.amount,
+                    method: payment.method,
+                },
+                invoiceTotal: selectedInvoice.grandTotal,
+                balanceDueAfterPayment: balanceDueAfterPayment,
+            });
+            setGeneratedReceipt(result);
+        } catch (error) {
+            console.error('Receipt generation failed:', error);
+            toast({ title: 'Error', description: 'Failed to generate receipt.', variant: 'destructive' });
+        } finally {
+            setIsReceiptLoading(false);
+        }
+    };
+
     return (
         <div className="space-y-4">
             <h1 className="text-3xl font-bold">Invoices</h1>
@@ -101,7 +138,7 @@ export function InvoicesClient({ orders }: { orders: Order[] }) {
                     <TabsTrigger value="full-paid">Full Paid Invoices</TabsTrigger>
                 </TabsList>
                 <TabsContent value="full-paid">
-                    <InvoiceTable invoices={fullPaidInvoices} />
+                    <InvoiceTable invoices={fullPaidInvoices} onRowClick={setSelectedInvoice} />
                 </TabsContent>
                 <TabsContent value="credit">
                     <InvoiceTable invoices={creditInvoices} onRowClick={setSelectedInvoice}/>
@@ -130,10 +167,13 @@ export function InvoicesClient({ orders }: { orders: Order[] }) {
 
                             <Separator />
                             
-                            <PaymentForm 
-                                balanceDue={selectedInvoice.balanceDue || 0}
-                                onAddPayment={handleAddPayment} 
-                            />
+                            {selectedInvoice.paymentTerm === 'Credit' && (
+                                <PaymentForm 
+                                    balanceDue={selectedInvoice.balanceDue || 0}
+                                    onAddPayment={handleAddPayment} 
+                                />
+                            )}
+                           
 
                             <Separator />
 
@@ -147,7 +187,10 @@ export function InvoicesClient({ orders }: { orders: Order[] }) {
                                                     <p className="font-medium">₹{formatNumber(payment.amount)}</p>
                                                     <p className="text-xs text-muted-foreground">{new Date(payment.paymentDate).toLocaleDateString()} via {payment.method}</p>
                                                 </div>
-                                                <Badge variant="secondary">Recorded</Badge>
+                                                <Button size="sm" variant="outline" onClick={() => handleGenerateReceipt(payment)} disabled={isReceiptLoading}>
+                                                    {isReceiptLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Receipt className="h-4 w-4" />}
+                                                    <span className="ml-2">Receipt</span>
+                                                </Button>
                                              </div>
                                         ))
                                     ) : (
@@ -160,6 +203,23 @@ export function InvoicesClient({ orders }: { orders: Order[] }) {
                     )}
                 </SheetContent>
             </Sheet>
+
+            <AlertDialog open={!!generatedReceipt} onOpenChange={() => setGeneratedReceipt(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Payment Receipt</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This is a receipt for the selected payment.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="whitespace-pre-wrap bg-gray-100 p-4 rounded-md text-sm font-mono">
+                        {generatedReceipt?.receipt}
+                    </div>
+                    <AlertDialogFooter>
+                        <AlertDialogAction onClick={() => setGeneratedReceipt(null)}>Close</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }
@@ -237,4 +297,3 @@ function PaymentForm({ balanceDue, onAddPayment }: { balanceDue: number; onAddPa
         </Card>
     );
 }
-
