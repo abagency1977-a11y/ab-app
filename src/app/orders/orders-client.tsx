@@ -23,9 +23,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { InvoiceTemplate } from '@/components/invoice-template';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import { generateInvoicePdf } from '@/ai/flows/generate-invoice-pdf';
+
 
 const formatNumber = (value: number) => {
     if (isNaN(value)) return '0.00';
@@ -37,14 +36,10 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
     const [products, setProducts] = useState<Product[]>([]);
     const [statusFilter, setStatusFilter] = useState('All');
-    const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
-    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [isAddOrderOpen, setIsAddOrderOpen] = useState(false);
     const { toast } = useToast();
-    const invoiceRef = useRef<HTMLDivElement>(null);
-
-
+    
     useEffect(() => {
         getProducts().then(setProducts);
     }, []);
@@ -54,30 +49,35 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         return orders.filter(order => order.status === statusFilter);
     }, [orders, statusFilter]);
     
-    const handleGenerateInvoice = (order: Order) => {
-        setSelectedOrder(order);
-        setIsInvoiceModalOpen(true);
+    const handleGenerateInvoice = async (order: Order) => {
+        setIsLoading(true);
+        try {
+            const customer = customers.find(c => c.id === order.customerId);
+            if (!customer) {
+                toast({ title: 'Error', description: 'Customer not found for this order.', variant: 'destructive'});
+                return;
+            }
+
+            const result = await generateInvoicePdf({ order, customer });
+            
+            // Trigger download
+            const link = document.createElement('a');
+            link.href = `data:application/pdf;base64,${result.pdfBase64}`;
+            link.download = `invoice-${order.id}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            toast({ title: 'Success', description: 'Invoice PDF has been downloaded.' });
+
+        } catch (error) {
+            console.error('Failed to generate invoice:', error);
+            toast({ title: 'Error', description: 'Failed to generate invoice PDF.', variant: 'destructive'});
+        } finally {
+            setIsLoading(false);
+        }
     };
 
-    const handleDownloadPdf = () => {
-        if (!invoiceRef.current) return;
-        setIsLoading(true);
-        html2canvas(invoiceRef.current, { scale: 3 }).then((canvas) => {
-            const imgData = canvas.toDataURL('image/png');
-            const pdf = new jsPDF('p', 'mm', 'a4', true);
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-            const imgWidth = canvas.width;
-            const imgHeight = canvas.height;
-            const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-            const imgX = (pdfWidth - imgWidth * ratio) / 2;
-            const imgY = 0;
-            pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
-            pdf.save(`invoice-${selectedOrder?.id}.pdf`);
-            setIsLoading(false);
-        });
-    };
-    
     const handleAddOrder = (newOrder: Order) => {
         setOrders(prev => [newOrder, ...prev]);
         toast({
@@ -146,8 +146,9 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem onClick={() => handleGenerateInvoice(order)}>
-                                                        <FileText className="mr-2 h-4 w-4" /> Generate Invoice
+                                                    <DropdownMenuItem onClick={() => handleGenerateInvoice(order)} disabled={isLoading}>
+                                                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> :<FileText className="mr-2 h-4 w-4" />}
+                                                        Generate Invoice
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
@@ -195,8 +196,9 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem onClick={() => handleGenerateInvoice(order)}>
-                                                        <FileText className="mr-2 h-4 w-4" /> Generate Invoice
+                                                    <DropdownMenuItem onClick={() => handleGenerateInvoice(order)} disabled={isLoading}>
+                                                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> :<FileText className="mr-2 h-4 w-4" />}
+                                                        Generate Invoice
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
@@ -244,8 +246,9 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem onClick={() => handleGenerateInvoice(order)}>
-                                                        <FileText className="mr-2 h-4 w-4" /> Generate Invoice
+                                                    <DropdownMenuItem onClick={() => handleGenerateInvoice(order)} disabled={isLoading}>
+                                                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> :<FileText className="mr-2 h-4 w-4" />}
+                                                        Generate Invoice
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
@@ -287,16 +290,11 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                                         <TableCell>
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" className="h-8 w-8 p-0">
+                                                    <Button variant="ghost" className="h-8 w-8 p-0" disabled>
                                                         <span className="sr-only">Open menu</span>
                                                         <MoreHorizontal className="h-4 w-4" />
                                                     </Button>
                                                 </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem onClick={() => handleGenerateInvoice(order)}>
-                                                        <FileText className="mr-2 h-4 w-4" /> Generate Invoice
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
                                             </DropdownMenu>
                                         </TableCell>
                                     </TableRow>
@@ -306,24 +304,6 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                     </div>
                 </TabsContent>
             </Tabs>
-            
-            <Dialog open={isInvoiceModalOpen} onOpenChange={setIsInvoiceModalOpen}>
-                <DialogContent className="max-w-4xl">
-                    <DialogHeader>
-                        <DialogTitle>Invoice for {selectedOrder?.id}</DialogTitle>
-                    </DialogHeader>
-                    <ScrollArea className="h-[70vh] border rounded-md">
-                         <InvoiceTemplate ref={invoiceRef} order={selectedOrder} customer={customers.find(c => c.id === selectedOrder?.customerId)} />
-                    </ScrollArea>
-                    <DialogFooter>
-                         <Button onClick={handleDownloadPdf} disabled={isLoading}>
-                            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                            Download PDF
-                        </Button>
-                        <Button variant="outline" onClick={() => setIsInvoiceModalOpen(false)}>Close</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
 
             <AddOrderDialog
                 isOpen={isAddOrderOpen}
@@ -716,4 +696,3 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         </>
     );
 }
-
