@@ -1,3 +1,4 @@
+
 import AppLayout from "@/components/app-layout";
 import { getProducts } from "@/lib/data";
 import { InventoryClient } from "./inventory-client";

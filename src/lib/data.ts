@@ -1,7 +1,7 @@
 
 import { db } from './firebase';
-import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, query, where, writeBatch, getDoc } from 'firebase/firestore';
-import type { Customer, Product, Order, Payment } from './types';
+import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit } from 'firebase/firestore';
+import type { Customer, Product, Order } from './types';
 
 // MOCK DATA - This will be used to seed the database for the first time.
 const mockCustomers: Omit<Customer, 'id'>[] = [
@@ -119,6 +119,10 @@ const mockOrders: Omit<Order, 'id'>[] = [
     isGstInvoice: true,
     deliveryAddress: '123 Innovation Drive, Tech City, 12345',
     deliveryDate: '2023-05-16',
+    balanceDue: 0,
+    payments: [
+        { id: 'PAY-111', amount: 7775, method: 'Card', paymentDate: '2023-05-15'}
+    ]
   },
   {
     customerId: 'CUST-002',
@@ -154,6 +158,10 @@ const mockOrders: Omit<Order, 'id'>[] = [
     paymentMode: 'Online Transfer',
     isGstInvoice: true,
     deliveryDate: '2023-04-30',
+    balanceDue: 0,
+    payments: [
+        { id: 'PAY-222', amount: 14250, method: 'Online Transfer', paymentDate: '2023-04-28'}
+    ]
   },
     {
     customerId: 'CUST-005',
@@ -190,43 +198,48 @@ const mockOrders: Omit<Order, 'id'>[] = [
 
 
 // Function to seed the database
+async function seedCollection(collectionName: string, mockData: any[], idPrefix: string) {
+    const collectionRef = collection(db, collectionName);
+    const snapshot = await getDocs(query(collectionRef, limit(1)));
+    if (snapshot.empty) {
+        console.log(`Seeding ${collectionName}...`);
+        const batch = writeBatch(db);
+        mockData.forEach((item, index) => {
+            // To ensure mock orders can reference mock customers/products, we use predictable IDs during seeding
+            const docId = `${idPrefix}-${String(index + 1).padStart(3, '0')}`;
+            const docRef = doc(db, collectionName, docId);
+            batch.set(docRef, item);
+        });
+        await batch.commit();
+        console.log(`${collectionName} seeded.`);
+    }
+}
+
 async function seedDatabase() {
-  const customersSnapshot = await getDocs(collection(db, 'customers'));
-  if (customersSnapshot.empty) {
-    console.log('Seeding database...');
-    const batch = writeBatch(db);
-
-    // Seed Customers
-    mockCustomers.forEach(customerData => {
-        const docRef = doc(collection(db, 'customers'));
-        batch.set(docRef, customerData);
-    });
-
-    // Seed Products
-    mockProducts.forEach(productData => {
-        const docRef = doc(collection(db, 'products'));
-        batch.set(docRef, productData);
-    });
-    
-    // Seed Orders
-    mockOrders.forEach(orderData => {
-        const docRef = doc(collection(db, 'orders'));
-        batch.set(docRef, orderData);
-    });
-
-    await batch.commit();
-    console.log('Database seeded.');
-  }
+    try {
+        await seedCollection('customers', mockCustomers, 'CUST');
+        await seedCollection('products', mockProducts, 'PROD');
+        // Ensure that mock orders have correct customer and product IDs
+        // This is a simple approach; a more robust solution would map old IDs to new IDs
+        await seedCollection('orders', mockOrders, 'ORD');
+    } catch (error) {
+        console.error("Error seeding database: ", error);
+    }
 }
 
 // Seed the database on startup if it's empty
-seedDatabase().catch(console.error);
+seedDatabase();
 
 
 // CUSTOMER FUNCTIONS
 export const getCustomers = async (): Promise<Customer[]> => {
-    const snapshot = await getDocs(collection(db, 'customers'));
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
+    try {
+        const snapshot = await getDocs(collection(db, 'customers'));
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
+    } catch (error) {
+        console.error("Error fetching customers: ", error);
+        return [];
+    }
 };
 
 export const addCustomer = async (customerData: Omit<Customer, 'id' | 'transactionHistory'>): Promise<Customer> => {
@@ -245,8 +258,13 @@ export const deleteCustomer = async (id: string) => {
 
 // PRODUCT FUNCTIONS
 export const getProducts = async (): Promise<Product[]> => {
-    const snapshot = await getDocs(collection(db, 'products'));
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
+    try {
+        const snapshot = await getDocs(collection(db, 'products'));
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
+    } catch (error) {
+        console.error("Error fetching products: ", error);
+        return [];
+    }
 };
 
 export const addProduct = async (productData: Omit<Product, 'id'>): Promise<Product> => {
@@ -260,8 +278,13 @@ export const deleteProduct = async(id: string) => {
 
 // ORDER FUNCTIONS
 export const getOrders = async (): Promise<Order[]> => {
-    const snapshot = await getDocs(collection(db, 'orders'));
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+    try {
+        const snapshot = await getDocs(collection(db, 'orders'));
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+    } catch (error) {
+        console.error("Error fetching orders: ", error);
+        return [];
+    }
 };
 
 export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): Promise<Order> => {
@@ -307,6 +330,6 @@ export const getDashboardData = async () => {
         itemsInStock,
         pendingOrders,
         revenueChartData,
-        recentOrders: orders.slice(0, 5).map(o => ({...o, total: o.grandTotal})),
+        recentOrders: orders.sort((a,b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()).slice(0, 5).map(o => ({...o, total: o.grandTotal})),
     };
 };

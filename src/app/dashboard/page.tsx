@@ -1,3 +1,4 @@
+
 import AppLayout from "@/components/app-layout";
 import { getDashboardData } from "@/lib/data";
 import { DashboardClient } from "./dashboard-client";
