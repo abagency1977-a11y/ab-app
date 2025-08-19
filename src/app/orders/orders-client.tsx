@@ -3,6 +3,7 @@
 
 
 
+
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
@@ -13,7 +14,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { MoreHorizontal, FileText, Receipt, Loader2, PlusCircle, Trash2, Download } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
@@ -28,6 +28,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { InvoiceTemplate } from '@/components/invoice-template';
+import { startOfWeek, startOfMonth, subMonths, isWithinInterval } from 'date-fns';
 
 
 const formatNumber = (value: number) => {
@@ -39,13 +40,14 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     const [orders, setOrders] = useState<Order[]>(initialOrders);
     const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
     const [products, setProducts] = useState<Product[]>([]);
-    const [statusFilter, setStatusFilter] = useState('All');
     const [isLoading, setIsLoading] = useState(false);
     const [isAddOrderOpen, setIsAddOrderOpen] = useState(false);
     const [orderToPrint, setOrderToPrint] = useState<Order | null>(null);
     const invoiceRef = useRef<HTMLDivElement>(null);
     const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
     const { toast } = useToast();
+    const [searchQuery, setSearchQuery] = useState('');
+    const [dateFilter, setDateFilter] = useState('All');
     
     useEffect(() => {
         getProducts().then(setProducts);
@@ -54,6 +56,33 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             setLogoUrl(savedLogo);
         }
     }, []);
+
+    const filteredOrders = useMemo(() => {
+        const now = new Date();
+        let filtered = orders.filter(order =>
+            order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            order.customerName.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+
+        if (dateFilter !== 'All') {
+            let interval: Interval;
+            if (dateFilter === 'This Week') {
+                interval = { start: startOfWeek(now), end: now };
+            } else if (dateFilter === 'This Month') {
+                interval = { start: startOfMonth(now), end: now };
+            } else if (dateFilter === 'Last Month') {
+                const startOfThisMonth = startOfMonth(now);
+                const startOfLastMonth = subMonths(startOfThisMonth, 1);
+                interval = { start: startOfLastMonth, end: startOfThisMonth };
+            }
+             filtered = filtered.filter(order => {
+                const orderDate = new Date(order.orderDate);
+                return isWithinInterval(orderDate, interval);
+            });
+        }
+        
+        return filtered;
+    }, [orders, searchQuery, dateFilter]);
 
     const handleGenerateInvoice = (order: Order) => {
         setOrderToPrint(order);
@@ -77,10 +106,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 scale: 3, // Higher scale for better quality
                 useCORS: true,
                 logging: true,
-                width: invoiceRef.current.offsetWidth,
-                height: invoiceRef.current.offsetHeight,
             });
-            const imgData = canvas.toDataURL('image/png');
             
             const pdf = new jsPDF({
                 orientation: 'portrait',
@@ -89,25 +115,10 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             });
 
             const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
+            const canvasAspectRatio = canvas.width / canvas.height;
+            const pdfHeight = pdfWidth / canvasAspectRatio;
             
-            const canvasWidth = canvas.width;
-            const canvasHeight = canvas.height;
-            
-            const canvasAspectRatio = canvasWidth / canvasHeight;
-            const pdfAspectRatio = pdfWidth / pdfHeight;
-
-            let finalWidth, finalHeight;
-
-            if (canvasAspectRatio > pdfAspectRatio) {
-                finalWidth = pdfWidth;
-                finalHeight = pdfWidth / canvasAspectRatio;
-            } else {
-                finalHeight = pdfHeight;
-                finalWidth = pdfHeight * canvasAspectRatio;
-            }
-            
-            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfWidth / canvasAspectRatio);
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
             pdf.save(`invoice-${orderToPrint.id}.pdf`);
 
             toast({ title: 'Success', description: 'Invoice PDF has been downloaded.' });
@@ -151,196 +162,70 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                     <PlusCircle className="mr-2 h-4 w-4" /> Place Order
                 </Button>
             </div>
-            <Tabs value={statusFilter} onValueChange={setStatusFilter} defaultValue="All">
-                <TabsList>
-                    <TabsTrigger value="All">All</TabsTrigger>
-                    <TabsTrigger value="Pending">Pending</TabsTrigger>
-                    <TabsTrigger value="Fulfilled">Fulfilled</TabsTrigger>
-                    <TabsTrigger value="Canceled">Canceled</TabsTrigger>
-                </TabsList>
-                <TabsContent value="All">
-                    <div className="rounded-lg border shadow-sm">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Order ID</TableHead>
-                                    <TableHead>Customer</TableHead>
-                                    <TableHead>Date</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead className="text-right">Total</TableHead>
-                                    <TableHead>Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {orders.map((order) => (
-                                    <TableRow key={order.id}>
-                                        <TableCell className="font-medium">{order.id}</TableCell>
-                                        <TableCell>{order.customerName}</TableCell>
-                                        <TableCell>{new Date(order.orderDate).toLocaleDateString()}</TableCell>
-                                        <TableCell>
-                                            <Badge variant={order.status === 'Fulfilled' ? 'default' : order.status === 'Pending' ? 'secondary' : 'destructive'} className="capitalize">{order.status}</Badge>
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            ₹{formatNumber(order.grandTotal)}
-                                        </TableCell>
-                                        <TableCell>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" className="h-8 w-8 p-0">
-                                                        <span className="sr-only">Open menu</span>
-                                                        <MoreHorizontal className="h-4 w-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem onClick={() => handleGenerateInvoice(order)} disabled={isLoading}>
-                                                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> :<FileText className="mr-2 h-4 w-4" />}
-                                                        Generate Invoice
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </TabsContent>
-                 <TabsContent value="Pending">
-                    <div className="rounded-lg border shadow-sm">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Order ID</TableHead>
-                                    <TableHead>Customer</TableHead>
-                                    <TableHead>Date</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead className="text-right">Total</TableHead>
-                                    <TableHead>Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {orders.filter(o => o.status === 'Pending').map((order) => (
-                                    <TableRow key={order.id}>
-                                        <TableCell className="font-medium">{order.id}</TableCell>
-                                        <TableCell>{order.customerName}</TableCell>
-                                        <TableCell>{new Date(order.orderDate).toLocaleDateString()}</TableCell>
-                                        <TableCell>
-                                            <Badge variant='secondary' className="capitalize">{order.status}</Badge>
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            ₹{formatNumber(order.grandTotal)}
-                                        </TableCell>
-                                        <TableCell>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" className="h-8 w-8 p-0">
-                                                        <span className="sr-only">Open menu</span>
-                                                        <MoreHorizontal className="h-4 w-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem onClick={() => handleGenerateInvoice(order)} disabled={isLoading}>
-                                                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> :<FileText className="mr-2 h-4 w-4" />}
-                                                        Generate Invoice
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </TabsContent>
-                 <TabsContent value="Fulfilled">
-                    <div className="rounded-lg border shadow-sm">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Order ID</TableHead>
-                                    <TableHead>Customer</TableHead>
-                                    <TableHead>Date</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead className="text-right">Total</TableHead>
-                                    <TableHead>Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {orders.filter(o => o.status === 'Fulfilled').map((order) => (
-                                    <TableRow key={order.id}>
-                                        <TableCell className="font-medium">{order.id}</TableCell>
-                                        <TableCell>{order.customerName}</TableCell>
-                                        <TableCell>{new Date(order.orderDate).toLocaleDateString()}</TableCell>
-                                        <TableCell>
-                                            <Badge variant='default' className="capitalize">{order.status}</Badge>
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            ₹{formatNumber(order.grandTotal)}
-                                        </TableCell>
-                                        <TableCell>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" className="h-8 w-8 p-0">
-                                                        <span className="sr-only">Open menu</span>
-                                                        <MoreHorizontal className="h-4 w-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem onClick={() => handleGenerateInvoice(order)} disabled={isLoading}>
-                                                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> :<FileText className="mr-2 h-4 w-4" />}
-                                                        Generate Invoice
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </TabsContent>
-                 <TabsContent value="Canceled">
-                    <div className="rounded-lg border shadow-sm">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Order ID</TableHead>
-                                    <TableHead>Customer</TableHead>
-                                    <TableHead>Date</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead className="text-right">Total</TableHead>
-                                    <TableHead>Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {orders.filter(o => o.status === 'Canceled').map((order) => (
-                                    <TableRow key={order.id}>
-                                        <TableCell className="font-medium">{order.id}</TableCell>
-                                        <TableCell>{order.customerName}</TableCell>
-                                        <TableCell>{new Date(order.orderDate).toLocaleDateString()}</TableCell>
-                                        <TableCell>
-                                            <Badge variant='destructive' className="capitalize">{order.status}</Badge>
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            ₹{formatNumber(order.grandTotal)}
-                                        </TableCell>
-                                        <TableCell>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" className="h-8 w-8 p-0" disabled>
-                                                        <span className="sr-only">Open menu</span>
-                                                        <MoreHorizontal className="h-4 w-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                            </DropdownMenu>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </TabsContent>
-            </Tabs>
+            <div className="flex items-center gap-4">
+                <Input 
+                    placeholder="Search by Order ID or Customer Name..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="max-w-sm"
+                />
+                <Select value={dateFilter} onValueChange={setDateFilter}>
+                    <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Filter by date" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="All">All Time</SelectItem>
+                        <SelectItem value="This Week">This Week</SelectItem>
+                        <SelectItem value="This Month">This Month</SelectItem>
+                        <SelectItem value="Last Month">Last Month</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+            <div className="rounded-lg border shadow-sm">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Order ID</TableHead>
+                            <TableHead>Customer</TableHead>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Total</TableHead>
+                            <TableHead>Actions</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {filteredOrders.map((order) => (
+                            <TableRow key={order.id}>
+                                <TableCell className="font-medium">{order.id}</TableCell>
+                                <TableCell>{order.customerName}</TableCell>
+                                <TableCell>{new Date(order.orderDate).toLocaleDateString()}</TableCell>
+                                <TableCell>
+                                    <Badge variant={order.status === 'Fulfilled' ? 'default' : order.status === 'Pending' ? 'secondary' : 'destructive'} className="capitalize">{order.status}</Badge>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                    ₹{formatNumber(order.grandTotal)}
+                                </TableCell>
+                                <TableCell>
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="ghost" className="h-8 w-8 p-0" disabled={order.status === 'Canceled'}>
+                                                <span className="sr-only">Open menu</span>
+                                                <MoreHorizontal className="h-4 w-4" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                            <DropdownMenuItem onClick={() => handleGenerateInvoice(order)} disabled={isLoading}>
+                                                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> :<FileText className="mr-2 h-4 w-4" />}
+                                                Generate Invoice
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </div>
              {orderToPrint && customerForOrderToPrint && (
                 <div style={{ position: 'fixed', left: '-200vw', top: 0, zIndex: -1 }}>
                     <InvoiceTemplate ref={invoiceRef} order={orderToPrint} customer={customerForOrderToPrint} logoUrl={logoUrl}/>
