@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,11 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('admin@abagency.com');
   const [password, setPassword] = useState('password');
+  const [year, setYear] = useState<number | null>(null);
+
+  useEffect(() => {
+    setYear(new Date().getFullYear());
+  }, []);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,7 +53,7 @@ export default function LoginPage() {
           </CardContent>
           <CardFooter>
             <p className="w-full text-center text-sm text-muted-foreground">
-              &copy; {new Date().getFullYear()} AB Agency. All rights reserved.
+              &copy; {year} AB Agency. All rights reserved.
             </p>
           </CardFooter>
         </Card>
