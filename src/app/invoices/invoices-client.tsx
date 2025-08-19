@@ -65,7 +65,7 @@ export function InvoicesClient({ orders, customers: initialCustomers }: { orders
     const [allInvoices, setAllInvoices] = useState<Order[]>(orders);
     const [allCustomers, setAllCustomers] = useState<Customer[]>(initialCustomers);
     const [selectedInvoice, setSelectedInvoice] = useState<Order | null>(null);
-    const [receiptToPrint, setReceiptToPrint] = useState<{order: Order, payment: Payment} | null>(null);
+    const [receiptToPrint, setReceiptToPrint] = useState<{order: Order, payment: Payment, historicalPayments: Payment[]} | null>(null);
     const [isReceiptLoading, setIsReceiptLoading] = useState(false);
     const { toast } = useToast();
     const receiptRef = useRef<HTMLDivElement>(null);
@@ -91,7 +91,7 @@ export function InvoicesClient({ orders, customers: initialCustomers }: { orders
         
         const updatedInvoice: Order = {
             ...selectedInvoice,
-            payments: [...(selectedInvoice.payments || []), newPayment],
+            payments: [...(selectedInvoice.payments || []), newPayment].sort((a, b) => new Date(a.paymentDate).getTime() - new Date(b.paymentDate).getTime()),
             balanceDue: (selectedInvoice.balanceDue || selectedInvoice.grandTotal) - newPayment.amount,
         };
         
@@ -112,9 +112,15 @@ export function InvoicesClient({ orders, customers: initialCustomers }: { orders
     };
 
     const handleGenerateReceipt = async (payment: Payment) => {
-        if (!selectedInvoice) return;
+        if (!selectedInvoice || !selectedInvoice.payments) return;
         setIsReceiptLoading(true);
-        setReceiptToPrint({ order: selectedInvoice, payment });
+
+        const paymentDate = new Date(payment.paymentDate);
+        const historicalPayments = selectedInvoice.payments
+            .filter(p => new Date(p.paymentDate) <= paymentDate)
+            .sort((a, b) => new Date(a.paymentDate).getTime() - new Date(b.paymentDate).getTime());
+
+        setReceiptToPrint({ order: selectedInvoice, payment, historicalPayments });
     };
 
     useEffect(() => {
@@ -238,6 +244,7 @@ export function InvoicesClient({ orders, customers: initialCustomers }: { orders
                         order={receiptToPrint.order}
                         customer={customerForReceipt}
                         payment={receiptToPrint.payment}
+                        historicalPayments={receiptToPrint.historicalPayments}
                         logoUrl={logoUrl}
                     />
                 </div>

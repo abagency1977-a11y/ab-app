@@ -12,11 +12,14 @@ interface ReceiptTemplateProps {
   order: Order;
   customer: Customer;
   payment: Payment;
+  historicalPayments: Payment[];
   logoUrl?: string;
 }
 
-export const ReceiptTemplate = React.forwardRef<HTMLDivElement, ReceiptTemplateProps>(({ order, customer, payment, logoUrl }, ref) => {
-    const balanceDueAfterPayment = (order.balanceDue ?? 0) + payment.amount;
+export const ReceiptTemplate = React.forwardRef<HTMLDivElement, ReceiptTemplateProps>(({ order, customer, payment, historicalPayments, logoUrl }, ref) => {
+
+    const totalPaidInHistory = historicalPayments.reduce((acc, p) => acc + p.amount, 0);
+    const balanceDueAfterThisPayment = order.grandTotal - totalPaidInHistory;
 
   return (
     <div ref={ref} className="bg-white text-black p-6" style={{ width: '148mm', minHeight: '210mm', fontFamily: "'Inter', sans-serif" }}>
@@ -54,27 +57,52 @@ export const ReceiptTemplate = React.forwardRef<HTMLDivElement, ReceiptTemplateP
       </div>
       
       <div className="text-center my-8">
-        <p className="text-sm text-gray-600">Amount Paid</p>
+        <p className="text-sm text-gray-600">Amount Paid this Transaction</p>
         <p className="text-4xl font-bold tracking-tight">₹{formatNumber(payment.amount)}</p>
       </div>
 
 
-      <table className="w-full text-sm text-left mb-6">
+      <table className="w-full text-sm text-left mb-4">
         <tbody>
             <tr className="border-t">
                 <td className="p-2">Original Invoice Total</td>
                 <td className="p-2 text-right">₹{formatNumber(order.grandTotal)}</td>
             </tr>
-            <tr className="border-t">
-                <td className="p-2">Amount Paid This Transaction</td>
-                <td className="p-2 text-right text-green-600">(-) ₹{formatNumber(payment.amount)}</td>
-            </tr>
-            <tr className="border-t border-b-2 border-gray-800 font-bold">
+            <tr className="border-t font-bold bg-gray-100">
                 <td className="p-2">Balance Due</td>
-                <td className="p-2 text-right">₹{formatNumber(order.balanceDue)}</td>
+                <td className="p-2 text-right text-red-600">₹{formatNumber(balanceDueAfterThisPayment)}</td>
             </tr>
         </tbody>
       </table>
+
+      {historicalPayments && historicalPayments.length > 0 && (
+          <div className="mb-4">
+              <h4 className="font-bold text-sm mb-2">Payment History for this Invoice:</h4>
+              <table className="w-full text-xs text-left">
+                  <thead className="bg-gray-200">
+                      <tr>
+                          <th className="p-2">Date</th>
+                          <th className="p-2 text-right">Amount Paid</th>
+                      </tr>
+                  </thead>
+                  <tbody>
+                      {historicalPayments.map(p => (
+                           <tr key={p.id} className="border-b">
+                              <td className="p-2">{new Date(p.paymentDate).toLocaleDateString()}</td>
+                              <td className="p-2 text-right">₹{formatNumber(p.amount)}</td>
+                           </tr>
+                      ))}
+                  </tbody>
+                   <tfoot className="font-bold">
+                        <tr>
+                            <td className="p-2 text-right">Total Paid:</td>
+                            <td className="p-2 text-right">₹{formatNumber(totalPaidInHistory)}</td>
+                        </tr>
+                   </tfoot>
+              </table>
+          </div>
+      )}
+
 
       <div className="text-center text-gray-500 text-xs absolute bottom-6 left-1/2 -translate-x-1/2 w-full px-6">
         <p>Thank you for your payment!</p>
