@@ -97,7 +97,7 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
              {order.discount > 0 && (
                 <div className="flex justify-between items-center p-2">
                     <span>Discount</span>
-                    <span className="text-green-600 inline-flex items-center">- <Rupee className="inline-block h-4 w-4 mr-1" />{formatNumber(order.discount)}</span>
+                    <span className="text-green-600 inline-flex items-center">-<Rupee className="inline-block h-4 w-4 mr-1" />{formatNumber(order.discount)}</span>
                 </div>
             )}
              <div className="flex justify-between items-center p-2 bg-gray-800 text-white font-bold text-lg">
