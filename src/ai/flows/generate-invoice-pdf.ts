@@ -1,17 +1,14 @@
+
 'use server';
 /**
- * @fileOverview A flow to generate an invoice PDF by filling a template.
+ * @fileOverview A flow to generate an invoice PDF from an HTML template.
  */
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { PDFDocument } from 'pdf-lib';
 import type { Order, Customer } from '@/lib/types';
-import fs from 'fs/promises';
-import path from 'path';
 
 const GenerateInvoicePdfInputSchema = z.object({
-  order: z.any().describe('The order object.'),
-  customer: z.any().describe('The customer object.'),
+  htmlContent: z.string().describe('The HTML content of the invoice to be converted to PDF.'),
 });
 
 export type GenerateInvoicePdfInput = z.infer<typeof GenerateInvoicePdfInputSchema>;
@@ -22,96 +19,24 @@ const GenerateInvoicePdfOutputSchema = z.object({
 
 export type GenerateInvoicePdfOutput = z.infer<typeof GenerateInvoicePdfOutputSchema>;
 
-const TEMPLATES = {
-    'Credit': 'credit-invoice.pdf',
-    'Full Payment': 'full-payment-invoice.pdf'
-};
-
-const formatNumber = (value: number | undefined) => {
-    if (value === undefined || isNaN(value)) return '0.00';
-    return new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
-};
-
-// Helper function to safely set text field value
-const setTextField = (form: any, fieldName: string, value: string | undefined) => {
-    try {
-        const field = form.getTextField(fieldName);
-        if (field && value) {
-            field.setText(value);
-        }
-    } catch (e) {
-        console.warn(`Could not find or set form field: ${fieldName}`);
-    }
-}
 
 export async function generateInvoicePdfFlow(input: GenerateInvoicePdfInput): Promise<GenerateInvoicePdfOutput> {
-    const { order, customer } = input as { order: Order, customer: Customer };
-    const templateName = TEMPLATES[order.paymentTerm];
-    if (!templateName) {
-      throw new Error(`No template found for payment term: ${order.paymentTerm}`);
-    }
+  // This is a placeholder. The actual conversion happens on the client-side
+  // using jsPDF and html2canvas because Genkit/server-side cannot render HTML/CSS.
+  // The client will prepare the HTML, generate the PDF, and this flow can be used
+  // in the future for any additional server-side PDF processing if needed (e.g., saving to cloud).
+  // For now, we just return a success indicator. The client-side will handle the PDF generation.
+  // We receive htmlContent to maintain a consistent flow structure, but we won't use it here.
+  
+  // In a real advanced scenario, you might use a headless browser service here
+  // to render the HTML and convert it to PDF. For this project, client-side is sufficient.
 
-    const templatePath = path.join(process.cwd(), 'public', 'templates', templateName);
-    
-    let templateBytes: Buffer;
-    try {
-        templateBytes = await fs.readFile(templatePath);
-    } catch (error) {
-        console.error(`Failed to read template file: ${templatePath}`, error);
-        throw new Error(`Template file not found: ${templateName}. Please ensure it has been uploaded via the Admin page.`);
-    }
-
-    const pdfDoc = await PDFDocument.load(templateBytes);
-    const form = pdfDoc.getForm();
-
-    const subtotal = order.items.reduce((acc, item) => acc + item.price * item.quantity, 0);
-    const totalGst = order.isGstInvoice ? order.items.reduce((acc, item) => acc + (item.price * item.quantity * (item.gst / 100)), 0) : 0;
-
-    // Fill fields safely
-    setTextField(form, 'billed_to', customer.name);
-    setTextField(form, 'delivery_address', order.deliveryAddress || customer.address);
-    setTextField(form, 'date', new Date(order.orderDate).toLocaleDateString());
-    setTextField(form, 'invoice_no', order.id.replace('ORD', 'INV'));
-    setTextField(form, 'order_no', order.id);
-    if (order.deliveryDate) {
-        setTextField(form, 'delivery_date', new Date(order.deliveryDate).toLocaleDateString());
-    }
-
-    order.items.forEach((item, index) => {
-        const i = index + 1;
-        setTextField(form, `item_${i}_desc`, item.productName);
-        setTextField(form, `item_${i}_qty`, String(item.quantity));
-        setTextField(form, `item_${i}_rate`, formatNumber(item.price));
-        setTextField(form, `item_${i}_total`, formatNumber(item.price * item.quantity));
-    });
-    
-    setTextField(form, 'subtotal', formatNumber(subtotal));
-
-    if (order.isGstInvoice) {
-        setTextField(form, 'total_gst', formatNumber(totalGst));
-    }
-
-    if (order.discount > 0) {
-      setTextField(form, 'discount', formatNumber(order.discount));
-    }
-    
-    setTextField(form, 'grand_total', formatNumber(order.grandTotal));
-
-    if (order.paymentTerm === 'Full Payment' && order.paymentMode) {
-        setTextField(form, 'payment_mode', order.paymentMode);
-    }
-    
-    if (order.paymentTerm === 'Credit' && order.dueDate) {
-      setTextField(form, 'amount_due', formatNumber(order.grandTotal));
-      setTextField(form, 'due_date', new Date(order.dueDate).toLocaleDateString());
-    }
-
-    form.flatten(); // This makes the fields non-editable in the final PDF
-
-    const pdfBytes = await pdfDoc.save();
-    const pdfBase64 = Buffer.from(pdfBytes).toString('base64');
-
-    return { pdfBase64 };
+  // The base64 string will be generated on the client and passed back. For the flow structure, we'll simulate it.
+  // The actual implementation is in the client component.
+  // This flow's primary purpose now is to provide a consistent AI-related endpoint.
+  
+  // We will pass back a dummy value as the client will handle the actual generation
+  return { pdfBase64: '' };
 }
 
 export const generateInvoicePdf = ai.defineFlow(

@@ -1,5 +1,6 @@
 
 
+
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
@@ -23,7 +24,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { generateInvoicePdf } from '@/ai/flows/generate-invoice-pdf';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import { InvoiceTemplate } from '@/components/invoice-template';
 
 
 const formatNumber = (value: number) => {
@@ -38,45 +41,66 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     const [statusFilter, setStatusFilter] = useState('All');
     const [isLoading, setIsLoading] = useState(false);
     const [isAddOrderOpen, setIsAddOrderOpen] = useState(false);
+    const [orderToPrint, setOrderToPrint] = useState<Order | null>(null);
+    const invoiceRef = useRef<HTMLDivElement>(null);
+    const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
     const { toast } = useToast();
     
     useEffect(() => {
         getProducts().then(setProducts);
+        const savedLogo = localStorage.getItem('companyLogo');
+        if (savedLogo) {
+            setLogoUrl(savedLogo);
+        }
     }, []);
 
-    const filteredOrders = useMemo(() => {
-        if (statusFilter === 'All') return orders;
-        return orders.filter(order => order.status === statusFilter);
-    }, [orders, statusFilter]);
-    
-    const handleGenerateInvoice = async (order: Order) => {
+    useEffect(() => {
+        if (orderToPrint && invoiceRef.current) {
+            handlePrint();
+        }
+    }, [orderToPrint]);
+
+    const handleGenerateInvoice = (order: Order) => {
+        setOrderToPrint(order);
+    };
+
+    const handlePrint = async () => {
+        if (!orderToPrint || !invoiceRef.current) return;
+        
         setIsLoading(true);
         try {
-            const customer = customers.find(c => c.id === order.customerId);
-            if (!customer) {
-                toast({ title: 'Error', description: 'Customer not found for this order.', variant: 'destructive'});
-                return;
-            }
+            const canvas = await html2canvas(invoiceRef.current, {
+                scale: 2, // Higher scale for better quality
+                useCORS: true,
+            });
+            const imgData = canvas.toDataURL('image/png');
+            
+            const pdf = new jsPDF({
+                orientation: 'portrait',
+                unit: 'mm',
+                format: 'a4',
+            });
 
-            const result = await generateInvoicePdf({ order, customer });
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            const canvasWidth = canvas.width;
+            const canvasHeight = canvas.height;
+            const ratio = canvasWidth / canvasHeight;
+            const height = pdfWidth / ratio;
             
-            // Trigger download
-            const link = document.createElement('a');
-            link.href = `data:application/pdf;base64,${result.pdfBase64}`;
-            link.download = `invoice-${order.id}.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, height);
+            pdf.save(`invoice-${orderToPrint.id}.pdf`);
+
             toast({ title: 'Success', description: 'Invoice PDF has been downloaded.' });
-
         } catch (error) {
             console.error('Failed to generate invoice:', error);
             toast({ title: 'Error', description: 'Failed to generate invoice PDF.', variant: 'destructive'});
         } finally {
             setIsLoading(false);
+            setOrderToPrint(null);
         }
     };
+
 
     const handleAddOrder = (newOrder: Order) => {
         setOrders(prev => [newOrder, ...prev]);
@@ -93,6 +117,12 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             description: `${newCustomer.name} has been successfully added.`,
         });
     };
+
+    const customerForOrderToPrint = useMemo(() => {
+        if (!orderToPrint) return null;
+        return customers.find(c => c.id === orderToPrint.customerId) || null;
+    }, [orderToPrint, customers]);
+
 
     return (
         <div className="space-y-4">
@@ -123,7 +153,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {filteredOrders.map((order) => (
+                                {orders.map((order) => (
                                     <TableRow key={order.id}>
                                         <TableCell className="font-medium">{order.id}</TableCell>
                                         <TableCell>{order.customerName}</TableCell>
@@ -173,7 +203,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {filteredOrders.filter(o => o.status === 'Pending').map((order) => (
+                                {orders.filter(o => o.status === 'Pending').map((order) => (
                                     <TableRow key={order.id}>
                                         <TableCell className="font-medium">{order.id}</TableCell>
                                         <TableCell>{order.customerName}</TableCell>
@@ -223,7 +253,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {filteredOrders.filter(o => o.status === 'Fulfilled').map((order) => (
+                                {orders.filter(o => o.status === 'Fulfilled').map((order) => (
                                     <TableRow key={order.id}>
                                         <TableCell className="font-medium">{order.id}</TableCell>
                                         <TableCell>{order.customerName}</TableCell>
@@ -273,7 +303,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {filteredOrders.filter(o => o.status === 'Canceled').map((order) => (
+                                {orders.filter(o => o.status === 'Canceled').map((order) => (
                                     <TableRow key={order.id}>
                                         <TableCell className="font-medium">{order.id}</TableCell>
                                         <TableCell>{order.customerName}</TableCell>
@@ -304,6 +334,11 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                     </div>
                 </TabsContent>
             </Tabs>
+             {orderToPrint && customerForOrderToPrint && (
+                <div style={{ position: 'fixed', left: '-200vw', top: 0, zIndex: -1 }}>
+                    <InvoiceTemplate ref={invoiceRef} order={orderToPrint} customer={customerForOrderToPrint} logoUrl={logoUrl}/>
+                </div>
+            )}
 
             <AddOrderDialog
                 isOpen={isAddOrderOpen}
