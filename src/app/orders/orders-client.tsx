@@ -118,12 +118,10 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
 
         setIsLoading(true);
         try {
-            const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-            
-            pdf.setFont('helvetica', 'normal');
-            const pageWidth = pdf.internal.pageSize.getWidth();
-            const margin = 10;
-            let yPos = margin;
+            const doc = new jsPDF();
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const margin = 15;
+            let yPos = 20;
 
             // --- Header ---
             if (logoUrl) {
@@ -132,162 +130,171 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 await new Promise(resolve => logoImg.onload = resolve);
                 const logoWidth = 25;
                 const logoHeight = (logoImg.height * logoWidth) / logoImg.width;
-                pdf.addImage(logoUrl, 'PNG', pageWidth / 2 - logoWidth / 2, yPos, logoWidth, logoHeight);
+                doc.addImage(logoUrl, 'PNG', pageWidth / 2 - logoWidth / 2, yPos, logoWidth, logoHeight);
                 yPos += logoHeight + 2;
             }
             
-            pdf.setFontSize(16).setFont(undefined, 'bold');
-            pdf.text('AB Agency', pageWidth / 2, yPos, { align: 'center' });
-            yPos += 7;
+            doc.setFontSize(14).setFont('helvetica', 'bold');
+            doc.text('AB Agency', pageWidth / 2, yPos, { align: 'center' });
+            yPos += 6;
 
-            pdf.setFontSize(9).setFont(undefined, 'normal');
-            pdf.text('No.1, Ayyanchery main road, Ayyanchery, Urapakkam\nChennai - 603210', pageWidth / 2, yPos, { align: 'center', lineHeightFactor: 1.4 });
-            yPos += 8;
-            pdf.setFontSize(9);
-            pdf.text(`Email: abagency1977@gmail.com, MOB: 95511 95505 / 95001 82975`, pageWidth / 2, yPos, { align: 'center' });
+            doc.setFontSize(9).setFont('helvetica', 'normal');
+            doc.text('No.1, Ayyanchery main road, Ayyanchery, Urapakkam, Chennai - 603210', pageWidth / 2, yPos, { align: 'center', lineHeightFactor: 1.4 });
+            yPos += 4;
+            doc.text(`Email: abagency1977@gmail.com | MOB: 95511 95505 / 95001 82975`, pageWidth / 2, yPos, { align: 'center' });
             yPos += 5;
             
-            pdf.setDrawColor(200); // Light gray line
-            pdf.line(margin, yPos, pageWidth - margin, yPos);
+            doc.setDrawColor(200);
+            doc.line(margin, yPos, pageWidth - margin, yPos);
             yPos += 10;
             
             // --- Billed To and Invoice Details ---
-            const customerAddress = `${customer.address}\n \n${customer.email} | ${customer.phone}`;
-            autoTable(pdf, {
+            const customerAddress = customer.address ? `${customer.address}\n \n${customer.email} | ${customer.phone}` : `${customer.email} | ${customer.phone}`;
+            
+            autoTable(doc, {
                 startY: yPos,
                 theme: 'plain',
-                styles: { fontSize: 10, font: 'helvetica' },
+                styles: { fontSize: 10, cellPadding: 0 },
                 body: [
                     [
                         { 
-                            content: `Billed To:\n${customer.name}\n${customerAddress}`, 
-                            styles: { cellPadding: {top: 0, right: 0, bottom: 0, left: 0} } 
+                            content: `Billed To:\n${customer.name}\n${customerAddress}`,
+                            styles: { fontStyle: 'bold' }
                         },
                         { 
-                            content: `Invoice\n\nInvoice #: ${orderToPrint.id.replace('ORD', 'INV')}\nDate: ${new Date(orderToPrint.orderDate).toLocaleDateString('en-GB')}${orderToPrint.deliveryDate ? `\nDelivery Date: ${new Date(orderToPrint.deliveryDate).toLocaleDateString('en-GB')}` : ''}`, 
-                            styles: { halign: 'right', cellPadding: {top: 0, right: 0, bottom: 0, left: 0} } 
+                            content: `Invoice\n\n# ${orderToPrint.id.replace('ORD', 'INV')}\n${new Date(orderToPrint.orderDate).toLocaleDateString('en-GB')}${orderToPrint.deliveryDate ? `\n${new Date(orderToPrint.deliveryDate).toLocaleDateString('en-GB')}` : ''}`, 
+                            styles: { halign: 'right' }
                         },
                     ],
                 ],
                 didParseCell: (data) => {
                     if (data.section === 'body' && data.row.index === 0 && data.cell.raw) {
-                         if (typeof data.cell.raw === 'string' && data.cell.raw.startsWith('Invoice\n')) {
+                         const text = String(data.cell.raw);
+                         if (text.startsWith('Invoice\n')) {
                            data.cell.styles.fontSize = 18;
                            data.cell.styles.fontStyle = 'bold';
                         }
-                        if (typeof data.cell.raw === 'string' && data.cell.raw.startsWith('Billed To:')) {
-                           data.cell.styles.fontStyle = 'bold';
-                        }
+                         if (text.startsWith('Billed To:')) {
+                            data.cell.styles.fontStyle = 'normal';
+                            data.cell.content = ''; // Clear content, we will redraw
+                         }
                     }
+                },
+                didDrawCell: (data) => {
+                    if (data.section === 'body' && data.row.index === 0 && data.column.index === 0) {
+                        doc.setFont('helvetica', 'bold');
+                        doc.text('Billed To:', data.cell.x, data.cell.y + 1);
+                        doc.setFont('helvetica', 'normal');
+                        doc.text(`${customer.name}\n${customerAddress}`, data.cell.x, data.cell.y + 6);
+                    }
+                     if (data.section === 'body' && data.row.index === 0 && data.column.index === 1) {
+                         const invoiceDate = new Date(orderToPrint.orderDate).toLocaleDateString('en-GB');
+                         const deliveryDate = orderToPrint.deliveryDate ? `Delivery Date: ${new Date(orderToPrint.deliveryDate).toLocaleDateString('en-GB')}` : '';
+                         doc.setFontSize(10);
+                         doc.setFont('helvetica', 'normal');
+                         doc.text(`Invoice #: ${orderToPrint.id.replace('ORD', 'INV')}`, data.cell.x, data.cell.y + 10, {align: 'right'});
+                         doc.text(`Date: ${invoiceDate}`, data.cell.x, data.cell.y + 15, {align: 'right'});
+                         if(deliveryDate) doc.text(deliveryDate, data.cell.x, data.cell.y + 20, {align: 'right'});
+                     }
                 }
             });
 
-            yPos = (pdf as any).lastAutoTable.finalY + 10;
+            yPos = (doc as any).lastAutoTable.finalY + 10;
             
             // --- Items Table ---
             const subtotal = orderToPrint.items.reduce((acc, item) => acc + item.price * item.quantity, 0);
             const totalGst = orderToPrint.isGstInvoice ? orderToPrint.items.reduce((acc, item) => acc + (item.price * item.quantity * (item.gst / 100)), 0) : 0;
             
-            const tableColumns = ['Item Description', 'Qty', 'Rate', 'Amount'];
-            if(orderToPrint.isGstInvoice) tableColumns.splice(3, 0, 'GST');
+            const tableColumns = ['#', 'Item Description', 'Qty', 'Rate', 'Amount'];
+            if(orderToPrint.isGstInvoice) tableColumns.splice(4, 0, 'GST');
             
-            const tableRows = orderToPrint.items.map(item => {
+            const tableRows = orderToPrint.items.map((item, index) => {
                 const row = [
+                    (index + 1).toString(),
                     item.productName,
                     item.quantity.toString(),
-                    formatNumberForPdf(item.price),
-                    formatNumberForPdf(item.price * item.quantity)
+                    formatCurrencyForPdf(item.price),
+                    formatCurrencyForPdf(item.price * item.quantity)
                 ];
-                if(orderToPrint.isGstInvoice) row.splice(3, 0, `${item.gst}%`);
+                if(orderToPrint.isGstInvoice) row.splice(4, 0, `${item.gst}%`);
                 return row;
             });
 
-            // --- Footer Rows for totals ---
-            const footerRows = [
-                 [{ content: 'Subtotal', styles: { halign: 'right' } }, { content: formatNumberForPdf(subtotal), styles: { halign: 'right' } }],
-            ];
-             if (orderToPrint.isGstInvoice) {
-                footerRows.push([{ content: 'Total GST', styles: { halign: 'right' } }, { content: formatNumberForPdf(totalGst), styles: { halign: 'right' } }]);
-            }
-            if (orderToPrint.deliveryFees > 0) {
-                footerRows.push([{ content: 'Delivery Fees', styles: { halign: 'right' } }, { content: formatNumberForPdf(orderToPrint.deliveryFees), styles: { halign: 'right' } }]);
-            }
-             if (orderToPrint.discount > 0) {
-                footerRows.push([{ content: 'Discount', styles: { halign: 'right' } }, { content: `-${formatNumberForPdf(orderToPrint.discount)}`, styles: { halign: 'right' } }]);
-            }
-
-            autoTable(pdf, {
+            autoTable(doc, {
                 startY: yPos,
                 head: [tableColumns],
                 body: tableRows,
-                foot: footerRows,
                 theme: 'grid',
-                headStyles: { fillColor: [34, 34, 34], fontSize: 10, font: 'helvetica', fontStyle: 'bold' },
-                footStyles: { halign: 'right', fontSize: 10 },
+                headStyles: { fillColor: [34, 34, 34], textColor: 255, font: 'helvetica', fontStyle: 'bold' },
                 styles: { fontSize: 9, font: 'helvetica' },
                 columnStyles: {
-                    0: { cellWidth: 'auto'},
-                    1: { halign: 'right' },
+                    0: { cellWidth: 8, halign: 'center' },
                     2: { halign: 'right' },
                     3: { halign: 'right' },
                     4: { halign: 'right' },
+                    5: { halign: 'right' }
                 },
-                didDrawPage: (data) => {
-                    // This hook is called after a page is drawn. We'll add the final totals here.
-                    const finalY = (pdf as any).lastAutoTable.finalY;
-                     // --- Totals Section ---
-                    autoTable(pdf, {
-                        startY: finalY + 2,
-                        body: [['Grand Total', formatCurrencyForPdf(orderToPrint.grandTotal)]],
-                        theme: 'plain',
-                        tableWidth: 80,
-                        margin: { left: pageWidth - 80 - margin },
-                        styles: { fontSize: 9, font: 'helvetica', cellPadding: {top: 1, right: 0, bottom: 1, left: 0} },
-                        columnStyles: {
-                            0: { halign: 'right' },
-                            1: { halign: 'right' }
-                        },
-                        didDrawCell: (data) => {
-                            if (data.row.index === 0) { 
-                                pdf.setFillColor(34, 34, 34);
-                                pdf.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, 'F');
-                                pdf.setTextColor(255, 255, 255);
-                                pdf.setFont(undefined, 'bold');
-                                // Have to manually re-draw text to ensure it's on top of the fill
-                                pdf.text(
-                                    data.cell.text,
-                                    data.cell.x + data.cell.width - data.cell.padding('right'),
-                                    data.cell.y + data.cell.height / 2,
-                                    {
-                                        baseline: 'middle',
-                                        align: 'right'
-                                    }
-                                );
-                            }
-                        },
-                        didParseCell: (data) => {
-                            if (data.row.index === 0) { 
-                                data.cell.styles.fontStyle = 'bold';
-                                data.cell.styles.fontSize = 12;
-                                data.cell.styles.valign = 'middle';
-                                data.cell.styles.cellPadding = { top: 2, bottom: 2 };
-                            }
-                        }
-                    });
-                }
             });
 
-             // --- Final Footer ---
-            const pageCount = (pdf as any).internal.getNumberOfPages();
-            pdf.setTextColor(100,116,139); // gray-500
-            pdf.setFontSize(8);
-            for (let i = 1; i <= pageCount; i++) {
-                pdf.setPage(i);
-                pdf.text('Thank you for your business!', pageWidth/2, pdf.internal.pageSize.getHeight() - 15, { align: 'center'});
-                pdf.text('This is a computer-generated invoice and does not require a signature.', pageWidth/2, pdf.internal.pageSize.getHeight() - 10, { align: 'center'});
+            // --- Totals Section ---
+            const finalY = (doc as any).lastAutoTable.finalY;
+            const totalsStartX = pageWidth - margin - 70;
+            const totalsStartY = finalY + 8;
+            const isCredit = orderToPrint.paymentTerm === 'Credit';
+            
+            const totalsBoxBgColor = isCredit ? '#FFE5E5' : '#E0F2F1'; // Light pink for credit, light green otherwise
+            const totalsBoxTextColor = isCredit ? [220, 38, 38] : [0, 0, 0]; // Red for credit, black otherwise
+            
+            doc.setFillColor(totalsBoxBgColor);
+            doc.roundedRect(totalsStartX - 5, totalsStartY - 5, 75, 26, 3, 3, 'F');
+
+            const totalsContent = [
+                ['Subtotal', formatCurrencyForPdf(subtotal)],
+            ];
+            if (orderToPrint.isGstInvoice) {
+                totalsContent.push(['Total GST', formatCurrencyForPdf(totalGst)]);
+            }
+            if (orderToPrint.deliveryFees > 0) {
+                totalsContent.push(['Delivery Fees', formatCurrencyForPdf(orderToPrint.deliveryFees)]);
+            }
+            if (orderToPrint.discount > 0) {
+                totalsContent.push(['Discount', `-${formatCurrencyForPdf(orderToPrint.discount)}`]);
             }
 
-            pdf.save(`invoice-${orderToPrint.id}.pdf`);
+            autoTable(doc, {
+                startY: totalsStartY,
+                body: totalsContent,
+                theme: 'plain',
+                styles: { fontSize: 9, font: 'helvetica' },
+                columnStyles: {
+                    0: { halign: 'left', fontStyle: 'bold', textColor: totalsBoxTextColor },
+                    1: { halign: 'right', textColor: totalsBoxTextColor }
+                },
+                margin: { left: totalsStartX }
+            });
+
+            // --- Grand Total ---
+            const grandTotalY = (doc as any).lastAutoTable.finalY + 2;
+            doc.setFillColor(105, 162, 180); // Subtle Blue
+            doc.roundedRect(totalsStartX - 5, grandTotalY, 75, 10, 3, 3, 'F');
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(255, 255, 255);
+            doc.text('Grand Total', totalsStartX, grandTotalY + 6.5);
+            doc.text(formatCurrencyForPdf(orderToPrint.grandTotal), totalsStartX + 70, grandTotalY + 6.5, { align: 'right' });
+
+
+            // --- Final Footer ---
+            const pageCount = (doc as any).internal.getNumberOfPages();
+            doc.setFont('helvetica', 'normal')
+            doc.setTextColor(100,116,139); // gray-500
+            doc.setFontSize(8);
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.text('Thank you for your business!', pageWidth/2, doc.internal.pageSize.getHeight() - 15, { align: 'center'});
+                doc.text('This is a computer-generated invoice and does not require a signature.', pageWidth/2, doc.internal.pageSize.getHeight() - 10, { align: 'center'});
+            }
+
+            doc.save(`invoice-${orderToPrint.id}.pdf`);
             toast({ title: 'Success', description: 'Invoice PDF has been downloaded.' });
 
         } catch (error) {
