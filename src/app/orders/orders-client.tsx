@@ -119,6 +119,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         try {
             const doc = new jsPDF();
             const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
             const margin = 15;
             let yPos = 20;
 
@@ -216,7 +217,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 body: tableRows,
                 theme: 'grid',
                 headStyles: { fillColor: [34, 34, 34], textColor: 255, font: 'helvetica', fontStyle: 'bold', fontSize: 9 },
-                styles: { fontSize: 9, font: 'helvetica' },
+                styles: { fontSize: 9, font: 'helvetica', cellPadding: 2 },
                 columnStyles: {
                     0: { cellWidth: 8, halign: 'center' },
                     2: { halign: 'right' },
@@ -262,13 +263,13 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                             0: { halign: 'left', fontStyle: 'normal', cellWidth: 'auto' },
                             1: { halign: 'right', fontStyle: 'bold' }
                         },
-                        didDrawPage: (totalsData) => {
-                            const table = totalsData.table;
-                            doc.setFillColor.apply(doc, boxBgColor);
-                            doc.setTextColor.apply(doc, boxTextColor);
-                            doc.roundedRect(table.x, table.y, table.width, table.height, 3, 3, 'F');
-                            // Redraw text on top of the box
-                            table.draw(doc);
+                        didDrawCell: (data) => {
+                             if (data.section === 'body') {
+                                doc.setFillColor.apply(doc, boxBgColor);
+                                doc.setDrawColor.apply(doc, boxBgColor);
+                                doc.setTextColor.apply(doc, boxTextColor);
+                                doc.roundedRect(data.table.x, data.table.y, data.table.width, data.table.height, 3, 3, 'FD');
+                             }
                         }
                     });
                     
@@ -290,12 +291,13 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                             0: { halign: 'left' },
                             1: { halign: 'right' }
                         },
-                        didDrawPage: (grandTotalData) => {
-                            const table = grandTotalData.table;
-                            doc.setFillColor.apply(doc, grandTotalBoxBgColor);
-                            doc.setTextColor.apply(doc, grandTotalTextColor);
-                            doc.roundedRect(table.x, table.y, table.width, table.height, 3, 3, 'F');
-                            table.draw(doc);
+                        didDrawCell: (data) => {
+                            if (data.section === 'body') {
+                                doc.setFillColor.apply(doc, grandTotalBoxBgColor);
+                                doc.setDrawColor.apply(doc, grandTotalBoxBgColor);
+                                doc.setTextColor.apply(doc, grandTotalTextColor);
+                                doc.roundedRect(data.table.x, data.table.y, data.table.width, data.table.height, 3, 3, 'FD');
+                            }
                         }
                     });
 
