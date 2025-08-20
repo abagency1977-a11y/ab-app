@@ -101,33 +101,39 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         
         setIsLoading(true);
         try {
-            const canvas = await html2canvas(invoiceRef.current, { scale: 3, useCORS: true });
-            const imgData = canvas.toDataURL('image/png');
+            const canvas = await html2canvas(invoiceRef.current, {
+                scale: 3,
+                useCORS: true,
+                windowWidth: invoiceRef.current.scrollWidth,
+                windowHeight: invoiceRef.current.scrollHeight,
+            });
 
+            const imgData = canvas.toDataURL('image/png');
             const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+            
             const pdfWidth = pdf.internal.pageSize.getWidth();
             const pdfHeight = pdf.internal.pageSize.getHeight();
-
-            const canvasWidth = canvas.width;
-            const canvasHeight = canvas.height;
-            const canvasAspectRatio = canvasWidth / canvasHeight;
-            const pdfAspectRatio = pdfWidth / pdfHeight;
-
-            let imgHeight = pdfWidth / canvasAspectRatio;
-            let heightLeft = imgHeight;
+            
+            const imgWidth = canvas.width;
+            const imgHeight = canvas.height;
+            
+            const ratio = imgWidth / pdfWidth;
+            const scaledImgHeight = imgHeight / ratio;
+            
             let position = 0;
+            let heightLeft = scaledImgHeight;
 
-            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, scaledImgHeight);
             heightLeft -= pdfHeight;
 
             while (heightLeft > 0) {
-                position = heightLeft - imgHeight;
+                position = -pdfHeight + (position * -1);
                 pdf.addPage();
-                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, scaledImgHeight);
                 heightLeft -= pdfHeight;
             }
             
-            doc.save(`invoice-${orderToPrint.id}.pdf`);
+            pdf.save(`invoice-${orderToPrint.id}.pdf`);
             toast({ title: 'Success', description: 'Invoice PDF has been downloaded.' });
 
         } catch (error) {
@@ -140,9 +146,25 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     };
 
 
-    const handleAddOrder = async (newOrder: Order) => {
-        setOrders(prevOrders => [newOrder, ...prevOrders]);
-    }
+    const handleAddOrder = async (newOrderData: Omit<Order, 'id' | 'customerName'>) => {
+       try {
+           const newOrder = await addOrder(newOrderData);
+           setOrders(prevOrders => [newOrder, ...prevOrders]);
+           toast({
+               title: "Order Placed",
+               description: `Order ${newOrder.id} has been successfully created.`,
+           });
+           return newOrder;
+       } catch (e: any) {
+           console.error("Error details:", e);
+           toast({
+              title: "Error Placing Order",
+              description: e.message || "Failed to save the new order.",
+              variant: "destructive"
+          });
+          throw e; // re-throw to be caught in the dialog
+       }
+    };
 
     const handleAddCustomer = async (newCustomerData: Omit<Customer, 'id' | 'transactionHistory' | 'orders'>) => {
         try {
@@ -291,7 +313,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     onOpenChange: (open: boolean) => void,
     customers: Customer[],
     products: Product[],
-    onOrderAdded: (order: Order) => void,
+    onOrderAdded: (order: Omit<Order, 'id' | 'customerName'>) => Promise<Order>,
     onCustomerAdded: (customer: Omit<Customer, 'id'|'transactionHistory' | 'orders'>) => Promise<Customer | null>,
 }) {
     const [customerId, setCustomerId] = useState<string>('');
@@ -437,7 +459,13 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         const customer = customers.find(c => c.id === customerId);
         if (!customer) return;
 
-        let baseOrderData: Omit<Order, 'id' | 'customerName'> = {
+        let baseOrderData: Omit<Order, 'id' | 'customerName' | 'paymentMode' | 'paymentRemarks' | 'dueDate' | 'balanceDue' | 'payments'> & {
+            paymentMode?: PaymentMode;
+            paymentRemarks?: string;
+            dueDate?: string;
+            balanceDue?: number;
+            payments?: Omit<Payment, 'id'>[];
+        } = {
             customerId,
             orderDate: new Date().toISOString().split('T')[0],
             status: 'Fulfilled',
@@ -458,52 +486,30 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
             paymentTerm,
             deliveryAddress: deliveryAddress || customer.address,
             isGstInvoice,
-            payments: [],
-            balanceDue: grandTotal,
             ...(deliveryDate && { deliveryDate }),
         };
 
-        let newOrderData;
         if (paymentTerm === 'Full Payment') {
-            newOrderData = {
-                ...baseOrderData,
-                balanceDue: 0,
-                payments: [{
-                    id: `temp-pay-id`,
-                    paymentDate: new Date().toISOString().split('T')[0],
-                    amount: grandTotal,
-                    method: paymentMode || 'Cash',
-                    notes: paymentRemarks,
-                }],
-            };
-            if(paymentMode) newOrderData.paymentMode = paymentMode;
-            if(paymentRemarks) newOrderData.paymentRemarks = paymentRemarks;
-
+            baseOrderData.balanceDue = 0;
+            baseOrderData.payments = [{
+                paymentDate: new Date().toISOString().split('T')[0],
+                amount: grandTotal,
+                method: paymentMode || 'Cash',
+                notes: paymentRemarks,
+            }];
+            if (paymentMode) baseOrderData.paymentMode = paymentMode;
+            if (paymentRemarks) baseOrderData.paymentRemarks = paymentRemarks;
         } else { // Credit
-             newOrderData = {
-                ...baseOrderData,
-                ...(dueDate && { dueDate: dueDate }),
-            };
-            // Ensure no payment details are saved for credit orders initially
-            delete newOrderData.paymentMode;
-            delete newOrderData.paymentRemarks;
+            baseOrderData.balanceDue = grandTotal;
+            baseOrderData.payments = [];
+            if (dueDate) baseOrderData.dueDate = dueDate;
         }
 
        try {
-           const newOrder = await addOrder(newOrderData);
-           onOrderAdded(newOrder);
-           toast({
-               title: "Order Placed",
-               description: `Order ${newOrder.id} has been successfully created.`,
-           });
+           await onOrderAdded(baseOrderData);
            resetForm();
-       } catch (e: any) {
-           console.error("Error details:", e);
-           toast({
-              title: "Error Placing Order",
-              description: e.message || "Failed to save the new order.",
-              variant: "destructive"
-          });
+       } catch (e) {
+            // Error is already toasted in the parent component
        }
     };
 
