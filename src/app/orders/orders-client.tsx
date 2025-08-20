@@ -28,6 +28,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Combobox } from '@/components/ui/combobox';
 
 
+const formatNumberForPdf = (value: number | undefined): string => {
+    if (value === undefined || isNaN(value)) return '0.00';
+    return new Intl.NumberFormat('en-IN', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+};
+
 const formatNumber = (value: number | undefined) => {
     if (value === undefined || isNaN(value)) return '₹0.00';
     return `₹${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
@@ -103,7 +111,8 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         setIsLoading(true);
         try {
             const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-
+            
+            pdf.setFont('helvetica', 'normal');
             const pageWidth = pdf.internal.pageSize.getWidth();
             const margin = 10;
             let yPos = margin;
@@ -128,13 +137,14 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             yPos += 8;
             pdf.setFontSize(8);
             pdf.text(`Email: abagency1977@gmail.com, MOB: 95511 95505 / 95001 82975`, pageWidth / 2, yPos, { align: 'center' });
-            yPos += 10;
+            yPos += 5;
             
             pdf.setDrawColor(200); // Light gray line
             pdf.line(margin, yPos, pageWidth - margin, yPos);
             yPos += 10;
-
-            // --- Invoice Details & Customer Info in a borderless table ---
+            
+            // --- Billed To and Invoice Details ---
+            const customerAddress = `${customer.address}\n\n${customer.email} | ${customer.phone}`;
             autoTable(pdf, {
                 startY: yPos,
                 theme: 'plain',
@@ -142,12 +152,12 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 body: [
                     [
                         { 
-                            content: `Billed To:\n${customer.name}\n${customer.address}\n${customer.email}\n${customer.phone}`, 
-                            styles: { fontStyle: 'normal', cellPadding: 0 } 
+                            content: `Billed To:\n${customer.name}\n${customerAddress}`, 
+                            styles: { fontStyle: 'normal', cellPadding: {top: 0, right: 0, bottom: 0, left: 0} } 
                         },
                         { 
                             content: `Invoice\n\nInvoice #: ${orderToPrint.id.replace('ORD', 'INV')}\nDate: ${new Date(orderToPrint.orderDate).toLocaleDateString('en-GB')}${orderToPrint.deliveryDate ? `\nDelivery Date: ${new Date(orderToPrint.deliveryDate).toLocaleDateString('en-GB')}` : ''}`, 
-                            styles: { halign: 'right', fontStyle: 'normal', cellPadding: 0 } 
+                            styles: { halign: 'right', fontStyle: 'normal', cellPadding: {top: 0, right: 0, bottom: 0, left: 0} } 
                         },
                     ],
                 ],
@@ -155,7 +165,10 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                     if (data.section === 'body' && data.row.index === 0 && data.cell.raw) {
                         const text = data.cell.raw;
                         if (typeof text === 'string' && text.startsWith('Invoice\n')) {
-                           data.cell.styles.fontSize = 16;
+                           data.cell.styles.fontSize = 15;
+                           data.cell.styles.fontStyle = 'bold';
+                        }
+                        if (typeof text === 'string' && text.startsWith('Billed To:')) {
                            data.cell.styles.fontStyle = 'bold';
                         }
                     }
@@ -175,8 +188,8 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 const row = [
                     item.productName,
                     item.quantity.toString(),
-                    formatNumber(item.price),
-                    formatNumber(item.price * item.quantity)
+                    formatNumberForPdf(item.price),
+                    formatNumberForPdf(item.price * item.quantity)
                 ];
                 if(orderToPrint.isGstInvoice) row.splice(3, 0, `${item.gst}%`);
                 return row;
@@ -202,23 +215,21 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
 
             // --- Totals Section ---
             const totalsBody = [
-                ['Subtotal', formatNumber(subtotal)],
+                ['Subtotal', formatNumberForPdf(subtotal)],
             ];
             if (orderToPrint.isGstInvoice) {
-                totalsBody.push(['Total GST', formatNumber(totalGst)]);
+                totalsBody.push(['Total GST', formatNumberForPdf(totalGst)]);
             }
             if (orderToPrint.deliveryFees > 0) {
-                totalsBody.push(['Delivery Fees', formatNumber(orderToPrint.deliveryFees)]);
+                totalsBody.push(['Delivery Fees', formatNumberForPdf(orderToPrint.deliveryFees)]);
             }
              if (orderToPrint.discount > 0) {
-                totalsBody.push(['Discount', `-${formatNumber(orderToPrint.discount)}`]);
+                totalsBody.push(['Discount', `-${formatNumberForPdf(orderToPrint.discount)}`]);
             }
             
-            totalsBody.push(['', '']); // Spacer
-            totalsBody.push(['Grand Total', formatNumber(orderToPrint.grandTotal)]);
+            totalsBody.push(['Grand Total', formatNumberForPdf(orderToPrint.grandTotal)]);
 
-            const totalsHeight = totalsBody.length * 8 + 10;
-            if (finalY + totalsHeight > pdf.internal.pageSize.getHeight() - 30) {
+            if (finalY + (totalsBody.length * 10) > pdf.internal.pageSize.getHeight() - 30) {
                 pdf.addPage();
                 finalY = margin;
             } else {
@@ -231,15 +242,24 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 theme: 'plain',
                 tableWidth: 80,
                 margin: { left: pageWidth - 80 - margin },
-                styles: { fontSize: 10, cellPadding: 1.5, font: 'helvetica' },
+                styles: { fontSize: 9, font: 'helvetica', cellPadding: {top: 1, right: 0, bottom: 1, left: 0} },
                  columnStyles: {
                     0: { halign: 'right' },
                     1: { halign: 'right' }
                 },
+                didDrawCell: (data) => {
+                     if (data.row.index === totalsBody.length - 1) { 
+                        pdf.setFillColor(34, 34, 34);
+                        pdf.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, 'F');
+                        pdf.setTextColor(255, 255, 255);
+                        pdf.setFont(undefined, 'bold');
+                        pdf.text(data.cell.text, data.cell.x + data.cell.padding('left'), data.cell.y + data.cell.height / 2, {
+                            baseline: 'middle'
+                        });
+                    }
+                },
                 didParseCell: (data) => {
-                     if (data.row.index === totalsBody.length - 1) { // Grand Total row
-                        data.cell.styles.fillColor = [34, 34, 34];
-                        data.cell.styles.textColor = [255, 255, 255];
+                     if (data.row.index === totalsBody.length - 1) { 
                         data.cell.styles.fontStyle = 'bold';
                         data.cell.styles.fontSize = 11;
                     }
@@ -247,33 +267,8 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             });
 
             finalY = (pdf as any).lastAutoTable.finalY + 10;
-
-            // --- Payment / Due Box ---
-            const boxHeight = 15;
-            if (finalY + boxHeight > pdf.internal.pageSize.getHeight() - 30) {
-                pdf.addPage();
-                finalY = margin;
-            }
-            if (orderToPrint.paymentTerm === 'Full Payment') {
-                pdf.setFillColor(236, 253, 245); // green-50
-                pdf.rect(margin, finalY, pageWidth - margin*2, boxHeight, 'F');
-                pdf.setTextColor(22, 101, 52); // green-800
-                pdf.setFontSize(10).setFont('helvetica', 'bold');
-                pdf.text('Payment Details', margin + 5, finalY + 5);
-                pdf.setFontSize(9).setFont('helvetica', 'normal');
-                pdf.text(`Mode: ${orderToPrint.paymentMode} | Status: Paid`, margin + 5, finalY + 11);
-            }
-            if (orderToPrint.paymentTerm === 'Credit') {
-                pdf.setFillColor(254, 242, 242); // red-50
-                pdf.rect(margin, finalY, pageWidth - margin*2, boxHeight, 'F');
-                pdf.setTextColor(153, 27, 27); // red-800
-                pdf.setFontSize(10).setFont('helvetica', 'bold');
-                pdf.text('Payment Due', margin + 5, finalY + 5);
-                pdf.setFontSize(9).setFont('helvetica', 'normal');
-                pdf.text(`Balance Due: ${formatNumber(orderToPrint.balanceDue)}`, margin + 5, finalY + 11);
-            }
             
-            // --- Final Footer ---
+             // --- Final Footer ---
             const pageCount = (pdf as any).internal.getNumberOfPages();
             pdf.setTextColor(100,116,139); // gray-500
             pdf.setFontSize(8);
@@ -862,3 +857,4 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     
 
     
+
