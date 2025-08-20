@@ -102,9 +102,9 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
 
         setIsLoading(true);
         try {
-            const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+            const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
 
-            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageWidth = pdf.internal.pageSize.getWidth();
             const margin = 10;
             let yPos = margin;
 
@@ -115,32 +115,30 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 await new Promise(resolve => logoImg.onload = resolve);
                 const logoWidth = 25;
                 const logoHeight = (logoImg.height * logoWidth) / logoImg.width;
-                doc.addImage(logoUrl, 'PNG', pageWidth / 2 - logoWidth / 2, yPos, logoWidth, logoHeight);
+                pdf.addImage(logoUrl, 'PNG', pageWidth / 2 - logoWidth / 2, yPos, logoWidth, logoHeight);
                 yPos += logoHeight + 2;
             }
             
-            doc.setFontSize(14).setFont(undefined, 'bold');
-            doc.text('AB Agency', pageWidth / 2, yPos, { align: 'center' });
+            pdf.setFontSize(14).setFont(undefined, 'bold');
+            pdf.text('AB Agency', pageWidth / 2, yPos, { align: 'center' });
             yPos += 5;
 
-            doc.setFontSize(9).setFont(undefined, 'normal');
-            doc.text('No.1, Ayyanchery main road, Ayyanchery, Urapakkam', pageWidth / 2, yPos, { align: 'center' });
-            yPos += 4;
-            doc.text('Chennai - 603210', pageWidth / 2, yPos, { align: 'center' });
-            yPos += 5; // Single line break
-            doc.setFontSize(8);
-            doc.text('Email: abagency1977@gmail.com, MOB: 95511 95505 / 95001 82975', pageWidth / 2, yPos, { align: 'center' });
+            pdf.setFontSize(9).setFont(undefined, 'normal');
+            pdf.text('No.1, Ayyanchery main road, Ayyanchery, Urapakkam\nChennai - 603210', pageWidth / 2, yPos, { align: 'center', lineHeightFactor: 1.2 });
+            yPos += 8;
+            pdf.setFontSize(8);
+            pdf.text(`Email: abagency1977@gmail.com, MOB: 95511 95505 / 95001 82975`, pageWidth / 2, yPos, { align: 'center' });
             yPos += 10;
             
-            doc.setDrawColor(200); // Light gray line
-            doc.line(margin, yPos, pageWidth - margin, yPos);
+            pdf.setDrawColor(200); // Light gray line
+            pdf.line(margin, yPos, pageWidth - margin, yPos);
             yPos += 10;
 
             // --- Invoice Details & Customer Info in a borderless table ---
-            autoTable(doc, {
+            autoTable(pdf, {
                 startY: yPos,
                 theme: 'plain',
-                styles: { fontSize: 9 },
+                styles: { fontSize: 9, font: 'helvetica' },
                 body: [
                     [
                         { 
@@ -155,8 +153,8 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 ],
                 didParseCell: (data) => {
                     if (data.section === 'body' && data.row.index === 0 && data.cell.raw) {
-                        const text = data.cell.raw as string;
-                        if (text.startsWith('Invoice\n')) {
+                        const text = data.cell.raw;
+                        if (typeof text === 'string' && text.startsWith('Invoice\n')) {
                            data.cell.styles.fontSize = 16;
                            data.cell.styles.fontStyle = 'bold';
                         }
@@ -164,7 +162,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 }
             });
 
-            yPos = (doc as any).lastAutoTable.finalY + 10;
+            yPos = (pdf as any).lastAutoTable.finalY + 10;
             
             // --- Items Table ---
             const subtotal = orderToPrint.items.reduce((acc, item) => acc + item.price * item.quantity, 0);
@@ -184,14 +182,15 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 return row;
             });
 
-            autoTable(doc, {
+            autoTable(pdf, {
                 startY: yPos,
                 head: [tableColumns],
                 body: tableRows,
                 theme: 'grid',
-                headStyles: { fillColor: [34, 34, 34], fontSize: 10 },
-                styles: { fontSize: 9, cellPadding: 2 },
+                headStyles: { fillColor: [34, 34, 34], fontSize: 10, font: 'helvetica', fontStyle: 'bold' },
+                styles: { fontSize: 9, font: 'helvetica' },
                 columnStyles: {
+                    0: { cellWidth: 'auto'},
                     1: { halign: 'right' },
                     2: { halign: 'right' },
                     3: { halign: 'right' },
@@ -199,7 +198,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 }
             });
 
-            let finalY = (doc as any).lastAutoTable.finalY;
+            let finalY = (pdf as any).lastAutoTable.finalY;
 
             // --- Totals Section ---
             const totalsBody = [
@@ -215,25 +214,24 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 totalsBody.push(['Discount', `-${formatNumber(orderToPrint.discount)}`]);
             }
             
-            // Add a spacer row before Grand Total for styling
-            totalsBody.push(['', '']); 
+            totalsBody.push(['', '']); // Spacer
             totalsBody.push(['Grand Total', formatNumber(orderToPrint.grandTotal)]);
 
             const totalsHeight = totalsBody.length * 8 + 10;
-             if (finalY + totalsHeight > doc.internal.pageSize.getHeight() - 20) {
-                doc.addPage();
+            if (finalY + totalsHeight > pdf.internal.pageSize.getHeight() - 30) {
+                pdf.addPage();
                 finalY = margin;
             } else {
                 finalY += 5;
             }
 
-            autoTable(doc, {
+            autoTable(pdf, {
                 startY: finalY,
                 body: totalsBody,
                 theme: 'plain',
                 tableWidth: 80,
                 margin: { left: pageWidth - 80 - margin },
-                styles: { fontSize: 10, cellPadding: 1.5 },
+                styles: { fontSize: 10, cellPadding: 1.5, font: 'helvetica' },
                  columnStyles: {
                     0: { halign: 'right' },
                     1: { halign: 'right' }
@@ -248,45 +246,44 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 }
             });
 
-            finalY = (doc as any).lastAutoTable.finalY + 10;
+            finalY = (pdf as any).lastAutoTable.finalY + 10;
 
             // --- Payment / Due Box ---
             const boxHeight = 15;
-            if (finalY + boxHeight > doc.internal.pageSize.getHeight() - 30) {
-                doc.addPage();
+            if (finalY + boxHeight > pdf.internal.pageSize.getHeight() - 30) {
+                pdf.addPage();
                 finalY = margin;
             }
             if (orderToPrint.paymentTerm === 'Full Payment') {
-                doc.setFillColor(236, 253, 245); // green-50
-                doc.rect(margin, finalY, pageWidth - margin*2, boxHeight, 'F');
-                doc.setTextColor(34, 197, 94); // green-600
-                doc.setFontSize(10).setFont(undefined, 'bold');
-                doc.text('Payment Details', margin + 5, finalY + 5);
-                doc.setFontSize(9).setFont(undefined, 'normal');
-                doc.text(`Mode: ${orderToPrint.paymentMode} | Status: Paid`, margin + 5, finalY + 11);
+                pdf.setFillColor(236, 253, 245); // green-50
+                pdf.rect(margin, finalY, pageWidth - margin*2, boxHeight, 'F');
+                pdf.setTextColor(22, 101, 52); // green-800
+                pdf.setFontSize(10).setFont('helvetica', 'bold');
+                pdf.text('Payment Details', margin + 5, finalY + 5);
+                pdf.setFontSize(9).setFont('helvetica', 'normal');
+                pdf.text(`Mode: ${orderToPrint.paymentMode} | Status: Paid`, margin + 5, finalY + 11);
             }
             if (orderToPrint.paymentTerm === 'Credit') {
-                doc.setFillColor(254, 242, 242); // red-50
-                doc.rect(margin, finalY, pageWidth - margin*2, boxHeight, 'F');
-                doc.setTextColor(220, 38, 38); // red-600
-                doc.setFontSize(10).setFont(undefined, 'bold');
-                doc.text('Payment Due', margin + 5, finalY + 5);
-                doc.setFontSize(9).setFont(undefined, 'normal');
-                doc.text(`Balance Due: ${formatNumber(orderToPrint.balanceDue)}`, margin + 5, finalY + 11);
+                pdf.setFillColor(254, 242, 242); // red-50
+                pdf.rect(margin, finalY, pageWidth - margin*2, boxHeight, 'F');
+                pdf.setTextColor(153, 27, 27); // red-800
+                pdf.setFontSize(10).setFont('helvetica', 'bold');
+                pdf.text('Payment Due', margin + 5, finalY + 5);
+                pdf.setFontSize(9).setFont('helvetica', 'normal');
+                pdf.text(`Balance Due: ${formatNumber(orderToPrint.balanceDue)}`, margin + 5, finalY + 11);
             }
             
             // --- Final Footer ---
-            const pageCount = (doc as any).internal.getNumberOfPages();
-            doc.setTextColor(100,116,139); // gray-500
-            doc.setFontSize(8);
+            const pageCount = (pdf as any).internal.getNumberOfPages();
+            pdf.setTextColor(100,116,139); // gray-500
+            pdf.setFontSize(8);
             for (let i = 1; i <= pageCount; i++) {
-                doc.setPage(i);
-                doc.text('Thank you for your business!', pageWidth/2, doc.internal.pageSize.getHeight() - 15, { align: 'center'});
-                doc.text('This is a computer-generated invoice and does not require a signature.', pageWidth/2, doc.internal.pageSize.getHeight() - 10, { align: 'center'});
+                pdf.setPage(i);
+                pdf.text('Thank you for your business!', pageWidth/2, pdf.internal.pageSize.getHeight() - 15, { align: 'center'});
+                pdf.text('This is a computer-generated invoice and does not require a signature.', pageWidth/2, pdf.internal.pageSize.getHeight() - 10, { align: 'center'});
             }
 
-
-            doc.save(`invoice-${orderToPrint.id}.pdf`);
+            pdf.save(`invoice-${orderToPrint.id}.pdf`);
             toast({ title: 'Success', description: 'Invoice PDF has been downloaded.' });
 
         } catch (error) {
