@@ -29,12 +29,20 @@ import { Combobox } from '@/components/ui/combobox';
 
 
 const formatNumberForPdf = (value: number | undefined): string => {
+    if (value === undefined || isNaN(value)) return '0.00';
+    return new Intl.NumberFormat('en-IN', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+};
+
+const formatCurrencyForPdf = (value: number | undefined): string => {
     if (value === undefined || isNaN(value)) return '₹ 0.00';
-    return `₹ ${new Intl.NumberFormat('en-IN', {
+     return `₹ ${new Intl.NumberFormat('en-IN', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(value)}`;
-};
+}
 
 const formatNumber = (value: number | undefined) => {
     if (value === undefined || isNaN(value)) return '₹0.00';
@@ -128,14 +136,14 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 yPos += logoHeight + 2;
             }
             
-            pdf.setFontSize(14).setFont(undefined, 'bold');
+            pdf.setFontSize(16).setFont(undefined, 'bold');
             pdf.text('AB Agency', pageWidth / 2, yPos, { align: 'center' });
-            yPos += 5;
+            yPos += 7;
 
             pdf.setFontSize(9).setFont(undefined, 'normal');
-            pdf.text('No.1, Ayyanchery main road, Ayyanchery, Urapakkam\nChennai - 603210', pageWidth / 2, yPos, { align: 'center', lineHeightFactor: 1.2 });
+            pdf.text('No.1, Ayyanchery main road, Ayyanchery, Urapakkam\nChennai - 603210', pageWidth / 2, yPos, { align: 'center', lineHeightFactor: 1.4 });
             yPos += 8;
-            pdf.setFontSize(8);
+            pdf.setFontSize(9);
             pdf.text(`Email: abagency1977@gmail.com, MOB: 95511 95505 / 95001 82975`, pageWidth / 2, yPos, { align: 'center' });
             yPos += 5;
             
@@ -144,31 +152,30 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             yPos += 10;
             
             // --- Billed To and Invoice Details ---
-            const customerAddress = `${customer.address}\n\n${customer.email} | ${customer.phone}`;
+            const customerAddress = `${customer.address}\n \n${customer.email} | ${customer.phone}`;
             autoTable(pdf, {
                 startY: yPos,
                 theme: 'plain',
-                styles: { fontSize: 9, font: 'helvetica' },
+                styles: { fontSize: 10, font: 'helvetica' },
                 body: [
                     [
                         { 
                             content: `Billed To:\n${customer.name}\n${customerAddress}`, 
-                            styles: { fontStyle: 'normal', cellPadding: {top: 0, right: 0, bottom: 0, left: 0} } 
+                            styles: { cellPadding: {top: 0, right: 0, bottom: 0, left: 0} } 
                         },
                         { 
                             content: `Invoice\n\nInvoice #: ${orderToPrint.id.replace('ORD', 'INV')}\nDate: ${new Date(orderToPrint.orderDate).toLocaleDateString('en-GB')}${orderToPrint.deliveryDate ? `\nDelivery Date: ${new Date(orderToPrint.deliveryDate).toLocaleDateString('en-GB')}` : ''}`, 
-                            styles: { halign: 'right', fontStyle: 'normal', cellPadding: {top: 0, right: 0, bottom: 0, left: 0} } 
+                            styles: { halign: 'right', cellPadding: {top: 0, right: 0, bottom: 0, left: 0} } 
                         },
                     ],
                 ],
                 didParseCell: (data) => {
                     if (data.section === 'body' && data.row.index === 0 && data.cell.raw) {
-                        const text = data.cell.raw as string;
-                        if (typeof text === 'string' && text.startsWith('Invoice\n')) {
+                         if (typeof data.cell.raw === 'string' && data.cell.raw.startsWith('Invoice\n')) {
                            data.cell.styles.fontSize = 18;
                            data.cell.styles.fontStyle = 'bold';
                         }
-                        if (typeof text === 'string' && text.startsWith('Billed To:')) {
+                        if (typeof data.cell.raw === 'string' && data.cell.raw.startsWith('Billed To:')) {
                            data.cell.styles.fontStyle = 'bold';
                         }
                     }
@@ -195,12 +202,28 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 return row;
             });
 
+            // --- Footer Rows for totals ---
+            const footerRows = [
+                 [{ content: 'Subtotal', styles: { halign: 'right' } }, { content: formatNumberForPdf(subtotal), styles: { halign: 'right' } }],
+            ];
+             if (orderToPrint.isGstInvoice) {
+                footerRows.push([{ content: 'Total GST', styles: { halign: 'right' } }, { content: formatNumberForPdf(totalGst), styles: { halign: 'right' } }]);
+            }
+            if (orderToPrint.deliveryFees > 0) {
+                footerRows.push([{ content: 'Delivery Fees', styles: { halign: 'right' } }, { content: formatNumberForPdf(orderToPrint.deliveryFees), styles: { halign: 'right' } }]);
+            }
+             if (orderToPrint.discount > 0) {
+                footerRows.push([{ content: 'Discount', styles: { halign: 'right' } }, { content: `-${formatNumberForPdf(orderToPrint.discount)}`, styles: { halign: 'right' } }]);
+            }
+
             autoTable(pdf, {
                 startY: yPos,
                 head: [tableColumns],
                 body: tableRows,
+                foot: footerRows,
                 theme: 'grid',
                 headStyles: { fillColor: [34, 34, 34], fontSize: 10, font: 'helvetica', fontStyle: 'bold' },
+                footStyles: { halign: 'right', fontSize: 10 },
                 styles: { fontSize: 9, font: 'helvetica' },
                 columnStyles: {
                     0: { cellWidth: 'auto'},
@@ -208,72 +231,52 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                     2: { halign: 'right' },
                     3: { halign: 'right' },
                     4: { halign: 'right' },
-                }
-            });
-
-            let finalY = (pdf as any).lastAutoTable.finalY;
-
-            // --- Totals Section ---
-            const totalsBody = [
-                ['Subtotal', formatNumberForPdf(subtotal)],
-            ];
-            if (orderToPrint.isGstInvoice) {
-                totalsBody.push(['Total GST', formatNumberForPdf(totalGst)]);
-            }
-            if (orderToPrint.deliveryFees > 0) {
-                totalsBody.push(['Delivery Fees', formatNumberForPdf(orderToPrint.deliveryFees)]);
-            }
-             if (orderToPrint.discount > 0) {
-                totalsBody.push(['Discount', `-${formatNumberForPdf(orderToPrint.discount)}`]);
-            }
-            
-            totalsBody.push(['Grand Total', formatNumberForPdf(orderToPrint.grandTotal)]);
-
-            if (finalY + (totalsBody.length * 10) > pdf.internal.pageSize.getHeight() - 30) {
-                pdf.addPage();
-                finalY = margin;
-            } else {
-                finalY += 5;
-            }
-
-            autoTable(pdf, {
-                startY: finalY,
-                body: totalsBody,
-                theme: 'plain',
-                tableWidth: 80,
-                margin: { left: pageWidth - 80 - margin },
-                styles: { fontSize: 9, font: 'helvetica', cellPadding: {top: 1, right: 0, bottom: 1, left: 0} },
-                 columnStyles: {
-                    0: { halign: 'right' },
-                    1: { halign: 'right' }
                 },
-                didDrawCell: (data) => {
-                     if (data.row.index === totalsBody.length - 1) { 
-                        pdf.setFillColor(34, 34, 34);
-                        pdf.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, 'F');
-                        pdf.setTextColor(255, 255, 255);
-                        pdf.setFont(undefined, 'bold');
-                         pdf.text(
-                            data.cell.text,
-                            data.cell.x + data.cell.width - data.cell.padding('right'),
-                            data.cell.y + data.cell.height / 2,
-                            {
-                                baseline: 'middle',
-                                align: 'right'
+                didDrawPage: (data) => {
+                    // This hook is called after a page is drawn. We'll add the final totals here.
+                    const finalY = (pdf as any).lastAutoTable.finalY;
+                     // --- Totals Section ---
+                    autoTable(pdf, {
+                        startY: finalY + 2,
+                        body: [['Grand Total', formatCurrencyForPdf(orderToPrint.grandTotal)]],
+                        theme: 'plain',
+                        tableWidth: 80,
+                        margin: { left: pageWidth - 80 - margin },
+                        styles: { fontSize: 9, font: 'helvetica', cellPadding: {top: 1, right: 0, bottom: 1, left: 0} },
+                        columnStyles: {
+                            0: { halign: 'right' },
+                            1: { halign: 'right' }
+                        },
+                        didDrawCell: (data) => {
+                            if (data.row.index === 0) { 
+                                pdf.setFillColor(34, 34, 34);
+                                pdf.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, 'F');
+                                pdf.setTextColor(255, 255, 255);
+                                pdf.setFont(undefined, 'bold');
+                                // Have to manually re-draw text to ensure it's on top of the fill
+                                pdf.text(
+                                    data.cell.text,
+                                    data.cell.x + data.cell.width - data.cell.padding('right'),
+                                    data.cell.y + data.cell.height / 2,
+                                    {
+                                        baseline: 'middle',
+                                        align: 'right'
+                                    }
+                                );
                             }
-                        );
-                    }
-                },
-                didParseCell: (data) => {
-                     if (data.row.index === totalsBody.length - 1) { 
-                        data.cell.styles.fontStyle = 'bold';
-                        data.cell.styles.fontSize = 11;
-                    }
+                        },
+                        didParseCell: (data) => {
+                            if (data.row.index === 0) { 
+                                data.cell.styles.fontStyle = 'bold';
+                                data.cell.styles.fontSize = 12;
+                                data.cell.styles.valign = 'middle';
+                                data.cell.styles.cellPadding = { top: 2, bottom: 2 };
+                            }
+                        }
+                    });
                 }
             });
 
-            finalY = (pdf as any).lastAutoTable.finalY + 10;
-            
              // --- Final Footer ---
             const pageCount = (pdf as any).internal.getNumberOfPages();
             pdf.setTextColor(100,116,139); // gray-500
@@ -861,7 +864,3 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
 
 
     
-
-    
-
-
