@@ -21,6 +21,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 import html2canvas from 'html2canvas';
 import { InvoiceTemplate } from '@/components/invoice-template';
 import { startOfWeek, startOfMonth, subMonths, isWithinInterval } from 'date-fns';
@@ -100,27 +101,81 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         
         setIsLoading(true);
         try {
-            const canvas = await html2canvas(invoiceRef.current, {
-                scale: 3, // Higher scale for better quality
-                useCORS: true,
-                logging: true,
-            });
-            const imgData = canvas.toDataURL('image/png');
-            
-            const pdf = new jsPDF({
-                orientation: 'portrait',
+            const doc = new jsPDF({
+                orientation: 'p',
                 unit: 'mm',
-                format: 'a4',
+                format: 'a4'
             });
 
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const canvasAspectRatio = canvas.width / canvas.height;
-            const pdfHeight = pdfWidth / canvasAspectRatio;
-            
-            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-            pdf.save(`invoice-${orderToPrint.id}.pdf`);
+            // Temporarily make the hidden element visible to render it
+            invoiceRef.current.style.position = 'absolute';
+            invoiceRef.current.style.left = '0';
+            invoiceRef.current.style.top = '0';
+            invoiceRef.current.style.zIndex = '1000';
+            invoiceRef.current.style.visibility = 'visible';
 
+
+            // 1. Header, Customer Details
+            const headerElement = invoiceRef.current.querySelector('[data-invoice-section="header"]') as HTMLElement;
+            const headerCanvas = await html2canvas(headerElement, { scale: 2, useCORS: true });
+            const headerImgData = headerCanvas.toDataURL('image/png');
+            const headerHeight = (headerCanvas.height * doc.internal.pageSize.getWidth()) / headerCanvas.width;
+            doc.addImage(headerImgData, 'PNG', 0, 0, doc.internal.pageSize.getWidth(), headerHeight);
+
+
+            // 2. Items Table
+            const head = [['Item Description', 'Qty', 'Rate', 'GST', 'Amount']];
+            const body = orderToPrint.items.map(item => [
+                item.productName,
+                item.quantity.toString(),
+                `₹${(item.price).toFixed(2)}`,
+                `${item.gst}%`,
+                `₹${(item.price * item.quantity).toFixed(2)}`
+            ]);
+            
+            let lastY = (doc as any).lastAutoTable.finalY || headerHeight + 5;
+
+            (doc as any).autoTable({
+                startY: lastY,
+                head: head,
+                body: body,
+                theme: 'striped',
+                headStyles: {
+                    fillColor: [30, 30, 30]
+                },
+                styles: {
+                    fontSize: 9,
+                },
+                didDrawPage: function(data) {
+                    // You can add headers/footers to subsequent pages here if needed
+                }
+            });
+            
+             // 3. Footer (Totals, Payment Details, etc.)
+            const footerElement = invoiceRef.current.querySelector('[data-invoice-section="footer"]') as HTMLElement;
+            const footerCanvas = await html2canvas(footerElement, { scale: 2, useCORS: true });
+            const footerImgData = footerCanvas.toDataURL('image/png');
+            const footerHeight = (footerCanvas.height * doc.internal.pageSize.getWidth()) / footerCanvas.width;
+            lastY = (doc as any).lastAutoTable.finalY || doc.internal.pageSize.getHeight()/2;
+            
+            // If footer overflows, add a new page
+            if (lastY + footerHeight > doc.internal.pageSize.getHeight() - 10) {
+                doc.addPage();
+                lastY = 10;
+            }
+            doc.addImage(footerImgData, 'PNG', 0, lastY + 5, doc.internal.pageSize.getWidth(), footerHeight);
+
+
+            // Reset visibility
+            invoiceRef.current.style.position = 'fixed';
+            invoiceRef.current.style.left = '-200vw';
+            invoiceRef.current.style.top = '0';
+            invoiceRef.current.style.zIndex = '-1';
+            invoiceRef.current.style.visibility = 'hidden';
+
+            doc.save(`invoice-${orderToPrint.id}.pdf`);
             toast({ title: 'Success', description: 'Invoice PDF has been downloaded.' });
+
         } catch (error) {
             console.error('Failed to generate invoice:', error);
             toast({ title: 'Error', description: 'Failed to generate invoice PDF.', variant: 'destructive'});
@@ -257,7 +312,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 </Table>
             </div>
              {orderToPrint && customerForOrderToPrint && (
-                <div style={{ position: 'fixed', left: '-200vw', top: 0, zIndex: -1 }}>
+                <div style={{ position: 'fixed', left: '-200vw', top: 0, zIndex: -1, visibility: 'hidden' }}>
                     <InvoiceTemplate ref={invoiceRef} order={orderToPrint} customer={customerForOrderToPrint} logoUrl={logoUrl}/>
                 </div>
             )}
@@ -474,6 +529,9 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                 ...baseOrderData,
                 ...(dueDate && { dueDate: dueDate }),
             };
+            // Ensure no payment details are saved for credit orders initially
+            delete newOrderData.paymentMode;
+            delete newOrderData.paymentRemarks;
         }
 
        try {
