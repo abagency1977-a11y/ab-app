@@ -89,6 +89,12 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
                     <span>₹{formatNumber(totalGst)}</span>
                 </div>
             )}
+             {order.deliveryFees > 0 && (
+                <div className="flex justify-between items-center p-2">
+                    <span>Delivery Fees</span>
+                    <span>₹{formatNumber(order.deliveryFees)}</span>
+                </div>
+            )}
              {order.discount > 0 && (
                 <div className="flex justify-between items-center p-2">
                     <span>Discount</span>

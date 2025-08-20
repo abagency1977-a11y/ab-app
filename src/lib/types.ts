@@ -53,6 +53,7 @@ export interface Order {
   items: OrderItem[];
   total: number;
   discount: number;
+  deliveryFees: number;
   grandTotal: number;
   paymentTerm: PaymentTerm;
   paymentMode?: PaymentMode;

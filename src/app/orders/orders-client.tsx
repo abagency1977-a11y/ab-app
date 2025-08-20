@@ -25,6 +25,7 @@ import html2canvas from 'html2canvas';
 import { InvoiceTemplate } from '@/components/invoice-template';
 import { startOfWeek, startOfMonth, subMonths, isWithinInterval } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Combobox } from '@/components/ui/combobox';
 
 
 const formatNumber = (value: number) => {
@@ -299,6 +300,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     const [isGstInvoice, setIsGstInvoice] = useState(true);
     const [enableDiscount, setEnableDiscount] = useState(false);
     const [discount, setDiscount] = useState(0);
+    const [deliveryFees, setDeliveryFees] = useState(0);
 
     const { toast } = useToast();
 
@@ -316,6 +318,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         setIsGstInvoice(true);
         setEnableDiscount(false);
         setDiscount(0);
+        setDeliveryFees(0);
         onOpenChange(false);
     }, [onOpenChange]);
 
@@ -409,7 +412,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         return { subTotal, totalGst, total: totalValue };
     }, [items, isGstInvoice]);
 
-    const grandTotal = useMemo(() => total - discount, [total, discount]);
+    const grandTotal = useMemo(() => total - discount + deliveryFees, [total, discount, deliveryFees]);
 
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -441,6 +444,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
             }),
             total,
             discount,
+            deliveryFees,
             grandTotal,
             paymentTerm,
             paymentMode: paymentTerm === 'Full Payment' ? paymentMode : undefined,
@@ -482,6 +486,10 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
        }
     };
 
+    const customerOptions = useMemo(() => customers.map(c => ({ value: c.id, label: c.name })), [customers]);
+    const productOptions = useMemo(() => products.map(p => ({ value: p.id, label: p.name })), [products]);
+
+
     return (
         <>
             <Dialog open={isOpen} onOpenChange={(open) => { if(!open) resetForm(); else onOpenChange(open);}}>
@@ -501,10 +509,14 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                         <div className="space-y-2">
                                                 <Label htmlFor="customer">Customer Name</Label>
                                                 <div className="flex gap-2">
-                                                    <Select value={customerId} onValueChange={setCustomerId}>
-                                                        <SelectTrigger id="customer"><SelectValue placeholder="Select a customer" /></SelectTrigger>
-                                                        <SelectContent>{customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
-                                                    </Select>
+                                                    <Combobox 
+                                                        options={customerOptions}
+                                                        value={customerId}
+                                                        onValueChange={setCustomerId}
+                                                        placeholder="Select a customer"
+                                                        searchPlaceholder="Search customers..."
+                                                        emptyPlaceholder="No customer found."
+                                                    />
                                                     <Button type="button" variant="outline" onClick={() => setIsAddCustomerOpen(true)}>Add New</Button>
                                                 </div>
                                             </div>
@@ -512,10 +524,14 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                         <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
                                             <div className="space-y-2 col-span-2">
                                                 <Label>Item Name</Label>
-                                                <Select value={currentItem.productId} onValueChange={handleProductSelect}>
-                                                    <SelectTrigger><SelectValue placeholder="Select an item" /></SelectTrigger>
-                                                    <SelectContent>{products.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-                                                </Select>
+                                                 <Combobox 
+                                                    options={productOptions}
+                                                    value={currentItem.productId}
+                                                    onValueChange={handleProductSelect}
+                                                    placeholder="Select an item"
+                                                    searchPlaceholder="Search items..."
+                                                    emptyPlaceholder="No item found."
+                                                />
                                             </div>
                                             <div className="space-y-2">
                                                 <Label>Stock Left</Label>
@@ -621,17 +637,23 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                             <DialogTitle className="text-lg">Order Summary</DialogTitle>
                                             <div className="flex justify-between"><span>Subtotal:</span> <span className="font-semibold">{formatNumber(subTotal)}</span></div>
                                             {isGstInvoice && <div className="flex justify-between"><span>Total GST:</span> <span className="font-semibold">{formatNumber(totalGst)}</span></div>}
+                                             <div className="flex justify-between">
+                                                <Label htmlFor="delivery_fees" className="flex-1">Delivery Fees</Label>
+                                                <Input type="number" placeholder="0.00" className="w-24 h-8" value={String(deliveryFees)} onChange={e => setDeliveryFees(parseFloat(e.target.value) || 0)} />
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <div className="flex items-center space-x-2">
+                                                    <Checkbox id="enable_discount" checked={enableDiscount} onCheckedChange={c => setEnableDiscount(c as boolean)} />
+                                                    <Label htmlFor="enable_discount" className="flex-1">Discount</Label>
+                                                </div>
+                                                <Input type="number" placeholder="0.00" className="w-24 h-8" value={String(discount)} onChange={e => setDiscount(parseFloat(e.target.value) || 0)} disabled={!enableDiscount} />
+                                            </div>
                                             <Separator />
                                             <div className="flex justify-between text-lg">
                                                 <span className="font-bold">Grand Total Value:</span>
                                                 <span className="font-bold text-primary">{formatNumber(grandTotal)}</span>
                                             </div>
-                                            <div className="flex items-center space-x-2 pt-2">
-                                                <Checkbox id="enable_discount" checked={enableDiscount} onCheckedChange={c => setEnableDiscount(c as boolean)} />
-                                                <Label htmlFor="enable_discount" className="flex-1">Enable Discount</Label>
-                                                <Input type="number" placeholder="0.00" className="w-24" value={String(discount)} onChange={e => setDiscount(parseFloat(e.target.value) || 0)} disabled={!enableDiscount} />
-                                            </div>
-                                            <div className="flex justify-between"><span>Discount Applied:</span> <span className="font-semibold">{formatNumber(discount)}</span></div>
+                                            
                                              <div className="flex items-center space-x-2 pt-2">
                                                 <Checkbox id="is_gst_invoice" checked={isGstInvoice} onCheckedChange={c => setIsGstInvoice(c as boolean)} />
                                                 <Label htmlFor="is_gst_invoice">Generate GST Invoice?</Label>
@@ -674,6 +696,3 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         </>
     );
 }
-
-
-    

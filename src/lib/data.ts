@@ -113,6 +113,7 @@ const mockOrders: Omit<Order, 'id'>[] = [
     ],
     total: 8000.00,
     discount: 225.00,
+    deliveryFees: 0,
     grandTotal: 7775.00,
     paymentTerm: 'Full Payment',
     paymentMode: 'Card',
@@ -132,7 +133,8 @@ const mockOrders: Omit<Order, 'id'>[] = [
     items: [{ productId: 'PROD-003', productName: 'Advanced Gizmo', quantity: 10, price: 220.00, gst: 18 }],
     total: 2596,
     discount: 0,
-    grandTotal: 2596,
+    deliveryFees: 100,
+    grandTotal: 2696,
     paymentTerm: 'Credit',
     dueDate: '2023-06-20',
     isGstInvoice: true,
@@ -140,7 +142,7 @@ const mockOrders: Omit<Order, 'id'>[] = [
     payments: [
       { id: 'PAY-001', paymentDate: '2023-05-21', amount: 1000, method: 'Online Transfer' }
     ],
-    balanceDue: 1596,
+    balanceDue: 1696,
   },
   {
     customerId: 'CUST-003',
@@ -153,6 +155,7 @@ const mockOrders: Omit<Order, 'id'>[] = [
     ],
     total: 14750,
     discount: 500,
+    deliveryFees: 0,
     grandTotal: 14250,
     paymentTerm: 'Full Payment',
     paymentMode: 'Online Transfer',
@@ -174,13 +177,14 @@ const mockOrders: Omit<Order, 'id'>[] = [
     ],
     total: 16699,
     discount: 0,
-    grandTotal: 16699,
+    deliveryFees: 250,
+    grandTotal: 16949,
     paymentTerm: 'Credit',
     dueDate: '2023-06-22',
     isGstInvoice: false,
     deliveryDate: '2023-05-25',
     payments: [],
-    balanceDue: 16699,
+    balanceDue: 16949,
   },
   {
     customerId: 'CUST-001',
@@ -190,6 +194,7 @@ const mockOrders: Omit<Order, 'id'>[] = [
     items: [{ productId: 'PROD-004', productName: 'Basic Thingamajig', quantity: 100, price: 25.00, gst: 18 }],
     total: 2950,
     discount: 0,
+    deliveryFees: 0,
     grandTotal: 2950,
     paymentTerm: 'Full Payment',
     isGstInvoice: true,
@@ -333,5 +338,3 @@ export const getDashboardData = async () => {
         recentOrders: orders.sort((a,b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()).slice(0, 5).map(o => ({...o, total: o.grandTotal})),
     };
 };
-
-    
