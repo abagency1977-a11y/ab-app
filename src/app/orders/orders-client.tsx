@@ -111,6 +111,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         const customer = customers.find(c => c.id === orderToPrint.customerId);
         if (!customer) {
             toast({ title: 'Error', description: 'Customer not found for this order.', variant: 'destructive'});
+            setOrderToPrint(null);
             return;
         }
 
@@ -125,12 +126,17 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             if (logoUrl) {
                 const logoImg = new Image();
                 logoImg.src = logoUrl;
-                await new Promise(resolve => { logoImg.onload = resolve; logoImg.onerror = resolve; });
-                if (logoImg.complete && logoImg.width > 0) {
-                  const logoWidth = 25;
-                  const logoHeight = (logoImg.height * logoWidth) / logoImg.width;
-                  doc.addImage(logoUrl, 'PNG', pageWidth / 2 - logoWidth / 2, yPos, logoWidth, logoHeight);
-                  yPos += logoHeight + 2;
+                try {
+                    await new Promise((resolve, reject) => {
+                        logoImg.onload = resolve;
+                        logoImg.onerror = reject;
+                    });
+                    const logoWidth = 25;
+                    const logoHeight = (logoImg.height * logoWidth) / logoImg.width;
+                    doc.addImage(logoUrl, 'PNG', pageWidth / 2 - logoWidth / 2, yPos, logoWidth, logoHeight);
+                    yPos += logoHeight + 2;
+                } catch (e) {
+                    console.error("Error loading logo for PDF", e);
                 }
             }
             
@@ -149,9 +155,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             yPos += 10;
             
             // --- Billed To and Invoice Details ---
-            const customerAddressLines = doc.splitTextToSize(customer.address || '', 80);
-            const customerContact = `${customer.email} | ${customer.phone}`;
-            
+            const billToY = yPos;
             doc.setFontSize(10).setFont('helvetica', 'bold');
             doc.text('Billed To:', margin, yPos);
             yPos += 6;
@@ -159,31 +163,33 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             doc.setFontSize(10).setFont('helvetica', 'normal');
             doc.text(customer.name, margin, yPos);
             yPos += 5;
-            
-            let addressY = yPos;
-            customerAddressLines.forEach((line: string) => {
-                doc.text(line, margin, addressY);
-                addressY += 5;
-            });
-            yPos = addressY + 1;
-            doc.text(customerContact, margin, yPos);
 
-            // Right column for invoice details
-            let rightColY = yPos - (customerAddressLines.length * 5) - 1 - 6; // align with "Billed To:"
-            doc.setFontSize(18).setFont('helvetica', 'bold');
-            doc.text('Invoice', pageWidth - margin, rightColY, { align: 'right'});
-            rightColY += 6;
+            const customerAddressLines = doc.splitTextToSize(customer.address || '', 80);
+            customerAddressLines.forEach((line: string) => {
+                doc.text(line, margin, yPos);
+                yPos += 5;
+            });
+            
+            yPos += 1; // Single line space
+            doc.text(`${customer.email} | ${customer.phone}`, margin, yPos);
+
+            const rightColX = pageWidth - margin;
+            let rightColY = billToY;
+
+            doc.setFontSize(16).setFont('helvetica', 'bold');
+            doc.text('Invoice', rightColX, rightColY, { align: 'right'});
+            rightColY += 8;
             
             doc.setFontSize(10).setFont('helvetica', 'normal');
-            doc.text(`# ${orderToPrint.id.replace('ORD', 'INV')}`, pageWidth - margin, rightColY, { align: 'right'});
+            doc.text(`# ${orderToPrint.id.replace('ORD', 'INV')}`, rightColX, rightColY, { align: 'right'});
             rightColY += 5;
-            doc.text(`Date: ${new Date(orderToPrint.orderDate).toLocaleDateString('en-GB')}`, pageWidth - margin, rightColY, { align: 'right'});
+            doc.text(`Date: ${new Date(orderToPrint.orderDate).toLocaleDateString('en-GB')}`, rightColX, rightColY, { align: 'right'});
             rightColY += 5;
             if(orderToPrint.deliveryDate) {
-                doc.text(`Delivery Date: ${new Date(orderToPrint.deliveryDate).toLocaleDateString('en-GB')}`, pageWidth - margin, rightColY, { align: 'right'});
+                doc.text(`Delivery Date: ${new Date(orderToPrint.deliveryDate).toLocaleDateString('en-GB')}`, rightColX, rightColY, { align: 'right'});
             }
             
-            const tableStartY = Math.max(yPos, rightColY) + 10;
+            const tableStartY = Math.max(yPos, rightColY) + 15;
             
             // --- Items Table ---
             const subtotal = orderToPrint.items.reduce((acc, item) => acc + item.price * item.quantity, 0);
@@ -209,7 +215,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 head: [tableColumns],
                 body: tableRows,
                 theme: 'grid',
-                headStyles: { fillColor: [34, 34, 34], textColor: 255, font: 'helvetica', fontStyle: 'bold' },
+                headStyles: { fillColor: [34, 34, 34], textColor: 255, font: 'helvetica', fontStyle: 'bold', fontSize: 9 },
                 styles: { fontSize: 9, font: 'helvetica' },
                 columnStyles: {
                     0: { cellWidth: 8, halign: 'center' },
@@ -219,13 +225,16 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                     5: { halign: 'right' }
                 },
                 didDrawPage: (data) => {
-                    const finalY = (doc as any).lastAutoTable.finalY || data.cursor?.y || 200;
+                    let finalY = (doc as any).lastAutoTable.finalY || data.cursor?.y || 200;
                     
                     // --- Totals Section ---
                     const isCredit = orderToPrint.paymentTerm === 'Credit';
-                    const boxBgColor = isCredit ? [254, 226, 226] : [220, 252, 231];
+                    const boxBgColor = isCredit ? [254, 226, 226] : [220, 252, 231]; // light-pink or light-green
                     const boxTextColor = isCredit ? [159, 18, 57] : [21, 128, 61];
-                    
+                    const grandTotalBoxBgColor = [219, 234, 254]; // light-blue
+                    const grandTotalTextColor = [29, 78, 216];
+                    const totalsTableWidth = 80;
+
                     const totalsRows = [];
                     totalsRows.push(['Subtotal', formatCurrencyForPdf(subtotal)]);
                     if (orderToPrint.isGstInvoice) {
@@ -242,54 +251,58 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                         body: totalsRows,
                         startY: finalY + 10,
                         theme: 'plain',
-                        tableWidth: 80,
-                        margin: { left: pageWidth - 80 - margin },
+                        tableWidth: totalsTableWidth,
+                        margin: { left: pageWidth - totalsTableWidth - margin },
                         styles: {
                             font: 'helvetica',
-                            fontSize: 9
+                            fontSize: 9,
+                            cellPadding: { top: 1.5, right: 2, bottom: 1.5, left: 2 }
                         },
                         columnStyles: {
-                            0: { halign: 'left', fontStyle: 'normal' },
+                            0: { halign: 'left', fontStyle: 'normal', cellWidth: 'auto' },
                             1: { halign: 'right', fontStyle: 'bold' }
                         },
-                        didDrawCell: (hookData) => {
-                            if (hookData.section === 'body') {
-                                doc.setFillColor.apply(doc, boxBgColor);
-                                doc.roundedRect(hookData.cell.x, hookData.cell.y, hookData.table.getWidth(), hookData.row.height * totalsRows.length, 3, 3, 'F');
-                                doc.setTextColor.apply(doc, boxTextColor);
-                            }
+                        didDrawPage: (totalsData) => {
+                            const table = totalsData.table;
+                            doc.setFillColor.apply(doc, boxBgColor);
+                            doc.setTextColor.apply(doc, boxTextColor);
+                            doc.roundedRect(table.x, table.y, table.width, table.height, 3, 3, 'F');
+                            // Redraw text on top of the box
+                            table.draw(doc);
                         }
                     });
-
-                    const totalsTableFinalY = (doc as any).lastAutoTable.finalY;
+                    
+                    finalY = (doc as any).lastAutoTable.finalY;
 
                     autoTable(doc, {
                         body: [['Grand Total', formatCurrencyForPdf(orderToPrint.grandTotal)]],
-                        startY: totalsTableFinalY + 2,
+                        startY: finalY + 2,
                         theme: 'plain',
-                        tableWidth: 80,
-                        margin: { left: pageWidth - 80 - margin },
+                        tableWidth: totalsTableWidth,
+                        margin: { left: pageWidth - totalsTableWidth - margin },
                         styles: {
                             font: 'helvetica',
                             fontSize: 11,
-                            fontStyle: 'bold'
+                            fontStyle: 'bold',
+                            cellPadding: { top: 2.5, right: 2, bottom: 2.5, left: 2 }
                         },
                         columnStyles: {
                             0: { halign: 'left' },
                             1: { halign: 'right' }
                         },
-                         didDrawCell: (hookData) => {
-                            if (hookData.section === 'body') {
-                                doc.setFillColor(219, 234, 254);
-                                doc.roundedRect(hookData.cell.x, hookData.cell.y, hookData.table.getWidth(), hookData.row.height, 3, 3, 'F');
-                                doc.setTextColor(29, 78, 216);
-                            }
+                        didDrawPage: (grandTotalData) => {
+                            const table = grandTotalData.table;
+                            doc.setFillColor.apply(doc, grandTotalBoxBgColor);
+                            doc.setTextColor.apply(doc, grandTotalTextColor);
+                            doc.roundedRect(table.x, table.y, table.width, table.height, 3, 3, 'F');
+                            table.draw(doc);
                         }
                     });
 
+
                     // --- Final Footer ---
                     const pageCount = (doc as any).internal.getNumberOfPages();
-                    doc.setFont('helvetica', 'normal').setFontSize(8)
+                    doc.setFont('helvetica', 'normal').setFontSize(8);
                     doc.setTextColor(100,116,139); // gray-500
                     for (let i = 1; i <= pageCount; i++) {
                         doc.setPage(i);
@@ -880,5 +893,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     
 
 
+
+    
 
     
