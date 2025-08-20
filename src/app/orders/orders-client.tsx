@@ -125,11 +125,13 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             if (logoUrl) {
                 const logoImg = new Image();
                 logoImg.src = logoUrl;
-                await new Promise(resolve => logoImg.onload = resolve);
-                const logoWidth = 25;
-                const logoHeight = (logoImg.height * logoWidth) / logoImg.width;
-                doc.addImage(logoUrl, 'PNG', pageWidth / 2 - logoWidth / 2, yPos, logoWidth, logoHeight);
-                yPos += logoHeight + 2;
+                await new Promise(resolve => { logoImg.onload = resolve; logoImg.onerror = resolve; });
+                if (logoImg.complete && logoImg.width > 0) {
+                  const logoWidth = 25;
+                  const logoHeight = (logoImg.height * logoWidth) / logoImg.width;
+                  doc.addImage(logoUrl, 'PNG', pageWidth / 2 - logoWidth / 2, yPos, logoWidth, logoHeight);
+                  yPos += logoHeight + 2;
+                }
             }
             
             doc.setFontSize(14).setFont('helvetica', 'bold');
@@ -152,35 +154,38 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             
             doc.setFontSize(10).setFont('helvetica', 'bold');
             doc.text('Billed To:', margin, yPos);
-
-            doc.setFontSize(18).setFont('helvetica', 'bold');
-            doc.text('Invoice', pageWidth - margin, yPos, { align: 'right'});
-            
             yPos += 6;
+            
             doc.setFontSize(10).setFont('helvetica', 'normal');
             doc.text(customer.name, margin, yPos);
-
-            doc.text(`# ${orderToPrint.id.replace('ORD', 'INV')}`, pageWidth - margin, yPos, { align: 'right'});
             yPos += 5;
-
+            
             let addressY = yPos;
             customerAddressLines.forEach((line: string) => {
                 doc.text(line, margin, addressY);
                 addressY += 5;
             });
-
-            doc.text(`Date: ${new Date(orderToPrint.orderDate).toLocaleDateString('en-GB')}`, pageWidth - margin, yPos, { align: 'right'});
-            yPos += 5;
-            if(orderToPrint.deliveryDate) {
-                doc.text(`Delivery Date: ${new Date(orderToPrint.deliveryDate).toLocaleDateString('en-GB')}`, pageWidth - margin, yPos, { align: 'right'});
-            }
-            
-            yPos = addressY + 5; // Add single line space
+            yPos = addressY + 1;
             doc.text(customerContact, margin, yPos);
 
-
+            // Right column for invoice details
+            let rightColY = yPos - (customerAddressLines.length * 5) - 1 - 6; // align with "Billed To:"
+            doc.setFontSize(18).setFont('helvetica', 'bold');
+            doc.text('Invoice', pageWidth - margin, rightColY, { align: 'right'});
+            rightColY += 6;
+            
+            doc.setFontSize(10).setFont('helvetica', 'normal');
+            doc.text(`# ${orderToPrint.id.replace('ORD', 'INV')}`, pageWidth - margin, rightColY, { align: 'right'});
+            rightColY += 5;
+            doc.text(`Date: ${new Date(orderToPrint.orderDate).toLocaleDateString('en-GB')}`, pageWidth - margin, rightColY, { align: 'right'});
+            rightColY += 5;
+            if(orderToPrint.deliveryDate) {
+                doc.text(`Delivery Date: ${new Date(orderToPrint.deliveryDate).toLocaleDateString('en-GB')}`, pageWidth - margin, rightColY, { align: 'right'});
+            }
+            
+            const tableStartY = Math.max(yPos, rightColY) + 10;
+            
             // --- Items Table ---
-            const tableStartY = yPos + 10;
             const subtotal = orderToPrint.items.reduce((acc, item) => acc + item.price * item.quantity, 0);
             const totalGst = orderToPrint.isGstInvoice ? orderToPrint.items.reduce((acc, item) => acc + (item.price * item.quantity * (item.gst / 100)), 0) : 0;
             
@@ -210,7 +215,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                     0: { cellWidth: 8, halign: 'center' },
                     2: { halign: 'right' },
                     3: { halign: 'right' },
-                    4: { halign: 'right' },
+                    4: { halign: orderToPrint.isGstInvoice ? 'center' : 'right' },
                     5: { halign: 'right' }
                 },
                 didDrawPage: (data) => {
@@ -219,48 +224,68 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                     // --- Totals Section ---
                     const isCredit = orderToPrint.paymentTerm === 'Credit';
                     const boxBgColor = isCredit ? [254, 226, 226] : [220, 252, 231];
-                    const boxTextColor = isCredit ? [220, 38, 38] : [0, 0, 0];
-                    const totalsWidth = 70;
-                    const totalsX = pageWidth - margin - totalsWidth;
-                    let totalsY = finalY + 10;
-
-                    const totalsContent = [];
-                    totalsContent.push(['Subtotal', formatCurrencyForPdf(subtotal)]);
+                    const boxTextColor = isCredit ? [159, 18, 57] : [21, 128, 61];
+                    
+                    const totalsRows = [];
+                    totalsRows.push(['Subtotal', formatCurrencyForPdf(subtotal)]);
                     if (orderToPrint.isGstInvoice) {
-                        totalsContent.push(['Total GST', formatCurrencyForPdf(totalGst)]);
+                        totalsRows.push(['Total GST', formatCurrencyForPdf(totalGst)]);
                     }
                     if (orderToPrint.deliveryFees > 0) {
-                        totalsContent.push(['Delivery Fees', formatCurrencyForPdf(orderToPrint.deliveryFees)]);
+                        totalsRows.push(['Delivery Fees', formatCurrencyForPdf(orderToPrint.deliveryFees)]);
                     }
                     if (orderToPrint.discount > 0) {
-                        totalsContent.push(['Discount', `-${formatCurrencyForPdf(orderToPrint.discount)}`]);
+                        totalsRows.push(['Discount', `-${formatCurrencyForPdf(orderToPrint.discount)}`]);
                     }
-                    
-                    const totalsHeight = (totalsContent.length * 6) + 8;
-                    
-                    doc.setFillColor.apply(doc, boxBgColor);
-                    doc.roundedRect(totalsX, totalsY, totalsWidth, totalsHeight, 3, 3, 'F');
-                    
-                    doc.setFont('helvetica', 'normal').setFontSize(9);
-                    doc.setTextColor.apply(doc, boxTextColor);
 
-                    let currentY = totalsY + 6;
-                    totalsContent.forEach(row => {
-                        doc.text(row[0], totalsX + 5, currentY);
-                        doc.text(row[1], totalsX + totalsWidth - 5, currentY, { align: 'right' });
-                        currentY += 6;
+                    autoTable(doc, {
+                        body: totalsRows,
+                        startY: finalY + 10,
+                        theme: 'plain',
+                        tableWidth: 80,
+                        margin: { left: pageWidth - 80 - margin },
+                        styles: {
+                            font: 'helvetica',
+                            fontSize: 9
+                        },
+                        columnStyles: {
+                            0: { halign: 'left', fontStyle: 'normal' },
+                            1: { halign: 'right', fontStyle: 'bold' }
+                        },
+                        didDrawCell: (hookData) => {
+                            if (hookData.section === 'body') {
+                                doc.setFillColor.apply(doc, boxBgColor);
+                                doc.roundedRect(hookData.cell.x, hookData.cell.y, hookData.table.getWidth(), hookData.row.height * totalsRows.length, 3, 3, 'F');
+                                doc.setTextColor.apply(doc, boxTextColor);
+                            }
+                        }
                     });
-                    
-                    // --- Grand Total ---
-                    const grandTotalY = totalsY + totalsHeight + 2;
-                    doc.setFillColor(219, 234, 254); // light blue
-                    doc.roundedRect(totalsX, grandTotalY, totalsWidth, 12, 3, 3, 'F');
-                    
-                    doc.setFont('helvetica', 'bold').setFontSize(10);
-                    doc.setTextColor(0, 0, 0);
-                    doc.text('Grand Total', totalsX + 5, grandTotalY + 8);
-                    doc.text(formatCurrencyForPdf(orderToPrint.grandTotal), totalsX + totalsWidth - 5, grandTotalY + 8, { align: 'right' });
 
+                    const totalsTableFinalY = (doc as any).lastAutoTable.finalY;
+
+                    autoTable(doc, {
+                        body: [['Grand Total', formatCurrencyForPdf(orderToPrint.grandTotal)]],
+                        startY: totalsTableFinalY + 2,
+                        theme: 'plain',
+                        tableWidth: 80,
+                        margin: { left: pageWidth - 80 - margin },
+                        styles: {
+                            font: 'helvetica',
+                            fontSize: 11,
+                            fontStyle: 'bold'
+                        },
+                        columnStyles: {
+                            0: { halign: 'left' },
+                            1: { halign: 'right' }
+                        },
+                         didDrawCell: (hookData) => {
+                            if (hookData.section === 'body') {
+                                doc.setFillColor(219, 234, 254);
+                                doc.roundedRect(hookData.cell.x, hookData.cell.y, hookData.table.getWidth(), hookData.row.height, 3, 3, 'F');
+                                doc.setTextColor(29, 78, 216);
+                            }
+                        }
+                    });
 
                     // --- Final Footer ---
                     const pageCount = (doc as any).internal.getNumberOfPages();
@@ -854,3 +879,6 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
 
     
 
+
+
+    
