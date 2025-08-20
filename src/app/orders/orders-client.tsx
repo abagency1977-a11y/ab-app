@@ -29,11 +29,11 @@ import { Combobox } from '@/components/ui/combobox';
 
 
 const formatNumberForPdf = (value: number | undefined): string => {
-    if (value === undefined || isNaN(value)) return '0.00';
-    return new Intl.NumberFormat('en-IN', {
+    if (value === undefined || isNaN(value)) return '₹ 0.00';
+    return `₹ ${new Intl.NumberFormat('en-IN', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    }).format(value);
+    }).format(value)}`;
 };
 
 const formatNumber = (value: number | undefined) => {
@@ -163,9 +163,9 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 ],
                 didParseCell: (data) => {
                     if (data.section === 'body' && data.row.index === 0 && data.cell.raw) {
-                        const text = data.cell.raw;
+                        const text = data.cell.raw as string;
                         if (typeof text === 'string' && text.startsWith('Invoice\n')) {
-                           data.cell.styles.fontSize = 15;
+                           data.cell.styles.fontSize = 18;
                            data.cell.styles.fontStyle = 'bold';
                         }
                         if (typeof text === 'string' && text.startsWith('Billed To:')) {
@@ -253,9 +253,15 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                         pdf.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, 'F');
                         pdf.setTextColor(255, 255, 255);
                         pdf.setFont(undefined, 'bold');
-                        pdf.text(data.cell.text, data.cell.x + data.cell.padding('left'), data.cell.y + data.cell.height / 2, {
-                            baseline: 'middle'
-                        });
+                         pdf.text(
+                            data.cell.text,
+                            data.cell.x + data.cell.width - data.cell.padding('right'),
+                            data.cell.y + data.cell.height / 2,
+                            {
+                                baseline: 'middle',
+                                align: 'right'
+                            }
+                        );
                     }
                 },
                 didParseCell: (data) => {
@@ -857,4 +863,5 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     
 
     
+
 
