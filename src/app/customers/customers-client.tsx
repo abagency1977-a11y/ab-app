@@ -7,14 +7,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { PlusCircle, MoreHorizontal, ArrowUpDown, CreditCard } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, ArrowUpDown, CreditCard, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getOrders, addCustomer, deleteCustomer as deleteCustomerFromDB } from '@/lib/data';
+import { getOrders, addCustomer, deleteCustomer as deleteCustomerFromDB, updateOrder } from '@/lib/data';
 import { Skeleton } from '@/components/ui/skeleton';
+import { allocateBulkPayment, AllocateBulkPaymentOutput } from '@/ai/flows/allocate-bulk-payment';
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value);
 
@@ -50,11 +51,7 @@ function AddCustomerDialog({ isOpen, onOpenChange, onCustomerAdded }: {
 
         try {
             const newCustomerFromDB = await addCustomer(newCustomerData);
-            const completeNewCustomer: Customer = {
-                ...newCustomerFromDB,
-                orders: []
-            };
-            onCustomerAdded(completeNewCustomer);
+            onCustomerAdded(newCustomerFromDB);
             onOpenChange(false);
             toast({
                 title: "Customer Added",
@@ -123,6 +120,14 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
         getOrders().then(setOrders);
     }, []);
 
+    const refreshData = async () => {
+        const [refreshedCustomers, refreshedOrders] = await Promise.all([
+            getCustomers(),
+            getOrders()
+        ]);
+        setCustomers(refreshedCustomers);
+        setOrders(refreshedOrders);
+    };
 
     const sortedCustomers = useMemo(() => {
         let sortableItems = [...customers];
@@ -190,7 +195,9 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
     };
     
     const openBulkPaymentDialog = (customer: Customer) => {
-        const customerOrders = orders.filter(o => o.customerId === customer.id && o.balanceDue && o.balanceDue > 0);
+        const customerOrders = orders
+            .filter(o => o.customerId === customer.id && (o.balanceDue ?? o.grandTotal) > 0)
+            .sort((a, b) => new Date(a.orderDate).getTime() - new Date(b.orderDate).getTime()); // oldest first
         setCustomerForBulkPayment({ ...customer, orders: customerOrders });
         setIsBulkPaymentOpen(true);
     };
@@ -243,7 +250,7 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                             <TableHead>Contact</TableHead>
                             <TableHead>
                                <Button variant="ghost" onClick={() => requestSort('transactionHistory.totalSpent')}>
-                                    Total Spent <ArrowUpDown className="ml-2 h-4 w-4" />
+                                    Total Ordered <ArrowUpDown className="ml-2 h-4 w-4" />
                                 </Button>
                             </TableHead>
                              <TableHead>Last Purchase</TableHead>
@@ -312,31 +319,96 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                 isOpen={isBulkPaymentOpen} 
                 onOpenChange={setIsBulkPaymentOpen}
                 customer={customerForBulkPayment}
+                allOrders={orders}
+                onPaymentSuccess={refreshData}
             />
         </div>
     );
 }
 
 
-function BulkPaymentDialog({ isOpen, onOpenChange, customer }: {
+function BulkPaymentDialog({ isOpen, onOpenChange, customer, allOrders, onPaymentSuccess }: {
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;
     customer: (Customer & { orders?: Order[] }) | null;
+    allOrders: Order[];
+    onPaymentSuccess: () => void;
 }) {
     const [amount, setAmount] = useState('');
     const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
     const [paymentMethod, setPaymentMethod] = useState('Cash');
     const [notes, setNotes] = useState('');
+    const [isProcessing, setIsProcessing] = useState(false);
     const { toast } = useToast();
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        // Placeholder for future logic
-        toast({
-            title: "Feature In Progress",
-            description: "Bulk payment allocation logic is not yet implemented.",
-        });
-        onOpenChange(false);
+        if (!customer || !customer.orders) return;
+        
+        setIsProcessing(true);
+        try {
+            const paymentAmount = parseFloat(amount);
+            if (isNaN(paymentAmount) || paymentAmount <= 0) {
+                throw new Error("Please enter a valid payment amount.");
+            }
+
+            const outstandingInvoices = customer.orders.map(o => ({
+                id: o.id,
+                orderDate: o.orderDate,
+                balanceDue: o.balanceDue ?? o.grandTotal,
+                grandTotal: o.grandTotal,
+            }));
+
+            const result = await allocateBulkPayment({
+                customerId: customer.id,
+                paymentAmount,
+                paymentDate,
+                paymentMethod,
+                outstandingInvoices,
+            });
+            
+            // Now, update the orders in Firestore based on the allocations
+            for (const allocation of result.allocations) {
+                const orderToUpdate = allOrders.find(o => o.id === allocation.invoiceId);
+                if (orderToUpdate) {
+                    const existingPayments = orderToUpdate.payments || [];
+                    const paymentId = `${orderToUpdate.id}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
+                    const newPayment: any = {
+                         id: paymentId,
+                         paymentDate,
+                         amount: allocation.amountAllocated,
+                         method: paymentMethod,
+                         notes: `Part of bulk payment. ${notes}`.trim(),
+                    };
+                    
+                    const updatedOrderData = {
+                        ...orderToUpdate,
+                        balanceDue: allocation.newBalanceDue,
+                        status: allocation.newStatus as Order['status'],
+                        payments: [...existingPayments, newPayment],
+                    };
+                    await updateOrder(updatedOrderData);
+                }
+            }
+            
+            toast({
+                title: "Bulk Payment Successful",
+                description: result.summary,
+            });
+
+            onPaymentSuccess(); // Refresh data on the main page
+            onOpenChange(false); // Close dialog
+
+        } catch (error: any) {
+            console.error("Bulk payment error:", error);
+            toast({
+                title: "Allocation Failed",
+                description: error.message || "Could not process the bulk payment.",
+                variant: 'destructive',
+            });
+        } finally {
+            setIsProcessing(false);
+        }
     };
 
     if (!customer) return null;
@@ -382,7 +454,10 @@ function BulkPaymentDialog({ isOpen, onOpenChange, customer }: {
                     </div>
                     <DialogFooter>
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                        <Button type="submit">Allocate Payment</Button>
+                        <Button type="submit" disabled={isProcessing}>
+                             {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Allocate Payment
+                        </Button>
                     </DialogFooter>
                 </form>
             </DialogContent>

@@ -1,6 +1,6 @@
 
 import { db } from './firebase';
-import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference } from 'firebase/firestore';
+import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference, updateDoc, increment } from 'firebase/firestore';
 import type { Customer, Product, Order, Payment } from './types';
 
 // MOCK DATA - This will be used to seed the database for the first time.
@@ -253,7 +253,7 @@ export const addCustomer = async (customerData: Omit<Customer, 'id' | 'transacti
         transactionHistory: { totalSpent: 0, lastPurchaseDate: new Date().toISOString().split('T')[0] },
     };
     const docRef = await addDoc(collection(db, 'customers'), newCustomer);
-    return { id: docRef.id, ...newCustomer };
+    return { id: docRef.id, ...newCustomer, orders: [] };
 };
 
 export const deleteCustomer = async (id: string) => {
@@ -317,7 +317,8 @@ async function getNextId(counterName: string, prefix: string): Promise<string> {
 }
 
 export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): Promise<Order> => {
-    const customerSnap = await getDoc(doc(db, "customers", orderData.customerId));
+    const customerRef = doc(db, "customers", orderData.customerId);
+    const customerSnap = await getDoc(customerRef);
      if (!customerSnap.exists()) {
         throw new Error("Customer not found");
     }
@@ -328,7 +329,7 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
     }
 
     const orderId = await getNextId('orderCounter', 'ORD');
-    const newOrderWithId = { ...orderData, customerName, id: orderId };
+    let newOrderWithId: Order = { ...orderData, customerName, id: orderId };
     
     // Add new payment IDs if they exist
     if (newOrderWithId.payments) {
@@ -339,8 +340,27 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
         });
     }
     
-    await setDoc(doc(db, "orders", orderId), newOrderWithId);
-    return newOrderWithId;
+    try {
+        await runTransaction(db, async (transaction) => {
+            // 1. Create the new order document
+            transaction.set(doc(db, "orders", orderId), newOrderWithId);
+
+            // 2. Update the customer's transaction history
+            transaction.update(customerRef, {
+                'transactionHistory.totalSpent': increment(newOrderWithId.grandTotal),
+                'transactionHistory.lastPurchaseDate': newOrderWithId.orderDate
+            });
+        });
+
+        // After successful transaction, return the new order data
+        return newOrderWithId;
+    } catch (e) {
+        console.error("Add order transaction failed: ", e);
+        if (e instanceof Error) {
+           throw new Error(`Failed to save the new order. Details: ${e.message}`);
+        }
+        throw new Error("Failed to save the new order due to an unknown error.");
+    }
 };
 
 export const updateOrder = async (orderData: Order): Promise<void> => {
