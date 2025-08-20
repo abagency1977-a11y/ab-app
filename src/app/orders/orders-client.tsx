@@ -132,8 +132,13 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
 
             // --- Header ---
             if (logoUrl) {
-                doc.addImage(logoUrl, 'PNG', pageWidth / 2 - 12.5, yPos, 25, 25);
-                yPos += 27;
+                try {
+                    doc.addImage(logoUrl, 'PNG', pageWidth / 2 - 12.5, yPos, 25, 25);
+                    yPos += 27;
+                } catch(e) {
+                    console.error("Error adding logo image to PDF:", e);
+                    // Continue without logo if it fails
+                }
             }
             
             doc.setFontSize(14).setFont('Inter', 'normal', 'bold');
@@ -224,62 +229,31 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                     let finalY = (doc as any).lastAutoTable.finalY || data.cursor?.y || 200;
                     
                     // --- Totals Section ---
-                    const totalsRows = [];
-                    totalsRows.push(['Subtotal', formatCurrencyForPdf(subtotal)]);
-                    if (orderToPrint.isGstInvoice) {
-                        totalsRows.push(['Total GST', formatCurrencyForPdf(totalGst)]);
-                    }
-                    if (orderToPrint.deliveryFees > 0) {
-                        totalsRows.push(['Delivery Fees', formatCurrencyForPdf(orderToPrint.deliveryFees)]);
-                    }
-                    if (orderToPrint.discount > 0) {
-                        totalsRows.push(['Discount', `-${formatCurrencyForPdf(orderToPrint.discount)}`]);
-                    }
-
-                    // Totals (Subtotal, GST, etc.)
-                    autoTable(doc, {
-                        body: totalsRows,
-                        startY: finalY + 8,
-                        theme: 'plain',
-                        tableWidth: 80,
-                        margin: { left: pageWidth - 80 - margin },
-                        styles: {
-                            font: 'Inter',
-                            fontStyle: 'normal',
-                            fontSize: 9,
-                            cellPadding: { top: 1.5, right: 2, bottom: 1.5, left: 2 }
-                        },
-                        columnStyles: {
-                            0: { halign: 'left', fontStyle: 'normal' },
-                            1: { halign: 'right' }
-                        },
-                    });
+                    const totalsX = pageWidth - margin - 80;
+                    doc.setFont('Inter', 'normal', 'bold');
+                    doc.setFontSize(10);
                     
-                    finalY = (doc as any).lastAutoTable.finalY;
+                    let totalsY = finalY + 8;
+                    
+                    const totalsData = [
+                        ['Subtotal:', formatCurrencyForPdf(subtotal)],
+                        ...(orderToPrint.isGstInvoice ? [['Total GST:', formatCurrencyForPdf(totalGst)]] : []),
+                        ...(orderToPrint.deliveryFees > 0 ? [['Delivery Fees:', formatCurrencyForPdf(orderToPrint.deliveryFees)]] : []),
+                        ...(orderToPrint.discount > 0 ? [['Discount:', `-${formatCurrencyForPdf(orderToPrint.discount)}`]] : []),
+                    ];
 
-                    // Grand Total
-                     autoTable(doc, {
-                        body: [['Grand Total', formatCurrencyForPdf(orderToPrint.grandTotal)]],
-                        startY: finalY + 2,
-                        theme: 'plain',
-                        tableWidth: 80,
-                        margin: { left: pageWidth - 80 - margin },
-                        styles: {
-                            font: 'Inter',
-                            fontStyle: 'bold',
-                            fontSize: 12,
-                            cellPadding: { top: 2, right: 2, bottom: 2, left: 2 }
-                        },
-                        didParseCell: (data) => {
-                           if (data.section === 'body') {
-                                data.cell.styles.fontStyle = 'bold';
-                           }
-                        },
-                        columnStyles: {
-                            0: { halign: 'left' },
-                            1: { halign: 'right' }
-                        }
+                    totalsData.forEach(([label, value]) => {
+                        doc.text(label, totalsX, totalsY);
+                        doc.text(value, pageWidth - margin, totalsY, { align: 'right' });
+                        totalsY += 6;
                     });
+
+                    // --- Grand Total ---
+                    totalsY += 2; // Add a little space before the grand total
+                    doc.setFontSize(12);
+                    doc.setFont('Inter', 'normal', 'bold');
+                    doc.text('Grand Total:', totalsX, totalsY);
+                    doc.text(formatCurrencyForPdf(orderToPrint.grandTotal), pageWidth - margin, totalsY, { align: 'right' });
 
 
                     // --- Final Footer ---
@@ -868,3 +842,5 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         </>
     );
 }
+
+    
