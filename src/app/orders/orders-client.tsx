@@ -21,8 +21,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
-import html2canvas from 'html2canvas';
+import autoTable from 'jspdf-autotable';
 import { InvoiceTemplate } from '@/components/invoice-template';
 import { startOfWeek, startOfMonth, subMonths, isWithinInterval } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -41,7 +40,6 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     const [isLoading, setIsLoading] = useState(false);
     const [isAddOrderOpen, setIsAddOrderOpen] = useState(false);
     const [orderToPrint, setOrderToPrint] = useState<Order | null>(null);
-    const invoiceRef = useRef<HTMLDivElement>(null);
     const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
     const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState('');
@@ -89,51 +87,188 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     
     useEffect(() => {
         if (orderToPrint) {
-            // Give React time to render the template off-screen
-            setTimeout(() => {
-                handlePrint();
-            }, 100);
+            handlePrint();
         }
     }, [orderToPrint]);
 
     const handlePrint = async () => {
-        if (!orderToPrint || !invoiceRef.current) return;
+        if (!orderToPrint) return;
         
+        const customer = customers.find(c => c.id === orderToPrint.customerId);
+        if (!customer) {
+            toast({ title: 'Error', description: 'Customer not found for this order.', variant: 'destructive'});
+            return;
+        }
+
         setIsLoading(true);
         try {
-            const canvas = await html2canvas(invoiceRef.current, {
-                scale: 3,
-                useCORS: true,
-                windowWidth: invoiceRef.current.scrollWidth,
-                windowHeight: invoiceRef.current.scrollHeight,
-            });
+            const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
 
-            const imgData = canvas.toDataURL('image/png');
-            const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-            
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-            
-            const imgWidth = canvas.width;
-            const imgHeight = canvas.height;
-            
-            const ratio = imgWidth / pdfWidth;
-            const scaledImgHeight = imgHeight / ratio;
-            
-            let position = 0;
-            let heightLeft = scaledImgHeight;
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+            const margin = 10;
+            let yPos = margin;
 
-            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, scaledImgHeight);
-            heightLeft -= pdfHeight;
-
-            while (heightLeft > 0) {
-                position = -pdfHeight + (position * -1);
-                pdf.addPage();
-                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, scaledImgHeight);
-                heightLeft -= pdfHeight;
+            // --- Header ---
+            if (logoUrl) {
+                doc.addImage(logoUrl, 'PNG', pageWidth / 2 - 15, yPos, 30, 15);
+                yPos += 20;
             }
             
-            pdf.save(`invoice-${orderToPrint.id}.pdf`);
+            doc.setFontSize(14).setFont(undefined, 'bold');
+            doc.text('AB Agency', pageWidth / 2, yPos, { align: 'center' });
+            yPos += 6;
+
+            doc.setFontSize(9).setFont(undefined, 'normal');
+            doc.text('No.1, Ayyanchery main road, Ayyanchery, Urapakkam', pageWidth / 2, yPos, { align: 'center' });
+            yPos += 4;
+            doc.text('Chennai - 603210', pageWidth / 2, yPos, { align: 'center' });
+            yPos += 6;
+            doc.text('Email - abagency1977@gmail.com, MOB: 95511 95505 / 95001 82975', pageWidth / 2, yPos, { align: 'center' });
+            yPos += 15;
+
+
+            // --- Invoice Details & Customer Info ---
+            doc.setFontSize(16).setFont(undefined, 'bold');
+            doc.text('Invoice', pageWidth - margin, yPos, { align: 'right' });
+            
+            doc.setFontSize(10).setFont(undefined, 'bold');
+            doc.text('Billed To:', margin, yPos);
+            yPos += 5;
+            
+            doc.setFontSize(10).setFont(undefined, 'normal');
+            doc.text(`Invoice #: ${orderToPrint.id.replace('ORD', 'INV')}`, pageWidth - margin, yPos, { align: 'right' });
+            doc.text(customer.name, margin, yPos);
+            yPos += 5;
+
+            doc.text(`Date: ${new Date(orderToPrint.orderDate).toLocaleDateString('en-GB')}`, pageWidth - margin, yPos, { align: 'right' });
+            doc.text(customer.address, margin, yPos, { maxWidth: pageWidth / 2 - margin * 2 });
+            yPos += (doc.getTextDimensions(customer.address, { maxWidth: pageWidth / 2 - margin * 2 }).h);
+
+            if (orderToPrint.deliveryDate) {
+                 doc.text(`Delivery Date: ${new Date(orderToPrint.deliveryDate).toLocaleDateString('en-GB')}`, pageWidth - margin, yPos, { align: 'right' });
+            }
+            doc.text(customer.email, margin, yPos);
+            yPos += 5;
+            doc.text(customer.phone, margin, yPos);
+            yPos += 10;
+
+            
+            // --- Items Table ---
+            const subtotal = orderToPrint.items.reduce((acc, item) => acc + item.price * item.quantity, 0);
+            const totalGst = orderToPrint.isGstInvoice ? orderToPrint.items.reduce((acc, item) => acc + (item.price * item.quantity * (item.gst / 100)), 0) : 0;
+            
+            const tableColumns = ['Item Description', 'Qty', 'Rate', 'Amount'];
+            if(orderToPrint.isGstInvoice) tableColumns.splice(3, 0, 'GST');
+            
+            const tableRows = orderToPrint.items.map(item => {
+                const row = [
+                    item.productName,
+                    item.quantity,
+                    `₹${(item.price).toFixed(2)}`,
+                    `₹${(item.price * item.quantity).toFixed(2)}`
+                ];
+                if(orderToPrint.isGstInvoice) row.splice(3, 0, `${item.gst}%`);
+                return row;
+            });
+
+            autoTable(doc, {
+                startY: yPos,
+                head: [tableColumns],
+                body: tableRows,
+                theme: 'grid',
+                headStyles: { fillColor: [34, 34, 34] },
+                styles: { fontSize: 9 },
+                columnStyles: {
+                    1: { halign: 'right' },
+                    2: { halign: 'right' },
+                    3: { halign: 'right' },
+                    4: { halign: 'right' },
+                }
+            });
+
+            yPos = (doc as any).lastAutoTable.finalY;
+
+            // --- Totals Section ---
+            const totalsBody = [
+                ['Subtotal', `₹${subtotal.toFixed(2)}`],
+            ];
+            if (orderToPrint.isGstInvoice) {
+                totalsBody.push(['Total GST', `₹${totalGst.toFixed(2)}`]);
+            }
+            if (orderToPrint.deliveryFees > 0) {
+                totalsBody.push(['Delivery Fees', `₹${orderToPrint.deliveryFees.toFixed(2)}`]);
+            }
+             if (orderToPrint.discount > 0) {
+                totalsBody.push(['Discount', `-₹${orderToPrint.discount.toFixed(2)}`]);
+            }
+            totalsBody.push(['Grand Total', `₹${orderToPrint.grandTotal.toFixed(2)}`]);
+
+            // Check if totals fit on the current page, if not, add a new page
+            const totalsHeight = totalsBody.length * 7 + 10; // Approximate height
+            if (yPos + totalsHeight > pageHeight - margin) {
+                doc.addPage();
+                yPos = margin;
+            } else {
+                yPos += 5;
+            }
+
+            autoTable(doc, {
+                startY: yPos,
+                body: totalsBody,
+                theme: 'plain',
+                tableWidth: 80,
+                margin: { left: pageWidth - 80 - margin },
+                styles: { fontSize: 10, cellPadding: 1.5 },
+                 columnStyles: {
+                    0: { halign: 'left' },
+                    1: { halign: 'right', fontStyle: 'bold' }
+                },
+                didParseCell: (data) => {
+                     if (data.row.index === totalsBody.length - 1) { // Grand Total row
+                        data.cell.styles.fillColor = [34, 34, 34];
+                        data.cell.styles.textColor = [255, 255, 255];
+                        data.cell.styles.fontStyle = 'bold';
+                    }
+                }
+            });
+
+            // --- Footer Notes ---
+             yPos = (doc as any).lastAutoTable.finalY + 10;
+             if (yPos > pageHeight - 30) {
+                doc.addPage();
+                yPos = margin;
+             }
+
+             if (orderToPrint.paymentTerm === 'Full Payment') {
+                doc.setFillColor(236, 253, 245); // green-50
+                doc.rect(margin, yPos, pageWidth - margin*2, 20, 'F');
+                doc.setTextColor(34, 197, 94); // green-600
+                doc.setFontSize(10).setFont(undefined, 'bold');
+                doc.text('Payment Details', margin + 5, yPos + 5);
+                doc.setFontSize(9).setFont(undefined, 'normal');
+                doc.text(`Payment Mode: ${orderToPrint.paymentMode}`, margin + 5, yPos + 10);
+                if (orderToPrint.paymentRemarks) doc.text(`Remarks: ${orderToPrint.paymentRemarks}`, margin + 5, yPos + 15);
+            }
+            
+            if (orderToPrint.paymentTerm === 'Credit') {
+                doc.setFillColor(254, 242, 242); // red-50
+                doc.rect(margin, yPos, pageWidth - margin*2, 15, 'F');
+                doc.setTextColor(220, 38, 38); // red-600
+                doc.setFontSize(10).setFont(undefined, 'bold');
+                doc.text('Payment Due', margin + 5, yPos + 5);
+                doc.setFontSize(9).setFont(undefined, 'normal');
+                doc.text(`Balance Due: ₹${(orderToPrint.balanceDue ?? 0).toFixed(2)}`, margin + 5, yPos + 10);
+            }
+            
+            // --- Final Footer ---
+            doc.setTextColor(100,116,139); // gray-500
+            doc.setFontSize(8);
+            doc.text('Thank you for your business!', pageWidth/2, pageHeight - 15, { align: 'center'});
+            doc.text('This is a computer-generated invoice and does not require a signature.', pageWidth/2, pageHeight - 10, { align: 'center'});
+
+
+            doc.save(`invoice-${orderToPrint.id}.pdf`);
             toast({ title: 'Success', description: 'Invoice PDF has been downloaded.' });
 
         } catch (error) {
@@ -188,11 +323,6 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             return null;
         }
     };
-
-    const customerForOrderToPrint = useMemo(() => {
-        if (!orderToPrint) return null;
-        return customers.find(c => c.id === orderToPrint.customerId) || null;
-    }, [orderToPrint, customers]);
 
     if (!isMounted) {
         return (
@@ -287,12 +417,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                     </TableBody>
                 </Table>
             </div>
-             {orderToPrint && customerForOrderToPrint && (
-                <div style={{ position: 'fixed', left: '-200vw', top: 0, zIndex: -1 }}>
-                    <InvoiceTemplate ref={invoiceRef} order={orderToPrint} customer={customerForOrderToPrint} logoUrl={logoUrl}/>
-                </div>
-            )}
-
+            
             <AddOrderDialog
                 isOpen={isAddOrderOpen}
                 onOpenChange={setIsAddOrderOpen}
@@ -459,16 +584,10 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         const customer = customers.find(c => c.id === customerId);
         if (!customer) return;
 
-        let baseOrderData: Omit<Order, 'id' | 'customerName' | 'paymentMode' | 'paymentRemarks' | 'dueDate' | 'balanceDue' | 'payments'> & {
-            paymentMode?: PaymentMode;
-            paymentRemarks?: string;
-            dueDate?: string;
-            balanceDue?: number;
-            payments?: Omit<Payment, 'id'>[];
-        } = {
+        let baseOrderData: Omit<Order, 'id' | 'customerName'> = {
             customerId,
             orderDate: new Date().toISOString().split('T')[0],
-            status: 'Fulfilled',
+            status: 'Fulfilled', // All orders are fulfilled
             items: items.map(item => {
                 const product = products.find(p => p.id === item.productId);
                 return {
@@ -487,23 +606,23 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
             deliveryAddress: deliveryAddress || customer.address,
             isGstInvoice,
             ...(deliveryDate && { deliveryDate }),
+            ...(paymentTerm === 'Full Payment' && { 
+                paymentMode, 
+                paymentRemarks,
+                balanceDue: 0,
+                payments: [{
+                    paymentDate: new Date().toISOString().split('T')[0],
+                    amount: grandTotal,
+                    method: paymentMode,
+                    notes: paymentRemarks,
+                }]
+            }),
+            ...(paymentTerm === 'Credit' && {
+                dueDate,
+                balanceDue: grandTotal,
+                payments: []
+            })
         };
-
-        if (paymentTerm === 'Full Payment') {
-            baseOrderData.balanceDue = 0;
-            baseOrderData.payments = [{
-                paymentDate: new Date().toISOString().split('T')[0],
-                amount: grandTotal,
-                method: paymentMode || 'Cash',
-                notes: paymentRemarks,
-            }];
-            if (paymentMode) baseOrderData.paymentMode = paymentMode;
-            if (paymentRemarks) baseOrderData.paymentRemarks = paymentRemarks;
-        } else { // Credit
-            baseOrderData.balanceDue = grandTotal;
-            baseOrderData.payments = [];
-            if (dueDate) baseOrderData.dueDate = dueDate;
-        }
 
        try {
            await onOrderAdded(baseOrderData);
