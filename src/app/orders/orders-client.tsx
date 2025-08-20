@@ -28,6 +28,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Combobox } from '@/components/ui/combobox';
 
 
+const formatNumber = (value: number | undefined) => {
+    if (value === undefined || isNaN(value)) return '₹0.00';
+    return `₹${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
+};
+
 const formatNumberForPdf = (value: number | undefined): string => {
     if (value === undefined || isNaN(value)) return '0.00';
     return new Intl.NumberFormat('en-IN', {
@@ -38,16 +43,9 @@ const formatNumberForPdf = (value: number | undefined): string => {
 
 const formatCurrencyForPdf = (value: number | undefined): string => {
     if (value === undefined || isNaN(value)) return '₹ 0.00';
-     return `₹ ${new Intl.NumberFormat('en-IN', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(value)}`;
+     return `₹ ${formatNumberForPdf(value)}`;
 }
 
-const formatNumber = (value: number | undefined) => {
-    if (value === undefined || isNaN(value)) return '₹0.00';
-    return `₹${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
-};
 
 export function OrdersClient({ orders: initialOrders, customers: initialCustomers, products: initialProducts }: { orders: Order[], customers: Customer[], products: Product[] }) {
     const [orders, setOrders] = useState<Order[]>(initialOrders);
@@ -139,7 +137,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             yPos += 6;
 
             doc.setFontSize(9).setFont('helvetica', 'normal');
-            doc.text('No.1, Ayyanchery main road, Ayyanchery, Urapakkam, Chennai - 603210', pageWidth / 2, yPos, { align: 'center', lineHeightFactor: 1.4 });
+            doc.text('No.1, Ayyanchery main road, Ayyanchery, Urapakkam, Chennai - 603210', pageWidth / 2, yPos, { align: 'center' });
             yPos += 4;
             doc.text(`Email: abagency1977@gmail.com | MOB: 95511 95505 / 95001 82975`, pageWidth / 2, yPos, { align: 'center' });
             yPos += 5;
@@ -149,53 +147,50 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             yPos += 10;
             
             // --- Billed To and Invoice Details ---
-            const customerAddress = customer.address ? `${customer.address}\n \n${customer.email} | ${customer.phone}` : `${customer.email} | ${customer.phone}`;
-            
+            const customerAddressLines = doc.splitTextToSize(customer.address || '', 80);
+            const customerContact = `${customer.email} | ${customer.phone}`;
+            let billedToContent = `Billed To:\n${customer.name}\n`;
+            billedToContent += customerAddressLines.join('\n');
+            billedToContent += `\n \n${customerContact}`; // Add extra space here
+
+            const invoiceTitle = 'Invoice';
+            const invoiceId = `# ${orderToPrint.id.replace('ORD', 'INV')}`;
+            const invoiceDate = `Date: ${new Date(orderToPrint.orderDate).toLocaleDateString('en-GB')}`;
+            const deliveryDate = orderToPrint.deliveryDate ? `Delivery Date: ${new Date(orderToPrint.deliveryDate).toLocaleDateString('en-GB')}` : '';
+
             autoTable(doc, {
                 startY: yPos,
                 theme: 'plain',
                 styles: { fontSize: 10, cellPadding: 0 },
-                body: [
-                    [
-                        { 
-                            content: `Billed To:\n${customer.name}\n${customerAddress}`,
-                            styles: { fontStyle: 'bold' }
-                        },
-                        { 
-                            content: `Invoice\n\n# ${orderToPrint.id.replace('ORD', 'INV')}\n${new Date(orderToPrint.orderDate).toLocaleDateString('en-GB')}${orderToPrint.deliveryDate ? `\n${new Date(orderToPrint.deliveryDate).toLocaleDateString('en-GB')}` : ''}`, 
-                            styles: { halign: 'right' }
-                        },
-                    ],
-                ],
-                didParseCell: (data) => {
-                    if (data.section === 'body' && data.row.index === 0 && data.cell.raw) {
-                         const text = String(data.cell.raw);
-                         if (text.startsWith('Invoice\n')) {
-                           data.cell.styles.fontSize = 18;
-                           data.cell.styles.fontStyle = 'bold';
-                        }
-                         if (text.startsWith('Billed To:')) {
-                            data.cell.styles.fontStyle = 'normal';
-                            data.cell.content = ''; // Clear content, we will redraw
-                         }
-                    }
+                body: [[billedToContent, '']],
+                columnStyles: {
+                    0: { cellWidth: 100 },
+                    1: { halign: 'right' }
                 },
                 didDrawCell: (data) => {
-                    if (data.section === 'body' && data.row.index === 0 && data.column.index === 0) {
-                        doc.setFont('helvetica', 'bold');
-                        doc.text('Billed To:', data.cell.x, data.cell.y + 1);
-                        doc.setFont('helvetica', 'normal');
-                        doc.text(`${customer.name}\n${customerAddress}`, data.cell.x, data.cell.y + 6);
+                    if (data.section === 'body' && data.row.index === 0) {
+                        if (data.column.index === 0) {
+                           doc.setFont('helvetica', 'bold');
+                           doc.text('Billed To:', data.cell.x, data.cell.y);
+                           doc.setFont('helvetica', 'normal');
+                           const addressY = data.cell.y + 5;
+                           doc.text(customer.name, data.cell.x, addressY);
+                           let currentY = addressY + 5;
+                           customerAddressLines.forEach((line: string) => {
+                               doc.text(line, data.cell.x, currentY);
+                               currentY += 5;
+                           });
+                           currentY += 5; // Extra space
+                           doc.text(customerContact, data.cell.x, currentY);
+                        } else if (data.column.index === 1) {
+                           doc.setFont('helvetica', 'bold').setFontSize(18);
+                           doc.text(invoiceTitle, data.cell.x, data.cell.y, { align: 'right' });
+                           doc.setFont('helvetica', 'normal').setFontSize(10);
+                           doc.text(invoiceId, data.cell.x, data.cell.y + 10, { align: 'right' });
+                           doc.text(invoiceDate, data.cell.x, data.cell.y + 15, { align: 'right' });
+                           if(deliveryDate) doc.text(deliveryDate, data.cell.x, data.cell.y + 20, {align: 'right'});
+                        }
                     }
-                     if (data.section === 'body' && data.row.index === 0 && data.column.index === 1) {
-                         const invoiceDate = new Date(orderToPrint.orderDate).toLocaleDateString('en-GB');
-                         const deliveryDate = orderToPrint.deliveryDate ? `Delivery Date: ${new Date(orderToPrint.deliveryDate).toLocaleDateString('en-GB')}` : '';
-                         doc.setFontSize(10);
-                         doc.setFont('helvetica', 'normal');
-                         doc.text(`Invoice #: ${orderToPrint.id.replace('ORD', 'INV')}`, data.cell.x, data.cell.y + 10, {align: 'right'});
-                         doc.text(`Date: ${invoiceDate}`, data.cell.x, data.cell.y + 15, {align: 'right'});
-                         if(deliveryDate) doc.text(deliveryDate, data.cell.x, data.cell.y + 20, {align: 'right'});
-                     }
                 }
             });
 
@@ -209,15 +204,15 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             if(orderToPrint.isGstInvoice) tableColumns.splice(4, 0, 'GST');
             
             const tableRows = orderToPrint.items.map((item, index) => {
-                const row = [
+                const rowData = [
                     (index + 1).toString(),
                     item.productName,
                     item.quantity.toString(),
                     formatCurrencyForPdf(item.price),
                     formatCurrencyForPdf(item.price * item.quantity)
                 ];
-                if(orderToPrint.isGstInvoice) row.splice(4, 0, `${item.gst}%`);
-                return row;
+                if(orderToPrint.isGstInvoice) rowData.splice(4, 0, `${item.gst}%`);
+                return rowData;
             });
 
             autoTable(doc, {
@@ -234,65 +229,64 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                     4: { halign: 'right' },
                     5: { halign: 'right' }
                 },
+                didDrawPage: (data) => {
+                    // --- Totals Section ---
+                    const totalsContent = [];
+                    totalsContent.push(['Subtotal', formatCurrencyForPdf(subtotal)]);
+                    if (orderToPrint.isGstInvoice) {
+                        totalsContent.push(['Total GST', formatCurrencyForPdf(totalGst)]);
+                    }
+                    if (orderToPrint.deliveryFees > 0) {
+                        totalsContent.push(['Delivery Fees', formatCurrencyForPdf(orderToPrint.deliveryFees)]);
+                    }
+                    if (orderToPrint.discount > 0) {
+                        totalsContent.push(['Discount', `-${formatCurrencyForPdf(orderToPrint.discount)}`]);
+                    }
+
+                    const isCredit = orderToPrint.paymentTerm === 'Credit';
+                    const boxBgColor = isCredit ? [254, 226, 226] : [220, 252, 231]; // light-pink or light-green
+                    const boxTextColor = isCredit ? [220, 38, 38] : [0, 0, 0];
+                    const boxWidth = 70;
+                    const boxHeight = (totalsContent.length * 6) + 10;
+                    const totalsStartX = pageWidth - margin - boxWidth;
+                    const totalsStartY = data.cursor?.y ? data.cursor.y + 10 : 200;
+
+                    doc.setFillColor.apply(doc, boxBgColor);
+                    doc.roundedRect(totalsStartX, totalsStartY, boxWidth, boxHeight, 3, 3, 'F');
+                    
+                    let currentY = totalsStartY + 7;
+                    totalsContent.forEach(row => {
+                        doc.setFont('helvetica', 'bold');
+                        doc.setTextColor.apply(doc, boxTextColor);
+                        doc.text(row[0], totalsStartX + 5, currentY);
+                        doc.setFont('helvetica', 'normal');
+                        doc.text(row[1], totalsStartX + boxWidth - 5, currentY, { align: 'right' });
+                        currentY += 6;
+                    });
+
+
+                    // --- Grand Total ---
+                    const grandTotalY = totalsStartY + boxHeight + 2;
+                    const grandTotalWidth = 70;
+                    const grandTotalHeight = 12;
+                    doc.setFillColor(105, 162, 180); // Subtle Blue
+                    doc.roundedRect(totalsStartX, grandTotalY, grandTotalWidth, grandTotalHeight, 3, 3, 'F');
+                    doc.setFont('helvetica', 'bold').setFontSize(11);
+                    doc.setTextColor(255, 255, 255);
+                    doc.text('Grand Total', totalsStartX + 5, grandTotalY + 8);
+                    doc.text(formatCurrencyForPdf(orderToPrint.grandTotal), totalsStartX + grandTotalWidth - 5, grandTotalY + 8, { align: 'right' });
+
+                    // --- Final Footer ---
+                    const pageCount = (doc as any).internal.getNumberOfPages();
+                    doc.setFont('helvetica', 'normal').setFontSize(8)
+                    doc.setTextColor(100,116,139); // gray-500
+                    for (let i = 1; i <= pageCount; i++) {
+                        doc.setPage(i);
+                        doc.text('Thank you for your business!', pageWidth/2, doc.internal.pageSize.getHeight() - 15, { align: 'center'});
+                        doc.text('This is a computer-generated invoice and does not require a signature.', pageWidth/2, doc.internal.pageSize.getHeight() - 10, { align: 'center'});
+                    }
+                }
             });
-
-            // --- Totals Section ---
-            const finalY = (doc as any).lastAutoTable.finalY;
-            const totalsStartX = pageWidth - margin - 70;
-            const totalsStartY = finalY + 8;
-            const isCredit = orderToPrint.paymentTerm === 'Credit';
-            
-            const totalsBoxBgColor = isCredit ? '#FFE5E5' : '#E0F2F1'; // Light pink for credit, light green otherwise
-            const totalsBoxTextColor = isCredit ? [220, 38, 38] : [0, 0, 0]; // Red for credit, black otherwise
-            
-            doc.setFillColor(totalsBoxBgColor);
-            doc.roundedRect(totalsStartX - 5, totalsStartY - 5, 75, 26, 3, 3, 'F');
-
-            const totalsContent = [
-                ['Subtotal', formatCurrencyForPdf(subtotal)],
-            ];
-            if (orderToPrint.isGstInvoice) {
-                totalsContent.push(['Total GST', formatCurrencyForPdf(totalGst)]);
-            }
-            if (orderToPrint.deliveryFees > 0) {
-                totalsContent.push(['Delivery Fees', formatCurrencyForPdf(orderToPrint.deliveryFees)]);
-            }
-            if (orderToPrint.discount > 0) {
-                totalsContent.push(['Discount', `-${formatCurrencyForPdf(orderToPrint.discount)}`]);
-            }
-
-            autoTable(doc, {
-                startY: totalsStartY,
-                body: totalsContent,
-                theme: 'plain',
-                styles: { fontSize: 9, font: 'helvetica' },
-                columnStyles: {
-                    0: { halign: 'left', fontStyle: 'bold', textColor: totalsBoxTextColor },
-                    1: { halign: 'right', textColor: totalsBoxTextColor }
-                },
-                margin: { left: totalsStartX }
-            });
-
-            // --- Grand Total ---
-            const grandTotalY = (doc as any).lastAutoTable.finalY + 2;
-            doc.setFillColor(105, 162, 180); // Subtle Blue
-            doc.roundedRect(totalsStartX - 5, grandTotalY, 75, 10, 3, 3, 'F');
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(255, 255, 255);
-            doc.text('Grand Total', totalsStartX, grandTotalY + 6.5);
-            doc.text(formatCurrencyForPdf(orderToPrint.grandTotal), totalsStartX + 70, grandTotalY + 6.5, { align: 'right' });
-
-
-            // --- Final Footer ---
-            const pageCount = (doc as any).internal.getNumberOfPages();
-            doc.setFont('helvetica', 'normal')
-            doc.setTextColor(100,116,139); // gray-500
-            doc.setFontSize(8);
-            for (let i = 1; i <= pageCount; i++) {
-                doc.setPage(i);
-                doc.text('Thank you for your business!', pageWidth/2, doc.internal.pageSize.getHeight() - 15, { align: 'center'});
-                doc.text('This is a computer-generated invoice and does not require a signature.', pageWidth/2, doc.internal.pageSize.getHeight() - 10, { align: 'center'});
-            }
 
             doc.save(`invoice-${orderToPrint.id}.pdf`);
             toast({ title: 'Success', description: 'Invoice PDF has been downloaded.' });
@@ -869,5 +863,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     );
 }
 
+
+    
 
     
