@@ -119,7 +119,6 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         try {
             const doc = new jsPDF();
             const pageWidth = doc.internal.pageSize.getWidth();
-            const pageHeight = doc.internal.pageSize.getHeight();
             const margin = 15;
             let yPos = 20;
 
@@ -230,9 +229,9 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                     
                     // --- Totals Section ---
                     const isCredit = orderToPrint.paymentTerm === 'Credit';
-                    const boxBgColor = isCredit ? [254, 226, 226] : [220, 252, 231]; // light-pink or light-green
+                    const boxBgColor = isCredit ? [254, 226, 226] : [220, 252, 231];
                     const boxTextColor = isCredit ? [159, 18, 57] : [21, 128, 61];
-                    const grandTotalBoxBgColor = [219, 234, 254]; // light-blue
+                    const grandTotalBoxBgColor = [219, 234, 254];
                     const grandTotalTextColor = [29, 78, 216];
                     const totalsTableWidth = 80;
 
@@ -247,7 +246,10 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                     if (orderToPrint.discount > 0) {
                         totalsRows.push(['Discount', `-${formatCurrencyForPdf(orderToPrint.discount)}`]);
                     }
-
+                    
+                    let tableHeight = 0;
+                    
+                    // --- Draw Totals Box and Content ---
                     autoTable(doc, {
                         body: totalsRows,
                         startY: finalY + 10,
@@ -263,18 +265,34 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                             0: { halign: 'left', fontStyle: 'normal', cellWidth: 'auto' },
                             1: { halign: 'right', fontStyle: 'bold' }
                         },
-                        didDrawCell: (data) => {
-                             if (data.section === 'body') {
-                                doc.setFillColor.apply(doc, boxBgColor);
-                                doc.setDrawColor.apply(doc, boxBgColor);
-                                doc.setTextColor.apply(doc, boxTextColor);
-                                doc.roundedRect(data.table.x, data.table.y, data.table.width, data.table.height, 3, 3, 'FD');
+                        didDrawPage: (hookData) => {
+                             tableHeight = (hookData.table as any).height;
+                        },
+                        didDrawCell: (hookData) => {
+                             if(hookData.section === 'body' && hookData.row.index === hookData.table.body.length -1) {
+                                doc.setFillColor(boxBgColor[0], boxBgColor[1], boxBgColor[2]);
+                                doc.setDrawColor(boxBgColor[0], boxBgColor[1], boxBgColor[2]);
+                                doc.setTextColor(boxTextColor[0], boxTextColor[1], boxTextColor[2]);
+                                const table = hookData.table;
+                                doc.roundedRect(table.x, table.y, table.width, table.height, 3, 3, 'FD');
+                                
+                                // Redraw text on top
+                                 table.body.forEach(row => {
+                                    row.cells.forEach(cell => {
+                                        doc.setTextColor(boxTextColor[0], boxTextColor[1], boxTextColor[2]);
+                                        doc.setFont(cell.styles.font, cell.styles.fontStyle);
+                                        doc.text(cell.text, cell.x + cell.padding('left'), cell.y + cell.height / 2, {
+                                            baseline: 'middle'
+                                        });
+                                    });
+                                });
                              }
                         }
                     });
-                    
+
                     finalY = (doc as any).lastAutoTable.finalY;
 
+                    // --- Draw Grand Total Box and Content ---
                     autoTable(doc, {
                         body: [['Grand Total', formatCurrencyForPdf(orderToPrint.grandTotal)]],
                         startY: finalY + 2,
@@ -283,24 +301,35 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                         margin: { left: pageWidth - totalsTableWidth - margin },
                         styles: {
                             font: 'helvetica',
-                            fontSize: 11,
+                            fontSize: 12, // Bigger font size
                             fontStyle: 'bold',
-                            cellPadding: { top: 2.5, right: 2, bottom: 2.5, left: 2 }
+                            cellPadding: { top: 3, right: 2, bottom: 3, left: 2 }
                         },
                         columnStyles: {
                             0: { halign: 'left' },
                             1: { halign: 'right' }
                         },
-                        didDrawCell: (data) => {
-                            if (data.section === 'body') {
-                                doc.setFillColor.apply(doc, grandTotalBoxBgColor);
-                                doc.setDrawColor.apply(doc, grandTotalBoxBgColor);
-                                doc.setTextColor.apply(doc, grandTotalTextColor);
-                                doc.roundedRect(data.table.x, data.table.y, data.table.width, data.table.height, 3, 3, 'FD');
-                            }
+                         didDrawCell: (hookData) => {
+                             if(hookData.section === 'body') {
+                                doc.setFillColor(grandTotalBoxBgColor[0], grandTotalBoxBgColor[1], grandTotalBoxBgColor[2]);
+                                doc.setDrawColor(grandTotalBoxBgColor[0], grandTotalBoxBgColor[1], grandTotalBoxBgColor[2]);
+                                doc.setTextColor(grandTotalTextColor[0], grandTotalTextColor[1], grandTotalTextColor[2]);
+                                const table = hookData.table;
+                                doc.roundedRect(table.x, table.y, table.width, table.height, 3, 3, 'FD');
+                                
+                                // Redraw text on top
+                                 table.body.forEach(row => {
+                                    row.cells.forEach(cell => {
+                                        doc.setTextColor(grandTotalTextColor[0], grandTotalTextColor[1], grandTotalTextColor[2]);
+                                        doc.setFont(cell.styles.font, 'bold');
+                                        doc.text(cell.text, cell.x + cell.padding('left'), cell.y + cell.height / 2, {
+                                            baseline: 'middle'
+                                        });
+                                    });
+                                });
+                             }
                         }
                     });
-
 
                     // --- Final Footer ---
                     const pageCount = (doc as any).internal.getNumberOfPages();
@@ -888,14 +917,3 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         </>
     );
 }
-
-
-    
-
-    
-
-
-
-    
-
-    
