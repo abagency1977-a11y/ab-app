@@ -26,6 +26,7 @@ import { InvoiceTemplate } from '@/components/invoice-template';
 import { startOfWeek, startOfMonth, subMonths, isWithinInterval } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Combobox } from '@/components/ui/combobox';
+import { InterMedium } from '@/lib/fonts';
 
 
 const formatNumber = (value: number | undefined) => {
@@ -118,6 +119,13 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         setIsLoading(true);
         try {
             const doc = new jsPDF();
+
+            // Embed the Inter font that supports the Rupee symbol
+            doc.addFileToVFS('Inter-Medium.ttf', InterMedium);
+            doc.addFont('Inter-Medium.ttf', 'Inter', 'normal');
+            doc.setFont('Inter');
+
+
             const pageWidth = doc.internal.pageSize.getWidth();
             const margin = 15;
             let yPos = 20;
@@ -128,11 +136,11 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 yPos += 27;
             }
             
-            doc.setFontSize(14).setFont('helvetica', 'bold');
+            doc.setFontSize(14).setFont('Inter', 'normal', 'bold');
             doc.text('AB Agency', pageWidth / 2, yPos, { align: 'center' });
             yPos += 6;
 
-            doc.setFontSize(9).setFont('helvetica', 'normal');
+            doc.setFontSize(9).setFont('Inter', 'normal');
             doc.text('No.1, Ayyanchery main road, Ayyanchery, Urapakkam, Chennai - 603210', pageWidth / 2, yPos, { align: 'center' });
             yPos += 4;
             doc.text(`Email: abagency1977@gmail.com | MOB: 95511 95505 / 95001 82975`, pageWidth / 2, yPos, { align: 'center' });
@@ -144,11 +152,11 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             
             // --- Billed To and Invoice Details ---
             const billToY = yPos;
-            doc.setFontSize(10).setFont('helvetica', 'bold');
+            doc.setFontSize(10).setFont('Inter', 'normal', 'bold');
             doc.text('Billed To:', margin, yPos);
             yPos += 6;
             
-            doc.setFontSize(10).setFont('helvetica', 'normal');
+            doc.setFontSize(10).setFont('Inter', 'normal');
             doc.text(customer.name, margin, yPos);
             yPos += 5;
 
@@ -164,11 +172,11 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             const rightColX = pageWidth - margin;
             let rightColY = billToY;
 
-            doc.setFontSize(16).setFont('helvetica', 'bold');
+            doc.setFontSize(16).setFont('Inter', 'normal', 'bold');
             doc.text('Invoice', rightColX, rightColY, { align: 'right'});
             rightColY += 8;
             
-            doc.setFontSize(10).setFont('helvetica', 'normal');
+            doc.setFontSize(10).setFont('Inter', 'normal');
             doc.text(`# ${orderToPrint.id.replace('ORD', 'INV')}`, rightColX, rightColY, { align: 'right'});
             rightColY += 5;
             doc.text(`Date: ${new Date(orderToPrint.orderDate).toLocaleDateString('en-GB')}`, rightColX, rightColY, { align: 'right'});
@@ -203,8 +211,8 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 head: [tableColumns],
                 body: tableRows,
                 theme: 'grid',
-                headStyles: { fillColor: [34, 34, 34], textColor: 255, font: 'helvetica', fontStyle: 'bold', fontSize: 9 },
-                styles: { fontSize: 9, font: 'helvetica', cellPadding: 2 },
+                headStyles: { fillColor: [34, 34, 34], textColor: 255, font: 'Inter', fontStyle: 'bold', fontSize: 9 },
+                styles: { fontSize: 9, font: 'Inter', cellPadding: 2 },
                 columnStyles: {
                     0: { cellWidth: 8, halign: 'center' },
                     2: { halign: 'right' },
@@ -236,8 +244,8 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                         tableWidth: 80,
                         margin: { left: pageWidth - 80 - margin },
                         styles: {
-                            font: 'helvetica',
-                            fontStyle: 'bold',
+                            font: 'Inter',
+                            fontStyle: 'normal',
                             fontSize: 9,
                             cellPadding: { top: 1.5, right: 2, bottom: 1.5, left: 2 }
                         },
@@ -257,10 +265,15 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                         tableWidth: 80,
                         margin: { left: pageWidth - 80 - margin },
                         styles: {
-                            font: 'helvetica',
+                            font: 'Inter',
                             fontStyle: 'bold',
                             fontSize: 12,
                             cellPadding: { top: 2, right: 2, bottom: 2, left: 2 }
+                        },
+                        didParseCell: (data) => {
+                           if (data.section === 'body') {
+                                data.cell.styles.fontStyle = 'bold';
+                           }
                         },
                         columnStyles: {
                             0: { halign: 'left' },
@@ -271,7 +284,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
 
                     // --- Final Footer ---
                     const pageCount = (doc as any).internal.getNumberOfPages();
-                    doc.setFont('helvetica', 'normal').setFontSize(8);
+                    doc.setFont('Inter', 'normal').setFontSize(8);
                     doc.setTextColor(100,116,139); // gray-500
                     for (let i = 1; i <= pageCount; i++) {
                         doc.setPage(i);
