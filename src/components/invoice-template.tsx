@@ -90,27 +90,27 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
       {/* Footer */}
       <div className="mt-auto pt-8">
         <div className="flex justify-end mb-4">
-          <div className="w-1/2">
+          <div className="w-1/2 space-y-2">
               <div className="flex justify-between items-center p-2 bg-gray-100">
                   <span>Subtotal</span>
-                  <span>₹{formatNumber(subtotal)}</span>
+                  <span className="font-semibold">₹{formatNumber(subtotal)}</span>
               </div>
               {order.isGstInvoice && (
                   <div className="flex justify-between items-center p-2">
                       <span>Total GST</span>
-                      <span>₹{formatNumber(totalGst)}</span>
+                      <span className="font-semibold">₹{formatNumber(totalGst)}</span>
                   </div>
               )}
               {order.deliveryFees > 0 && (
                   <div className="flex justify-between items-center p-2">
                       <span>Delivery Fees</span>
-                      <span>₹{formatNumber(order.deliveryFees)}</span>
+                      <span className="font-semibold">₹{formatNumber(order.deliveryFees)}</span>
                   </div>
               )}
               {order.discount > 0 && (
                   <div className="flex justify-between items-center p-2">
                       <span>Discount</span>
-                      <span className="text-green-600">-₹{formatNumber(order.discount)}</span>
+                      <span className="font-semibold text-green-600">-₹{formatNumber(order.discount)}</span>
                   </div>
               )}
               <div className="flex justify-between items-center p-2 bg-gray-800 text-white font-bold text-lg">
