@@ -28,9 +28,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Combobox } from '@/components/ui/combobox';
 
 
-const formatNumber = (value: number) => {
-    if (isNaN(value)) return '₹0.00';
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value);
+const formatNumber = (value: number | undefined) => {
+    if (value === undefined || isNaN(value)) return '₹0.00';
+    return `₹${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
 };
 
 export function OrdersClient({ orders: initialOrders, customers: initialCustomers, products: initialProducts }: { orders: Order[], customers: Customer[], products: Product[] }) {
@@ -105,54 +105,66 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
 
             const pageWidth = doc.internal.pageSize.getWidth();
-            const pageHeight = doc.internal.pageSize.getHeight();
             const margin = 10;
             let yPos = margin;
 
             // --- Header ---
             if (logoUrl) {
-                doc.addImage(logoUrl, 'PNG', pageWidth / 2 - 15, yPos, 30, 15);
-                yPos += 20;
+                const logoImg = new Image();
+                logoImg.src = logoUrl;
+                await new Promise(resolve => logoImg.onload = resolve);
+                const logoWidth = 25;
+                const logoHeight = (logoImg.height * logoWidth) / logoImg.width;
+                doc.addImage(logoUrl, 'PNG', pageWidth / 2 - logoWidth / 2, yPos, logoWidth, logoHeight);
+                yPos += logoHeight + 2;
             }
             
             doc.setFontSize(14).setFont(undefined, 'bold');
             doc.text('AB Agency', pageWidth / 2, yPos, { align: 'center' });
-            yPos += 6;
+            yPos += 5;
 
             doc.setFontSize(9).setFont(undefined, 'normal');
             doc.text('No.1, Ayyanchery main road, Ayyanchery, Urapakkam', pageWidth / 2, yPos, { align: 'center' });
             yPos += 4;
             doc.text('Chennai - 603210', pageWidth / 2, yPos, { align: 'center' });
-            yPos += 6;
-            doc.text('Email - abagency1977@gmail.com, MOB: 95511 95505 / 95001 82975', pageWidth / 2, yPos, { align: 'center' });
-            yPos += 15;
-
-
-            // --- Invoice Details & Customer Info ---
-            doc.setFontSize(16).setFont(undefined, 'bold');
-            doc.text('Invoice', pageWidth - margin, yPos, { align: 'right' });
+            yPos += 5; // Single line break
+            doc.setFontSize(8);
+            doc.text('Email: abagency1977@gmail.com, MOB: 95511 95505 / 95001 82975', pageWidth / 2, yPos, { align: 'center' });
+            yPos += 10;
             
-            doc.setFontSize(10).setFont(undefined, 'bold');
-            doc.text('Billed To:', margin, yPos);
-            yPos += 5;
-            
-            doc.setFontSize(10).setFont(undefined, 'normal');
-            doc.text(`Invoice #: ${orderToPrint.id.replace('ORD', 'INV')}`, pageWidth - margin, yPos, { align: 'right' });
-            doc.text(customer.name, margin, yPos);
-            yPos += 5;
-
-            doc.text(`Date: ${new Date(orderToPrint.orderDate).toLocaleDateString('en-GB')}`, pageWidth - margin, yPos, { align: 'right' });
-            doc.text(customer.address, margin, yPos, { maxWidth: pageWidth / 2 - margin * 2 });
-            yPos += (doc.getTextDimensions(customer.address, { maxWidth: pageWidth / 2 - margin * 2 }).h);
-
-            if (orderToPrint.deliveryDate) {
-                 doc.text(`Delivery Date: ${new Date(orderToPrint.deliveryDate).toLocaleDateString('en-GB')}`, pageWidth - margin, yPos, { align: 'right' });
-            }
-            doc.text(customer.email, margin, yPos);
-            yPos += 5;
-            doc.text(customer.phone, margin, yPos);
+            doc.setDrawColor(200); // Light gray line
+            doc.line(margin, yPos, pageWidth - margin, yPos);
             yPos += 10;
 
+            // --- Invoice Details & Customer Info in a borderless table ---
+            autoTable(doc, {
+                startY: yPos,
+                theme: 'plain',
+                styles: { fontSize: 9 },
+                body: [
+                    [
+                        { 
+                            content: `Billed To:\n${customer.name}\n${customer.address}\n${customer.email}\n${customer.phone}`, 
+                            styles: { fontStyle: 'normal', cellPadding: 0 } 
+                        },
+                        { 
+                            content: `Invoice\n\nInvoice #: ${orderToPrint.id.replace('ORD', 'INV')}\nDate: ${new Date(orderToPrint.orderDate).toLocaleDateString('en-GB')}${orderToPrint.deliveryDate ? `\nDelivery Date: ${new Date(orderToPrint.deliveryDate).toLocaleDateString('en-GB')}` : ''}`, 
+                            styles: { halign: 'right', fontStyle: 'normal', cellPadding: 0 } 
+                        },
+                    ],
+                ],
+                didParseCell: (data) => {
+                    if (data.section === 'body' && data.row.index === 0 && data.cell.raw) {
+                        const text = data.cell.raw as string;
+                        if (text.startsWith('Invoice\n')) {
+                           data.cell.styles.fontSize = 16;
+                           data.cell.styles.fontStyle = 'bold';
+                        }
+                    }
+                }
+            });
+
+            yPos = (doc as any).lastAutoTable.finalY + 10;
             
             // --- Items Table ---
             const subtotal = orderToPrint.items.reduce((acc, item) => acc + item.price * item.quantity, 0);
@@ -164,9 +176,9 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             const tableRows = orderToPrint.items.map(item => {
                 const row = [
                     item.productName,
-                    item.quantity,
-                    `₹${(item.price).toFixed(2)}`,
-                    `₹${(item.price * item.quantity).toFixed(2)}`
+                    item.quantity.toString(),
+                    formatNumber(item.price),
+                    formatNumber(item.price * item.quantity)
                 ];
                 if(orderToPrint.isGstInvoice) row.splice(3, 0, `${item.gst}%`);
                 return row;
@@ -177,8 +189,8 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 head: [tableColumns],
                 body: tableRows,
                 theme: 'grid',
-                headStyles: { fillColor: [34, 34, 34] },
-                styles: { fontSize: 9 },
+                headStyles: { fillColor: [34, 34, 34], fontSize: 10 },
+                styles: { fontSize: 9, cellPadding: 2 },
                 columnStyles: {
                     1: { halign: 'right' },
                     2: { halign: 'right' },
@@ -187,85 +199,91 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 }
             });
 
-            yPos = (doc as any).lastAutoTable.finalY;
+            let finalY = (doc as any).lastAutoTable.finalY;
 
             // --- Totals Section ---
             const totalsBody = [
-                ['Subtotal', `₹${subtotal.toFixed(2)}`],
+                ['Subtotal', formatNumber(subtotal)],
             ];
             if (orderToPrint.isGstInvoice) {
-                totalsBody.push(['Total GST', `₹${totalGst.toFixed(2)}`]);
+                totalsBody.push(['Total GST', formatNumber(totalGst)]);
             }
             if (orderToPrint.deliveryFees > 0) {
-                totalsBody.push(['Delivery Fees', `₹${orderToPrint.deliveryFees.toFixed(2)}`]);
+                totalsBody.push(['Delivery Fees', formatNumber(orderToPrint.deliveryFees)]);
             }
              if (orderToPrint.discount > 0) {
-                totalsBody.push(['Discount', `-₹${orderToPrint.discount.toFixed(2)}`]);
+                totalsBody.push(['Discount', `-${formatNumber(orderToPrint.discount)}`]);
             }
-            totalsBody.push(['Grand Total', `₹${orderToPrint.grandTotal.toFixed(2)}`]);
+            
+            // Add a spacer row before Grand Total for styling
+            totalsBody.push(['', '']); 
+            totalsBody.push(['Grand Total', formatNumber(orderToPrint.grandTotal)]);
 
-            // Check if totals fit on the current page, if not, add a new page
-            const totalsHeight = totalsBody.length * 7 + 10; // Approximate height
-            if (yPos + totalsHeight > pageHeight - margin) {
+            const totalsHeight = totalsBody.length * 8 + 10;
+             if (finalY + totalsHeight > doc.internal.pageSize.getHeight() - 20) {
                 doc.addPage();
-                yPos = margin;
+                finalY = margin;
             } else {
-                yPos += 5;
+                finalY += 5;
             }
 
             autoTable(doc, {
-                startY: yPos,
+                startY: finalY,
                 body: totalsBody,
                 theme: 'plain',
                 tableWidth: 80,
                 margin: { left: pageWidth - 80 - margin },
                 styles: { fontSize: 10, cellPadding: 1.5 },
                  columnStyles: {
-                    0: { halign: 'left' },
-                    1: { halign: 'right', fontStyle: 'bold' }
+                    0: { halign: 'right' },
+                    1: { halign: 'right' }
                 },
                 didParseCell: (data) => {
                      if (data.row.index === totalsBody.length - 1) { // Grand Total row
                         data.cell.styles.fillColor = [34, 34, 34];
                         data.cell.styles.textColor = [255, 255, 255];
                         data.cell.styles.fontStyle = 'bold';
+                        data.cell.styles.fontSize = 11;
                     }
                 }
             });
 
-            // --- Footer Notes ---
-             yPos = (doc as any).lastAutoTable.finalY + 10;
-             if (yPos > pageHeight - 30) {
-                doc.addPage();
-                yPos = margin;
-             }
+            finalY = (doc as any).lastAutoTable.finalY + 10;
 
-             if (orderToPrint.paymentTerm === 'Full Payment') {
+            // --- Payment / Due Box ---
+            const boxHeight = 15;
+            if (finalY + boxHeight > doc.internal.pageSize.getHeight() - 30) {
+                doc.addPage();
+                finalY = margin;
+            }
+            if (orderToPrint.paymentTerm === 'Full Payment') {
                 doc.setFillColor(236, 253, 245); // green-50
-                doc.rect(margin, yPos, pageWidth - margin*2, 20, 'F');
+                doc.rect(margin, finalY, pageWidth - margin*2, boxHeight, 'F');
                 doc.setTextColor(34, 197, 94); // green-600
                 doc.setFontSize(10).setFont(undefined, 'bold');
-                doc.text('Payment Details', margin + 5, yPos + 5);
+                doc.text('Payment Details', margin + 5, finalY + 5);
                 doc.setFontSize(9).setFont(undefined, 'normal');
-                doc.text(`Payment Mode: ${orderToPrint.paymentMode}`, margin + 5, yPos + 10);
-                if (orderToPrint.paymentRemarks) doc.text(`Remarks: ${orderToPrint.paymentRemarks}`, margin + 5, yPos + 15);
+                doc.text(`Mode: ${orderToPrint.paymentMode} | Status: Paid`, margin + 5, finalY + 11);
             }
-            
             if (orderToPrint.paymentTerm === 'Credit') {
                 doc.setFillColor(254, 242, 242); // red-50
-                doc.rect(margin, yPos, pageWidth - margin*2, 15, 'F');
+                doc.rect(margin, finalY, pageWidth - margin*2, boxHeight, 'F');
                 doc.setTextColor(220, 38, 38); // red-600
                 doc.setFontSize(10).setFont(undefined, 'bold');
-                doc.text('Payment Due', margin + 5, yPos + 5);
+                doc.text('Payment Due', margin + 5, finalY + 5);
                 doc.setFontSize(9).setFont(undefined, 'normal');
-                doc.text(`Balance Due: ₹${(orderToPrint.balanceDue ?? 0).toFixed(2)}`, margin + 5, yPos + 10);
+                doc.text(`Balance Due: ${formatNumber(orderToPrint.balanceDue)}`, margin + 5, finalY + 11);
             }
             
             // --- Final Footer ---
+            const pageCount = (doc as any).internal.getNumberOfPages();
             doc.setTextColor(100,116,139); // gray-500
             doc.setFontSize(8);
-            doc.text('Thank you for your business!', pageWidth/2, pageHeight - 15, { align: 'center'});
-            doc.text('This is a computer-generated invoice and does not require a signature.', pageWidth/2, pageHeight - 10, { align: 'center'});
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.text('Thank you for your business!', pageWidth/2, doc.internal.pageSize.getHeight() - 15, { align: 'center'});
+                doc.text('This is a computer-generated invoice and does not require a signature.', pageWidth/2, doc.internal.pageSize.getHeight() - 10, { align: 'center'});
+            }
 
 
             doc.save(`invoice-${orderToPrint.id}.pdf`);
@@ -843,5 +861,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     );
 }
 
+
+    
 
     
