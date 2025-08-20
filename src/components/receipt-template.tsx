@@ -26,20 +26,19 @@ export const ReceiptTemplate = React.forwardRef<HTMLDivElement, ReceiptTemplateP
         <div className="flex flex-col h-full">
             <div>
                 <div className="flex justify-between items-start mb-6">
-                    <div className="flex items-center gap-4">
-                    {logoUrl && (
-                        <img src={logoUrl} alt="Company Logo" className="h-16" />
-                    )}
-                    <div>
-                        <h2 className="text-xl font-bold">AB Agency</h2>
-                        <p className="text-xs">No.1, Ayyanchery main road, Urapakkam</p>
-                        <p className="text-xs">abagency1977@gmail.com | 9551195505</p>
+                    <div className="flex-1 text-center">
+                        {logoUrl && (
+                            <img src={logoUrl} alt="Company Logo" className="h-16 mx-auto" />
+                        )}
+                        <h2 className="text-xl font-bold mt-2">AB Agency</h2>
+                        <p className="text-xs">No.1, Ayyanchery main road, Ayyanchery, Urapakkam</p>
+                        <p className="text-xs">Chennai - 603210</p>
+                        <p className="text-xs mt-2">Email - abagency1977@gmail.com, MOB: 95511 95505 / 95001 82975</p>
                     </div>
-                    </div>
-                    <div className="text-right">
-                    <h2 className="text-3xl font-bold uppercase text-gray-700">Receipt</h2>
-                    <p className="mt-1 text-xs"><span className="font-bold">Receipt #:</span> {payment.id.replace('PAY', 'RCPT')}</p>
-                    <p className="text-xs"><span className="font-bold">Payment Date:</span> {new Date(payment.paymentDate).toLocaleDateString('en-IN')}</p>
+                    <div className="text-right w-1/3">
+                        <h2 className="text-3xl font-bold uppercase text-gray-700">Receipt</h2>
+                        <p className="mt-1 text-xs"><span className="font-bold">Receipt #:</span> {payment.id.replace(`${order.id}-`, '').replace('PAY', 'RCPT')}</p>
+                        <p className="text-xs"><span className="font-bold">Payment Date:</span> {new Date(payment.paymentDate).toLocaleDateString('en-IN')}</p>
                     </div>
                 </div>
 

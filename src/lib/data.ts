@@ -1,7 +1,7 @@
 
 import { db } from './firebase';
-import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit } from 'firebase/firestore';
-import type { Customer, Product, Order } from './types';
+import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference } from 'firebase/firestore';
+import type { Customer, Product, Order, Payment } from './types';
 
 // MOCK DATA - This will be used to seed the database for the first time.
 const mockCustomers: Omit<Customer, 'id'>[] = [
@@ -293,25 +293,98 @@ export const getOrders = async (): Promise<Order[]> => {
     }
 };
 
+async function getNextId(counterName: string, prefix: string): Promise<string> {
+    const counterRef = doc(db, "counters", counterName);
+    let nextNumber = 1;
+
+    try {
+        await runTransaction(db, async (transaction) => {
+            const counterSnap = await transaction.get(counterRef);
+            if (counterSnap.exists()) {
+                nextNumber = counterSnap.data().currentNumber + 1;
+                transaction.update(counterRef, { currentNumber: nextNumber });
+            } else {
+                // If the counter doesn't exist, create it.
+                transaction.set(counterRef, { currentNumber: nextNumber });
+            }
+        });
+    } catch (e) {
+        console.error(`Transaction failed at ${counterName}: `, e);
+        throw new Error(`Could not generate next ID for ${counterName}.`);
+    }
+    
+    return `${prefix}-${String(nextNumber).padStart(4, '0')}`;
+}
+
 export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): Promise<Order> => {
     const customerSnap = await getDoc(doc(db, "customers", orderData.customerId));
-    if (!customerSnap.exists()) {
+     if (!customerSnap.exists()) {
         throw new Error("Customer not found");
     }
     const customerData = customerSnap.data();
-    if (!customerData || !customerData.name) {
-        throw new Error(`Customer with ID ${orderData.customerId} has no name.`);
+    const customerName = customerData?.name;
+    if (!customerName || typeof customerName !== 'string') {
+        throw new Error(`Customer with ID ${orderData.customerId} has no name or name is invalid.`);
     }
-    const customerName = customerData.name;
-    const newOrder = { ...orderData, customerName };
-    const docRef = await addDoc(collection(db, 'orders'), newOrder);
-    return { id: docRef.id, ...newOrder };
+
+    const orderId = await getNextId('orderCounter', 'ORD');
+    const newOrderWithId = { ...orderData, customerName, id: orderId };
+    
+    // Add new payment IDs if they exist
+    if (newOrderWithId.payments) {
+        let paymentCounter = 0;
+        newOrderWithId.payments = newOrderWithId.payments.map(p => {
+             paymentCounter++;
+             return {...p, id: `${orderId}-PAY-${String(paymentCounter).padStart(2, '0')}`}
+        });
+    }
+    
+    await setDoc(doc(db, "orders", orderId), newOrderWithId);
+    return newOrderWithId;
 };
 
 export const updateOrder = async (orderData: Order): Promise<void> => {
     const { id, ...dataToUpdate } = orderData;
     if (!id) throw new Error("Order ID is required to update.");
-    await setDoc(doc(db, 'orders', id), dataToUpdate);
+    await setDoc(doc(db, 'orders', id), dataToUpdate, { merge: true });
+};
+
+export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 'id'>): Promise<Order> => {
+    const orderRef = doc(db, "orders", orderId);
+    let updatedOrder: Order;
+
+    try {
+        await runTransaction(db, async (transaction) => {
+            const orderSnap = await transaction.get(orderRef);
+            if (!orderSnap.exists()) {
+                throw new Error("Order not found!");
+            }
+            
+            const order = { id: orderSnap.id, ...orderSnap.data() } as Order;
+            const existingPayments = order.payments || [];
+            const paymentId = `${order.id}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
+            const newPayment: Payment = { ...payment, id: paymentId };
+
+            const newBalance = (order.balanceDue ?? order.grandTotal) - newPayment.amount;
+
+            updatedOrder = {
+                ...order,
+                payments: [...existingPayments, newPayment],
+                balanceDue: newBalance,
+                status: newBalance <= 0 ? 'Fulfilled' : order.status
+            };
+
+            transaction.update(orderRef, {
+                payments: updatedOrder.payments,
+                balanceDue: updatedOrder.balanceDue,
+                status: updatedOrder.status
+            });
+        });
+        return updatedOrder!;
+    } catch(e) {
+        console.error("Payment transaction failed: ", e);
+        throw e;
+    }
 };
 
 

@@ -21,17 +21,16 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
   return (
     <div ref={ref} className="bg-white text-black p-8" style={{ width: '210mm', minHeight: '297mm', fontFamily: "'Inter', sans-serif" }}>
       <div className="flex justify-between items-start mb-8">
-        <div className="flex items-center gap-4">
+        <div className="flex-1 text-center">
           {logoUrl && (
-            <img src={logoUrl} alt="Company Logo" className="h-20" />
+            <img src={logoUrl} alt="Company Logo" className="h-20 mx-auto" />
           )}
-           <div>
-            <h2 className="text-2xl font-bold">AB Agency</h2>
-            <p className="text-xs">No.1, Ayyanchery main road, Ayyanchery, Urapakkam, Chennai - 603210.</p>
-            <p className="text-xs">abagency1977@gmail.com | 95511 95505 / 95001 82975</p>
-          </div>
+           <h2 className="text-2xl font-bold mt-2">AB Agency</h2>
+            <p className="text-xs">No.1, Ayyanchery main road, Ayyanchery, Urapakkam</p>
+            <p className="text-xs">Chennai - 603210</p>
+            <p className="text-xs mt-2">Email - abagency1977@gmail.com, MOB: 95511 95505 / 95001 82975</p>
         </div>
-        <div className="text-right">
+        <div className="text-right w-1/3">
           <h2 className="text-4xl font-bold uppercase text-gray-700">Invoice</h2>
           <p className="mt-2"><span className="font-bold">Invoice #:</span> {order.id.replace('ORD', 'INV')}</p>
           <p><span className="font-bold">Date:</span> {new Date(order.orderDate).toLocaleDateString('en-IN')}</p>

@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import type { Order, Customer, Product, PaymentTerm, PaymentMode } from '@/lib/types';
+import type { Order, Customer, Product, PaymentTerm, PaymentMode, OrderStatus } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -447,24 +447,22 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
             deliveryFees,
             grandTotal,
             paymentTerm,
-            deliveryDate: deliveryDate || undefined,
             deliveryAddress: deliveryAddress || customer.address,
             isGstInvoice,
             payments: [],
             balanceDue: grandTotal,
         };
 
-        let newOrderData: Omit<Order, 'id' | 'customerName'>;
-
+        let newOrderData;
         if (paymentTerm === 'Full Payment') {
             newOrderData = {
                 ...baseOrderData,
-                status: 'Fulfilled',
+                status: 'Fulfilled' as OrderStatus,
                 balanceDue: 0,
                 paymentMode: paymentMode,
-                paymentRemarks: paymentRemarks || undefined,
+                ...(paymentRemarks && { paymentRemarks: paymentRemarks }),
                 payments: [{
-                    id: `PAY-${Date.now()}`,
+                    id: `temp-pay-id`, // Temporary ID, will be replaced by backend logic
                     paymentDate: new Date().toISOString().split('T')[0],
                     amount: grandTotal,
                     method: paymentMode || 'Cash',
@@ -472,28 +470,28 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                 }],
             };
         } else { // Credit
-            newOrderData = {
+             newOrderData = {
                 ...baseOrderData,
-                status: 'Pending',
-                dueDate: dueDate || undefined,
+                status: 'Pending' as OrderStatus,
+                ...(dueDate && { dueDate: dueDate }),
             };
         }
 
-        try {
-            const newOrder = await addOrder(newOrderData);
-            onOrderAdded(newOrder);
-            toast({
-                title: "Order Placed",
-                description: `Order ${newOrder.id} has been successfully created.`,
-            });
-            resetForm();
-       } catch (e: any) {
-            console.error("Error details:", e);
-            toast({
-               title: "Error Placing Order",
-               description: e.message || "Failed to save the new order.",
-               variant: "destructive"
+       try {
+           const newOrder = await addOrder(newOrderData);
+           onOrderAdded(newOrder);
+           toast({
+               title: "Order Placed",
+               description: `Order ${newOrder.id} has been successfully created.`,
            });
+           resetForm();
+       } catch (e: any) {
+           console.error("Error details:", e);
+           toast({
+              title: "Error Placing Order",
+              description: e.message || "Failed to save the new order.",
+              variant: "destructive"
+          });
        }
     };
 

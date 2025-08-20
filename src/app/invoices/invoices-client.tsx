@@ -18,7 +18,7 @@ import { Loader2, Receipt } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { ReceiptTemplate } from '@/components/receipt-template';
-import { getCustomers, getOrders, updateOrder } from '@/lib/data';
+import { getCustomers, getOrders, addPaymentToOrder } from '@/lib/data';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const formatNumber = (value: number | undefined) => {
@@ -89,33 +89,21 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
     
     const handleAddPayment = async (payment: Omit<Payment, 'id'>) => {
         if (!selectedInvoice) return;
-
-        const newPayment: Payment = { ...payment, id: `PAY-${Date.now()}` };
-        
-        const updatedInvoice: Order = {
-            ...selectedInvoice,
-            payments: [...(selectedInvoice.payments || []), newPayment].sort((a, b) => new Date(a.paymentDate).getTime() - new Date(b.paymentDate).getTime()),
-            balanceDue: (selectedInvoice.balanceDue || selectedInvoice.grandTotal) - newPayment.amount,
-        };
-        
-        if (updatedInvoice.balanceDue <= 0) {
-            updatedInvoice.balanceDue = 0;
-            updatedInvoice.status = 'Fulfilled';
-        }
         
         try {
-            await updateOrder(updatedInvoice);
+            const updatedInvoice = await addPaymentToOrder(selectedInvoice.id, payment);
+            
             const newAllInvoices = allInvoices.map(inv => inv.id === updatedInvoice.id ? updatedInvoice : inv);
             setAllInvoices(newAllInvoices);
             setSelectedInvoice(updatedInvoice); // Keep sheet open with updated data
             toast({
                 title: 'Payment Recorded',
-                description: `${formatNumber(newPayment.amount)} payment for invoice ${updatedInvoice.id.replace('ORD','INV')} has been recorded.`,
+                description: `${formatNumber(payment.amount)} payment for invoice ${updatedInvoice.id.replace('ORD','INV')} has been recorded.`,
             });
-        } catch(e) {
+        } catch(e: any) {
             toast({
                 title: 'Error',
-                description: 'Failed to record payment.',
+                description: e.message || 'Failed to record payment.',
                 variant: 'destructive'
             });
         }
@@ -154,7 +142,7 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
             const pdfHeight = pdfWidth / canvasAspectRatio;
 
             pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-            pdf.save(`receipt-${receiptToPrint.payment.id}.pdf`);
+            pdf.save(`receipt-${receiptToPrint.payment.id.replace(receiptToPrint.order.id + '-', '')}.pdf`);
 
             toast({ title: 'Success', description: 'Receipt PDF has been downloaded.' });
         } catch (error) {
