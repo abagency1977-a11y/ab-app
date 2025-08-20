@@ -20,6 +20,92 @@ const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 
 
 type SortKey = keyof Customer | 'transactionHistory.totalSpent';
 
+function AddCustomerDialog({ isOpen, onOpenChange, onCustomerAdded }: {
+    isOpen: boolean;
+    onOpenChange: (open: boolean) => void;
+    onCustomerAdded: (customer: Customer) => void;
+}) {
+    const nameRef = useRef<HTMLInputElement>(null);
+    const emailRef = useRef<HTMLInputElement>(null);
+    const phoneRef = useRef<HTMLInputElement>(null);
+    const addressRef = useRef<HTMLInputElement>(null);
+    const { toast } = useToast();
+
+    const handleAddCustomer = async () => {
+        const newCustomerData = {
+            name: nameRef.current?.value || '',
+            email: emailRef.current?.value || '',
+            phone: phoneRef.current?.value || '',
+            address: addressRef.current?.value || '',
+        };
+
+        if (!newCustomerData.name || !newCustomerData.email) {
+            toast({
+                title: "Validation Error",
+                description: "Customer name and email are required.",
+                variant: 'destructive',
+            });
+            return;
+        }
+
+        try {
+            const newCustomerFromDB = await addCustomer(newCustomerData);
+            const completeNewCustomer: Customer = {
+                ...newCustomerFromDB,
+                orders: []
+            };
+            onCustomerAdded(completeNewCustomer);
+            onOpenChange(false);
+            toast({
+                title: "Customer Added",
+                description: `${newCustomerFromDB.name} has been successfully added.`,
+            });
+        } catch (error) {
+            console.error("Failed to add customer:", error);
+            toast({
+                title: "Error",
+                description: "Failed to add customer. Please try again.",
+                variant: 'destructive',
+            });
+        }
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Add New Customer</DialogTitle>
+                    <DialogDescription>
+                        Fill in the details below to add a new customer to the system.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="name" className="text-right">Name</Label>
+                        <Input id="name" name="name" ref={nameRef} className="col-span-3" required />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="email" className="text-right">Email</Label>
+                        <Input id="email" name="email" ref={emailRef} type="email" className="col-span-3" required />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="phone" className="text-right">Phone</Label>
+                        <Input id="phone" name="phone" ref={phoneRef} className="col-span-3" />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="address" className="text-right">Address</Label>
+                        <Input id="address" name="address" ref={addressRef} className="col-span-3" />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                    <Button type="button" onClick={handleAddCustomer}>Save Customer</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 export function CustomersClient({ customers: initialCustomers }: { customers: Customer[] }) {
     const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
     const [orders, setOrders] = useState<Order[]>([]);
@@ -78,37 +164,8 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
         customer.email.toLowerCase().includes(search.toLowerCase())
     );
     
-    const handleAddCustomer = async (event: React.FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        const formData = new FormData(event.currentTarget);
-        const newCustomerData = {
-            name: formData.get('name') as string,
-            email: formData.get('email') as string,
-            phone: formData.get('phone') as string,
-            address: formData.get('address') as string,
-        };
-        
-        try {
-            const newCustomerFromDB = await addCustomer(newCustomerData);
-            // Ensure the customer object added to state has all required fields for rendering
-            const completeNewCustomer: Customer = {
-                ...newCustomerFromDB,
-                orders: [] // Add the missing 'orders' property
-            };
-            setCustomers(prevCustomers => [...prevCustomers, completeNewCustomer]);
-            setIsAddDialogOpen(false);
-            toast({
-                title: "Customer Added",
-                description: `${newCustomerFromDB.name} has been successfully added.`,
-            });
-        } catch (error) {
-            console.error("Failed to add customer:", error);
-            toast({
-                title: "Error",
-                description: "Failed to add customer. Please try again.",
-                variant: 'destructive',
-            });
-        }
+    const handleCustomerAdded = (newCustomer: Customer) => {
+        setCustomers(prevCustomers => [...prevCustomers, newCustomer]);
     };
 
     const handleDeleteCustomer = async () => {
@@ -230,40 +287,11 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                 </Table>
             </div>
 
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Add New Customer</DialogTitle>
-                        <DialogDescription>
-                            Fill in the details below to add a new customer to the system.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <form onSubmit={handleAddCustomer} className="space-y-4">
-                        <div className="grid gap-4 py-4">
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="name" className="text-right">Name</Label>
-                                <Input id="name" name="name" className="col-span-3" required />
-                            </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="email" className="text-right">Email</Label>
-                                <Input id="email" name="email" type="email" className="col-span-3" required />
-                            </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="phone" className="text-right">Phone</Label>
-                                <Input id="phone" name="phone" className="col-span-3" />
-                            </div>
-                             <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="address" className="text-right">Address</Label>
-                                <Input id="address" name="address" className="col-span-3" />
-                            </div>
-                        </div>
-                         <DialogFooter>
-                            <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
-                            <Button type="submit">Save Customer</Button>
-                        </DialogFooter>
-                    </form>
-                </DialogContent>
-            </Dialog>
+            <AddCustomerDialog 
+                isOpen={isAddDialogOpen} 
+                onOpenChange={setIsAddDialogOpen} 
+                onCustomerAdded={handleCustomerAdded} 
+            />
 
             <AlertDialog open={!!customerToDelete} onOpenChange={(open) => !open && setCustomerToDelete(null)}>
                 <AlertDialogContent>

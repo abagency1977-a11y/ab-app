@@ -21,6 +21,99 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value);
 
+function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
+    isOpen: boolean;
+    onOpenChange: (open: boolean) => void;
+    onProductAdded: (product: Product) => void;
+}) {
+    const nameRef = useRef<HTMLInputElement>(null);
+    const skuRef = useRef<HTMLInputElement>(null);
+    const stockRef = useRef<HTMLInputElement>(null);
+    const priceRef = useRef<HTMLInputElement>(null);
+    const gstRef = useRef<HTMLInputElement>(null);
+    const { toast } = useToast();
+
+    const handleAddProduct = async () => {
+        const newProductData = {
+            name: nameRef.current?.value || '',
+            sku: skuRef.current?.value || '',
+            stock: Number(stockRef.current?.value || 0),
+            price: Number(priceRef.current?.value || 0),
+            gst: Number(gstRef.current?.value || 0),
+        };
+
+        if (!newProductData.name || !newProductData.sku) {
+             toast({
+                title: "Validation Error",
+                description: "Product name and SKU are required.",
+                variant: 'destructive',
+            });
+            return;
+        }
+
+        try {
+            const newProductFromDB = await addProduct(newProductData);
+            const completeNewProduct: Product = {
+                ...newProductFromDB,
+                historicalData: []
+            };
+            onProductAdded(completeNewProduct);
+            onOpenChange(false);
+            toast({
+                title: "Product Added",
+                description: `${newProductFromDB.name} has been successfully added to inventory.`,
+            });
+        } catch(e) {
+             console.error("Failed to add product:", e);
+             toast({
+                title: "Error",
+                description: "Failed to add product. Please try again.",
+                variant: 'destructive'
+            });
+        }
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Add New Product</DialogTitle>
+                    <DialogDescription>
+                        Fill in the details below to add a new product to the inventory.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="name" className="text-right">Name</Label>
+                        <Input id="name" name="name" ref={nameRef} className="col-span-3" required />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="sku" className="text-right">SKU</Label>
+                        <Input id="sku" name="sku" ref={skuRef} className="col-span-3" required />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="stock" className="text-right">Stock</Label>
+                        <Input id="stock" name="stock" ref={stockRef} type="number" className="col-span-3" required />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="price" className="text-right">Price</Label>
+                        <Input id="price" name="price" ref={priceRef} type="number" step="0.01" className="col-span-3" required />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="gst" className="text-right">GST %</Label>
+                        <Input id="gst" name="gst" ref={gstRef} type="number" step="0.01" className="col-span-3" required />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                    <Button type="button" onClick={handleAddProduct}>Add Product</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+
 export function InventoryClient({ products: initialProducts }: { products: Product[] }) {
     const [products, setProducts] = useState<Product[]>(initialProducts);
     const [selectedProduct, setSelectedProduct] = useState<string | undefined>(initialProducts[0]?.id);
@@ -67,40 +160,11 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             setIsLoading(false);
         }
     };
-
-    const handleAddProduct = async (event: React.FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        const formData = new FormData(event.currentTarget);
-        const newProductData = {
-            name: formData.get('name') as string,
-            sku: formData.get('sku') as string,
-            stock: Number(formData.get('stock')),
-            price: Number(formData.get('price')),
-            gst: Number(formData.get('gst')),
-        };
-
-        try {
-            const newProductFromDB = await addProduct(newProductData);
-            // Ensure the product object added to state has all required fields for rendering
-            const completeNewProduct: Product = {
-                ...newProductFromDB,
-                historicalData: [] // Add the missing 'historicalData' property
-            };
-            setProducts(prevProducts => [...prevProducts, completeNewProduct]);
-            setIsAddDialogOpen(false);
-            toast({
-                title: "Product Added",
-                description: `${newProductFromDB.name} has been successfully added to inventory.`,
-            });
-        } catch(e) {
-             console.error("Failed to add product:", e);
-             toast({
-                title: "Error",
-                description: "Failed to add product. Please try again.",
-                variant: 'destructive'
-            });
-        }
+    
+    const handleProductAdded = (newProduct: Product) => {
+        setProducts(prevProducts => [...prevProducts, newProduct]);
     };
+
 
     const handleEditProduct = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -277,44 +341,11 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                 </div>
             </div>
 
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Add New Product</DialogTitle>
-                        <DialogDescription>
-                            Fill in the details below to add a new product to the inventory.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <form onSubmit={handleAddProduct} className="space-y-4">
-                        <div className="grid gap-4 py-4">
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="name" className="text-right">Name</Label>
-                                <Input id="name" name="name" className="col-span-3" required />
-                            </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="sku" className="text-right">SKU</Label>
-                                <Input id="sku" name="sku" className="col-span-3" required />
-                            </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="stock" className="text-right">Stock</Label>
-                                <Input id="stock" name="stock" type="number" className="col-span-3" required />
-                            </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="price" className="text-right">Price</Label>
-                                <Input id="price" name="price" type="number" step="0.01" className="col-span-3" required />
-                            </div>
-                             <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="gst" className="text-right">GST %</Label>
-                                <Input id="gst" name="gst" type="number" step="0.01" className="col-span-3" required />
-                            </div>
-                        </div>
-                        <DialogFooter>
-                            <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
-                            <Button type="submit">Add Product</Button>
-                        </DialogFooter>
-                    </form>
-                </DialogContent>
-            </Dialog>
+            <AddProductDialog 
+                isOpen={isAddDialogOpen} 
+                onOpenChange={setIsAddDialogOpen} 
+                onProductAdded={handleProductAdded}
+            />
 
              <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
                 <DialogContent>
