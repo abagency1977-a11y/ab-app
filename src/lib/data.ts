@@ -228,7 +228,7 @@ async function seedDatabase() {
 }
 
 // Seed the database on startup if it's empty
-seedDatabase();
+// seedDatabase();
 
 
 // CUSTOMER FUNCTIONS
@@ -333,3 +333,5 @@ export const getDashboardData = async () => {
         recentOrders: orders.sort((a,b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()).slice(0, 5).map(o => ({...o, total: o.grandTotal})),
     };
 };
+
+    
