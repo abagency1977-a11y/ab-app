@@ -428,10 +428,10 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         const customer = customers.find(c => c.id === customerId);
         if (!customer) return;
 
-        const newOrderData: Omit<Order, 'id' | 'customerName'> = {
+        const baseOrderData = {
             customerId,
             orderDate: new Date().toISOString().split('T')[0],
-            status: 'Pending',
+            status: 'Pending' as OrderStatus,
             items: items.map(item => {
                 const product = products.find(p => p.id === item.productId);
                 return {
@@ -447,26 +447,36 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
             deliveryFees,
             grandTotal,
             paymentTerm,
-            paymentMode: paymentTerm === 'Full Payment' ? paymentMode : undefined,
-            paymentRemarks: paymentTerm === 'Full Payment' ? paymentRemarks : undefined,
-            dueDate: paymentTerm === 'Credit' ? dueDate : undefined,
-            deliveryDate,
+            deliveryDate: deliveryDate || undefined,
             deliveryAddress: deliveryAddress || customer.address,
             isGstInvoice,
             payments: [],
             balanceDue: grandTotal,
         };
 
+        let newOrderData: Omit<Order, 'id' | 'customerName'>;
+
         if (paymentTerm === 'Full Payment') {
-            newOrderData.status = 'Fulfilled';
-            newOrderData.balanceDue = 0;
-            newOrderData.payments = [{
-                id: `PAY-${Date.now()}`,
-                paymentDate: new Date().toISOString().split('T')[0],
-                amount: grandTotal,
-                method: paymentMode || 'Cash',
-                notes: paymentRemarks,
-            }];
+            newOrderData = {
+                ...baseOrderData,
+                status: 'Fulfilled',
+                balanceDue: 0,
+                paymentMode: paymentMode,
+                paymentRemarks: paymentRemarks || undefined,
+                payments: [{
+                    id: `PAY-${Date.now()}`,
+                    paymentDate: new Date().toISOString().split('T')[0],
+                    amount: grandTotal,
+                    method: paymentMode || 'Cash',
+                    notes: paymentRemarks,
+                }],
+            };
+        } else { // Credit
+            newOrderData = {
+                ...baseOrderData,
+                status: 'Pending',
+                dueDate: dueDate || undefined,
+            };
         }
 
         try {
