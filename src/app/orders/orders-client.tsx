@@ -428,10 +428,10 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         const customer = customers.find(c => c.id === customerId);
         if (!customer) return;
 
-        const baseOrderData = {
+        let baseOrderData: Omit<Order, 'id' | 'customerName'> = {
             customerId,
             orderDate: new Date().toISOString().split('T')[0],
-            status: 'Pending' as OrderStatus,
+            status: 'Fulfilled', // Always fulfilled as per user request
             items: items.map(item => {
                 const product = products.find(p => p.id === item.productId);
                 return {
@@ -451,18 +451,18 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
             isGstInvoice,
             payments: [],
             balanceDue: grandTotal,
+            ...(deliveryDate && { deliveryDate }),
         };
 
         let newOrderData;
         if (paymentTerm === 'Full Payment') {
             newOrderData = {
                 ...baseOrderData,
-                status: 'Fulfilled' as OrderStatus,
                 balanceDue: 0,
                 paymentMode: paymentMode,
-                ...(paymentRemarks && { paymentRemarks: paymentRemarks }),
+                ...(paymentRemarks && { paymentRemarks }),
                 payments: [{
-                    id: `temp-pay-id`, // Temporary ID, will be replaced by backend logic
+                    id: `temp-pay-id`,
                     paymentDate: new Date().toISOString().split('T')[0],
                     amount: grandTotal,
                     method: paymentMode || 'Cash',
@@ -472,7 +472,6 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         } else { // Credit
              newOrderData = {
                 ...baseOrderData,
-                status: 'Pending' as OrderStatus,
                 ...(dueDate && { dueDate: dueDate }),
             };
         }

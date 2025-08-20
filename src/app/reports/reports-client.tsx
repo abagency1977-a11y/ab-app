@@ -27,7 +27,7 @@ export function ReportsClient({ reportData }: { reportData: any }) {
         const dataSummary = `
             Total Revenue: ₹${formatNumber(reportData.totalRevenue)}
             Total Customers: ${reportData.totalCustomers}
-            Pending Orders: ${reportData.pendingOrders}
+            Orders Placed: ${reportData.ordersPlaced}
             Monthly Revenue: ${JSON.stringify(reportData.revenueChartData)}
         `;
         try {
@@ -79,8 +79,8 @@ export function ReportsClient({ reportData }: { reportData: any }) {
                     <CardContent><p className="text-3xl font-bold">{reportData.itemsInStock.toLocaleString()}</p></CardContent>
                 </Card>
                 <Card>
-                    <CardHeader><CardTitle>Pending Orders</CardTitle></CardHeader>
-                    <CardContent><p className="text-3xl font-bold">{reportData.pendingOrders}</p></CardContent>
+                    <CardHeader><CardTitle>Orders Placed</CardTitle></CardHeader>
+                    <CardContent><p className="text-3xl font-bold">{reportData.ordersPlaced}</p></CardContent>
                 </Card>
             </div>
 

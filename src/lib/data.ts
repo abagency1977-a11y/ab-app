@@ -322,8 +322,8 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
      if (!customerSnap.exists()) {
         throw new Error("Customer not found");
     }
-    const customerData = customerSnap.data();
-    const customerName = customerData?.name;
+    const customerDocData = customerSnap.data();
+    const customerName = customerDocData?.name;
     if (!customerName || typeof customerName !== 'string') {
         throw new Error(`Customer with ID ${orderData.customerId} has no name or name is invalid.`);
     }
@@ -417,7 +417,7 @@ export const getDashboardData = async () => {
     const totalRevenue = orders.filter(o => o.status === 'Fulfilled').reduce((sum, order) => sum + order.grandTotal, 0);
     const totalCustomers = customers.length;
     const itemsInStock = products.reduce((sum, product) => sum + product.stock, 0);
-    const pendingOrders = orders.filter(o => o.status === 'Pending').length;
+    const ordersPlaced = orders.filter(o => o.status !== 'Canceled').length;
 
     const monthlyRevenue = orders.filter(o => o.status === 'Fulfilled').reduce((acc, order) => {
         const month = new Date(order.orderDate).toLocaleString('default', { month: 'short' });
@@ -431,7 +431,7 @@ export const getDashboardData = async () => {
         totalRevenue,
         totalCustomers,
         itemsInStock,
-        pendingOrders,
+        ordersPlaced,
         revenueChartData,
         recentOrders: orders.sort((a,b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()).slice(0, 5).map(o => ({...o, total: o.grandTotal})),
     };

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -44,7 +45,7 @@ export function DashboardClient({ data }: { data: any }) {
                 />
                 <StatCard title="Customers" value={`${data.totalCustomers}`} icon={Users} description="Total number of customers" />
                 <StatCard title="Items in Stock" value={data.itemsInStock.toLocaleString()} icon={Boxes} description="Total items across all products" />
-                <StatCard title="Pending Orders" value={`${data.pendingOrders}`} icon={ShoppingCart} description="Orders awaiting fulfillment" />
+                <StatCard title="Orders Placed" value={`${data.ordersPlaced}`} icon={ShoppingCart} description="Total orders placed (non-canceled)" />
             </div>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
                 <Card className="lg:col-span-4">
