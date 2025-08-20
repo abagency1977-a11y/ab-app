@@ -130,13 +130,17 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     };
 
 
-    const handleAddOrder = (newOrder: Order) => {
+    const handleAddOrder = async (newOrder: Order) => {
         setOrders(prevOrders => [newOrder, ...prevOrders]);
     }
 
     const handleAddCustomer = async (newCustomerData: Omit<Customer, 'id' | 'transactionHistory'>) => {
         try {
-            const newCustomer = await addCustomer(newCustomerData);
+            const newCustomerWithHistory = await addCustomer(newCustomerData);
+            const newCustomer: Customer = {
+                ...newCustomerWithHistory,
+                orders: []
+            };
             setCustomers(prevCustomers => [...prevCustomers, newCustomer]);
             toast({
                 title: "Customer Added",
@@ -278,7 +282,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     customers: Customer[],
     products: Product[],
     onOrderAdded: (order: Order) => void,
-    onCustomerAdded: (customer: Omit<Customer, 'id'|'transactionHistory'>) => Promise<Customer | null>,
+    onCustomerAdded: (customer: Omit<Customer, 'id'|'transactionHistory' | 'orders'>) => Promise<Customer | null>,
 }) {
     const [customerId, setCustomerId] = useState<string>('');
     const [items, setItems] = useState<OrderItemState[]>([]);
@@ -670,3 +674,6 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         </>
     );
 }
+
+
+    
