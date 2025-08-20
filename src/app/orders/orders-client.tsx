@@ -135,7 +135,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         setOrders(prevOrders => [newOrder, ...prevOrders]);
     }
 
-    const handleAddCustomer = async (newCustomerData: Omit<Customer, 'id' | 'transactionHistory'>) => {
+    const handleAddCustomer = async (newCustomerData: Omit<Customer, 'id' | 'transactionHistory' | 'orders'>) => {
         try {
             const newCustomerWithHistory = await addCustomer(newCustomerData);
             const newCustomer: Customer = {
@@ -477,10 +477,11 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                 description: `Order ${newOrder.id} has been successfully created.`,
             });
             resetForm();
-       } catch (e) {
-           toast({
+       } catch (e: any) {
+            console.error("Error details:", e);
+            toast({
                title: "Error Placing Order",
-               description: "Failed to save the new order.",
+               description: e.message || "Failed to save the new order.",
                variant: "destructive"
            });
        }
@@ -637,7 +638,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                             <DialogTitle className="text-lg">Order Summary</DialogTitle>
                                             <div className="flex justify-between"><span>Subtotal:</span> <span className="font-semibold">{formatNumber(subTotal)}</span></div>
                                             {isGstInvoice && <div className="flex justify-between"><span>Total GST:</span> <span className="font-semibold">{formatNumber(totalGst)}</span></div>}
-                                             <div className="flex justify-between">
+                                             <div className="flex justify-between items-center">
                                                 <Label htmlFor="delivery_fees" className="flex-1">Delivery Fees</Label>
                                                 <Input type="number" placeholder="0.00" className="w-24 h-8" value={String(deliveryFees)} onChange={e => setDeliveryFees(parseFloat(e.target.value) || 0)} />
                                             </div>

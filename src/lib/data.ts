@@ -247,7 +247,7 @@ export const getCustomers = async (): Promise<Customer[]> => {
     }
 };
 
-export const addCustomer = async (customerData: Omit<Customer, 'id' | 'transactionHistory'>): Promise<Customer> => {
+export const addCustomer = async (customerData: Omit<Customer, 'id' | 'transactionHistory' | 'orders'>): Promise<Customer> => {
     const newCustomer: Omit<Customer, 'id'> = {
         ...customerData,
         transactionHistory: { totalSpent: 0, lastPurchaseDate: new Date().toISOString().split('T')[0] },
@@ -272,9 +272,10 @@ export const getProducts = async (): Promise<Product[]> => {
     }
 };
 
-export const addProduct = async (productData: Omit<Product, 'id'>): Promise<Product> => {
-    const docRef = await addDoc(collection(db, 'products'), productData);
-    return { id: docRef.id, ...productData };
+export const addProduct = async (productData: Omit<Product, 'id' | 'historicalData'>): Promise<Product> => {
+     const newProduct = { ...productData, historicalData: [] };
+    const docRef = await addDoc(collection(db, 'products'), newProduct);
+    return { id: docRef.id, ...newProduct };
 };
 
 export const deleteProduct = async(id: string) => {
@@ -297,7 +298,11 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
     if (!customerSnap.exists()) {
         throw new Error("Customer not found");
     }
-    const customerName = customerSnap.data().name;
+    const customerData = customerSnap.data();
+    if (!customerData || !customerData.name) {
+        throw new Error(`Customer with ID ${orderData.customerId} has no name.`);
+    }
+    const customerName = customerData.name;
     const newOrder = { ...orderData, customerName };
     const docRef = await addDoc(collection(db, 'orders'), newOrder);
     return { id: docRef.id, ...newOrder };
