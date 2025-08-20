@@ -101,78 +101,32 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         
         setIsLoading(true);
         try {
-            const doc = new jsPDF({
-                orientation: 'p',
-                unit: 'mm',
-                format: 'a4'
-            });
+            const canvas = await html2canvas(invoiceRef.current, { scale: 3, useCORS: true });
+            const imgData = canvas.toDataURL('image/png');
 
-            // Temporarily make the hidden element visible to render it
-            invoiceRef.current.style.position = 'absolute';
-            invoiceRef.current.style.left = '0';
-            invoiceRef.current.style.top = '0';
-            invoiceRef.current.style.zIndex = '1000';
-            invoiceRef.current.style.visibility = 'visible';
+            const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
 
+            const canvasWidth = canvas.width;
+            const canvasHeight = canvas.height;
+            const canvasAspectRatio = canvasWidth / canvasHeight;
+            const pdfAspectRatio = pdfWidth / pdfHeight;
 
-            // 1. Header, Customer Details
-            const headerElement = invoiceRef.current.querySelector('[data-invoice-section="header"]') as HTMLElement;
-            const headerCanvas = await html2canvas(headerElement, { scale: 2, useCORS: true });
-            const headerImgData = headerCanvas.toDataURL('image/png');
-            const headerHeight = (headerCanvas.height * doc.internal.pageSize.getWidth()) / headerCanvas.width;
-            doc.addImage(headerImgData, 'PNG', 0, 0, doc.internal.pageSize.getWidth(), headerHeight);
+            let imgHeight = pdfWidth / canvasAspectRatio;
+            let heightLeft = imgHeight;
+            let position = 0;
 
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+            heightLeft -= pdfHeight;
 
-            // 2. Items Table
-            const head = [['Item Description', 'Qty', 'Rate', 'GST', 'Amount']];
-            const body = orderToPrint.items.map(item => [
-                item.productName,
-                item.quantity.toString(),
-                `₹${(item.price).toFixed(2)}`,
-                `${item.gst}%`,
-                `₹${(item.price * item.quantity).toFixed(2)}`
-            ]);
-            
-            let lastY = (doc as any).lastAutoTable.finalY || headerHeight + 5;
-
-            (doc as any).autoTable({
-                startY: lastY,
-                head: head,
-                body: body,
-                theme: 'striped',
-                headStyles: {
-                    fillColor: [30, 30, 30]
-                },
-                styles: {
-                    fontSize: 9,
-                },
-                didDrawPage: function(data) {
-                    // You can add headers/footers to subsequent pages here if needed
-                }
-            });
-            
-             // 3. Footer (Totals, Payment Details, etc.)
-            const footerElement = invoiceRef.current.querySelector('[data-invoice-section="footer"]') as HTMLElement;
-            const footerCanvas = await html2canvas(footerElement, { scale: 2, useCORS: true });
-            const footerImgData = footerCanvas.toDataURL('image/png');
-            const footerHeight = (footerCanvas.height * doc.internal.pageSize.getWidth()) / footerCanvas.width;
-            lastY = (doc as any).lastAutoTable.finalY || doc.internal.pageSize.getHeight()/2;
-            
-            // If footer overflows, add a new page
-            if (lastY + footerHeight > doc.internal.pageSize.getHeight() - 10) {
-                doc.addPage();
-                lastY = 10;
+            while (heightLeft > 0) {
+                position = heightLeft - imgHeight;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+                heightLeft -= pdfHeight;
             }
-            doc.addImage(footerImgData, 'PNG', 0, lastY + 5, doc.internal.pageSize.getWidth(), footerHeight);
-
-
-            // Reset visibility
-            invoiceRef.current.style.position = 'fixed';
-            invoiceRef.current.style.left = '-200vw';
-            invoiceRef.current.style.top = '0';
-            invoiceRef.current.style.zIndex = '-1';
-            invoiceRef.current.style.visibility = 'hidden';
-
+            
             doc.save(`invoice-${orderToPrint.id}.pdf`);
             toast({ title: 'Success', description: 'Invoice PDF has been downloaded.' });
 
@@ -312,7 +266,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 </Table>
             </div>
              {orderToPrint && customerForOrderToPrint && (
-                <div style={{ position: 'fixed', left: '-200vw', top: 0, zIndex: -1, visibility: 'hidden' }}>
+                <div style={{ position: 'fixed', left: '-200vw', top: 0, zIndex: -1 }}>
                     <InvoiceTemplate ref={invoiceRef} order={orderToPrint} customer={customerForOrderToPrint} logoUrl={logoUrl}/>
                 </div>
             )}
@@ -486,7 +440,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         let baseOrderData: Omit<Order, 'id' | 'customerName'> = {
             customerId,
             orderDate: new Date().toISOString().split('T')[0],
-            status: 'Fulfilled', // Always fulfilled as per user request
+            status: 'Fulfilled',
             items: items.map(item => {
                 const product = products.find(p => p.id === item.productId);
                 return {
@@ -514,8 +468,6 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
             newOrderData = {
                 ...baseOrderData,
                 balanceDue: 0,
-                paymentMode: paymentMode,
-                ...(paymentRemarks && { paymentRemarks }),
                 payments: [{
                     id: `temp-pay-id`,
                     paymentDate: new Date().toISOString().split('T')[0],
@@ -524,6 +476,9 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                     notes: paymentRemarks,
                 }],
             };
+            if(paymentMode) newOrderData.paymentMode = paymentMode;
+            if(paymentRemarks) newOrderData.paymentRemarks = paymentRemarks;
+
         } else { // Credit
              newOrderData = {
                 ...baseOrderData,
@@ -762,3 +717,6 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         </>
     );
 }
+
+
+    
