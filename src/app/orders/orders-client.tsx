@@ -149,54 +149,38 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             // --- Billed To and Invoice Details ---
             const customerAddressLines = doc.splitTextToSize(customer.address || '', 80);
             const customerContact = `${customer.email} | ${customer.phone}`;
-            let billedToContent = `Billed To:\n${customer.name}\n`;
-            billedToContent += customerAddressLines.join('\n');
-            billedToContent += `\n \n${customerContact}`; // Add extra space here
+            
+            doc.setFontSize(10).setFont('helvetica', 'bold');
+            doc.text('Billed To:', margin, yPos);
 
-            const invoiceTitle = 'Invoice';
-            const invoiceId = `# ${orderToPrint.id.replace('ORD', 'INV')}`;
-            const invoiceDate = `Date: ${new Date(orderToPrint.orderDate).toLocaleDateString('en-GB')}`;
-            const deliveryDate = orderToPrint.deliveryDate ? `Delivery Date: ${new Date(orderToPrint.deliveryDate).toLocaleDateString('en-GB')}` : '';
+            doc.setFontSize(18).setFont('helvetica', 'bold');
+            doc.text('Invoice', pageWidth - margin, yPos, { align: 'right'});
+            
+            yPos += 6;
+            doc.setFontSize(10).setFont('helvetica', 'normal');
+            doc.text(customer.name, margin, yPos);
 
-            autoTable(doc, {
-                startY: yPos,
-                theme: 'plain',
-                styles: { fontSize: 10, cellPadding: 0 },
-                body: [[billedToContent, '']],
-                columnStyles: {
-                    0: { cellWidth: 100 },
-                    1: { halign: 'right' }
-                },
-                didDrawCell: (data) => {
-                    if (data.section === 'body' && data.row.index === 0) {
-                        if (data.column.index === 0) {
-                           doc.setFont('helvetica', 'bold');
-                           doc.text('Billed To:', data.cell.x, data.cell.y);
-                           doc.setFont('helvetica', 'normal');
-                           const addressY = data.cell.y + 5;
-                           doc.text(customer.name, data.cell.x, addressY);
-                           let currentY = addressY + 5;
-                           customerAddressLines.forEach((line: string) => {
-                               doc.text(line, data.cell.x, currentY);
-                               currentY += 5;
-                           });
-                           currentY += 5; // Extra space
-                           doc.text(customerContact, data.cell.x, currentY);
-                        } else if (data.column.index === 1) {
-                           doc.setFont('helvetica', 'bold').setFontSize(18);
-                           doc.text(invoiceTitle, data.cell.x, data.cell.y, { align: 'right' });
-                           doc.setFont('helvetica', 'normal').setFontSize(10);
-                           doc.text(invoiceId, data.cell.x, data.cell.y + 10, { align: 'right' });
-                           doc.text(invoiceDate, data.cell.x, data.cell.y + 15, { align: 'right' });
-                           if(deliveryDate) doc.text(deliveryDate, data.cell.x, data.cell.y + 20, {align: 'right'});
-                        }
-                    }
-                }
+            doc.text(`# ${orderToPrint.id.replace('ORD', 'INV')}`, pageWidth - margin, yPos, { align: 'right'});
+            yPos += 5;
+
+            let addressY = yPos;
+            customerAddressLines.forEach((line: string) => {
+                doc.text(line, margin, addressY);
+                addressY += 5;
             });
 
-            yPos = (doc as any).lastAutoTable.finalY + 10;
+            doc.text(`Date: ${new Date(orderToPrint.orderDate).toLocaleDateString('en-GB')}`, pageWidth - margin, yPos, { align: 'right'});
+            yPos += 5;
+            if(orderToPrint.deliveryDate) {
+                doc.text(`Delivery Date: ${new Date(orderToPrint.deliveryDate).toLocaleDateString('en-GB')}`, pageWidth - margin, yPos, { align: 'right'});
+            }
             
+            yPos = addressY + 5; // Add single line space
+            doc.text(customerContact, margin, yPos);
+
+
             // --- Items Table ---
+            const tableStartY = yPos + 10;
             const subtotal = orderToPrint.items.reduce((acc, item) => acc + item.price * item.quantity, 0);
             const totalGst = orderToPrint.isGstInvoice ? orderToPrint.items.reduce((acc, item) => acc + (item.price * item.quantity * (item.gst / 100)), 0) : 0;
             
@@ -204,10 +188,10 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             if(orderToPrint.isGstInvoice) tableColumns.splice(4, 0, 'GST');
             
             const tableRows = orderToPrint.items.map((item, index) => {
-                const rowData = [
-                    (index + 1).toString(),
+                const rowData: (string | number)[] = [
+                    (index + 1),
                     item.productName,
-                    item.quantity.toString(),
+                    item.quantity,
                     formatCurrencyForPdf(item.price),
                     formatCurrencyForPdf(item.price * item.quantity)
                 ];
@@ -216,7 +200,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             });
 
             autoTable(doc, {
-                startY: yPos,
+                startY: tableStartY,
                 head: [tableColumns],
                 body: tableRows,
                 theme: 'grid',
@@ -230,7 +214,16 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                     5: { halign: 'right' }
                 },
                 didDrawPage: (data) => {
+                    const finalY = (doc as any).lastAutoTable.finalY || data.cursor?.y || 200;
+                    
                     // --- Totals Section ---
+                    const isCredit = orderToPrint.paymentTerm === 'Credit';
+                    const boxBgColor = isCredit ? [254, 226, 226] : [220, 252, 231];
+                    const boxTextColor = isCredit ? [220, 38, 38] : [0, 0, 0];
+                    const totalsWidth = 70;
+                    const totalsX = pageWidth - margin - totalsWidth;
+                    let totalsY = finalY + 10;
+
                     const totalsContent = [];
                     totalsContent.push(['Subtotal', formatCurrencyForPdf(subtotal)]);
                     if (orderToPrint.isGstInvoice) {
@@ -242,39 +235,32 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                     if (orderToPrint.discount > 0) {
                         totalsContent.push(['Discount', `-${formatCurrencyForPdf(orderToPrint.discount)}`]);
                     }
-
-                    const isCredit = orderToPrint.paymentTerm === 'Credit';
-                    const boxBgColor = isCredit ? [254, 226, 226] : [220, 252, 231]; // light-pink or light-green
-                    const boxTextColor = isCredit ? [220, 38, 38] : [0, 0, 0];
-                    const boxWidth = 70;
-                    const boxHeight = (totalsContent.length * 6) + 10;
-                    const totalsStartX = pageWidth - margin - boxWidth;
-                    const totalsStartY = data.cursor?.y ? data.cursor.y + 10 : 200;
-
-                    doc.setFillColor.apply(doc, boxBgColor);
-                    doc.roundedRect(totalsStartX, totalsStartY, boxWidth, boxHeight, 3, 3, 'F');
                     
-                    let currentY = totalsStartY + 7;
+                    const totalsHeight = (totalsContent.length * 6) + 8;
+                    
+                    doc.setFillColor.apply(doc, boxBgColor);
+                    doc.roundedRect(totalsX, totalsY, totalsWidth, totalsHeight, 3, 3, 'F');
+                    
+                    doc.setFont('helvetica', 'normal').setFontSize(9);
+                    doc.setTextColor.apply(doc, boxTextColor);
+
+                    let currentY = totalsY + 6;
                     totalsContent.forEach(row => {
-                        doc.setFont('helvetica', 'bold');
-                        doc.setTextColor.apply(doc, boxTextColor);
-                        doc.text(row[0], totalsStartX + 5, currentY);
-                        doc.setFont('helvetica', 'normal');
-                        doc.text(row[1], totalsStartX + boxWidth - 5, currentY, { align: 'right' });
+                        doc.text(row[0], totalsX + 5, currentY);
+                        doc.text(row[1], totalsX + totalsWidth - 5, currentY, { align: 'right' });
                         currentY += 6;
                     });
-
-
+                    
                     // --- Grand Total ---
-                    const grandTotalY = totalsStartY + boxHeight + 2;
-                    const grandTotalWidth = 70;
-                    const grandTotalHeight = 12;
-                    doc.setFillColor(105, 162, 180); // Subtle Blue
-                    doc.roundedRect(totalsStartX, grandTotalY, grandTotalWidth, grandTotalHeight, 3, 3, 'F');
-                    doc.setFont('helvetica', 'bold').setFontSize(11);
-                    doc.setTextColor(255, 255, 255);
-                    doc.text('Grand Total', totalsStartX + 5, grandTotalY + 8);
-                    doc.text(formatCurrencyForPdf(orderToPrint.grandTotal), totalsStartX + grandTotalWidth - 5, grandTotalY + 8, { align: 'right' });
+                    const grandTotalY = totalsY + totalsHeight + 2;
+                    doc.setFillColor(219, 234, 254); // light blue
+                    doc.roundedRect(totalsX, grandTotalY, totalsWidth, 12, 3, 3, 'F');
+                    
+                    doc.setFont('helvetica', 'bold').setFontSize(10);
+                    doc.setTextColor(0, 0, 0);
+                    doc.text('Grand Total', totalsX + 5, grandTotalY + 8);
+                    doc.text(formatCurrencyForPdf(orderToPrint.grandTotal), totalsX + totalsWidth - 5, grandTotalY + 8, { align: 'right' });
+
 
                     // --- Final Footer ---
                     const pageCount = (doc as any).internal.getNumberOfPages();
@@ -867,3 +853,4 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     
 
     
+
