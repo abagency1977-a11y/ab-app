@@ -182,6 +182,11 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             const rightColX = pageWidth - margin;
             let rightColY = billToY;
 
+            doc.setFontSize(10).setFont('helvetica', 'bold');
+            doc.text('GSTIN: 33ABCDE1234F1Z5', rightColX, rightColY, { align: 'right'});
+            rightColY += 8;
+
+
             doc.setFontSize(16).setFont('helvetica', 'bold');
             if (orderToPrint.paymentTerm === 'Credit') {
                 doc.text('Credit Invoice', rightColX, rightColY, { align: 'right'});
@@ -282,7 +287,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             const textWidth = doc.getTextWidth(grandTotalText);
             
             const boxWidth = textWidth + 40;
-            const boxHeight = 20;
+            const boxHeight = 22;
             const boxX = (pageWidth - boxWidth) / 2;
 
             const boxBgColor = isCredit ? [254, 226, 226] : [224, 242, 254]; // Light Red or Light Blue
@@ -954,3 +959,5 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
 }
 
 
+
+    
