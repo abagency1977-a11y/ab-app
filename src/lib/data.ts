@@ -4,43 +4,7 @@ import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc
 import type { Customer, Product, Order, Payment, OrderItem } from './types';
 
 // MOCK DATA - This will be used to seed the database for the first time.
-const mockCustomers: Omit<Customer, 'id'>[] = [
-  {
-    name: 'Innovate Inc.',
-    email: 'contact@innovate.com',
-    phone: '555-0101',
-    address: '123 Innovation Drive, Tech City, 12345',
-    transactionHistory: { totalSpent: 15300, lastPurchaseDate: '2023-05-15' },
-  },
-  {
-    name: 'Synergy Solutions',
-    email: 'info@synergysolutions.com',
-    phone: '555-0102',
-    address: '456 Synergy Ave, Business Bay, 67890',
-    transactionHistory: { totalSpent: 8250, lastPurchaseDate: '2023-05-20' },
-  },
-  {
-    name: 'Quantum Creations',
-    email: 'support@quantum.com',
-    phone: '555-0103',
-    address: '789 Quantum Blvd, Future Town, 54321',
-    transactionHistory: { totalSpent: 22400, lastPurchaseDate: '2023-04-28' },
-  },
-    {
-    name: 'Apex Enterprises',
-    email: 'sales@apex.com',
-    phone: '555-0104',
-    address: '101 Apex Circle, Summit Peak, 13579',
-    transactionHistory: { totalSpent: 5600, lastPurchaseDate: '2023-05-18' },
-  },
-  {
-    name: 'Nexus Corp',
-    email: 'admin@nexuscorp.com',
-    phone: '555-0105',
-    address: '210 Nexus Lane, Central Hub, 97531',
-    transactionHistory: { totalSpent: 19800, lastPurchaseDate: '2023-05-22' },
-  },
-];
+const mockCustomers: Omit<Customer, 'id'>[] = [];
 
 const mockProducts: Omit<Product, 'id'>[] = [
   {
@@ -99,112 +63,17 @@ const mockProducts: Omit<Product, 'id'>[] = [
         { date: '2023-05-30', quantity: 130 },
     ]
   },
+    {
+    name: 'Opening Balance',
+    sku: 'OB-001',
+    stock: 9999,
+    price: 1,
+    gst: 0,
+    historicalData: []
+  }
 ];
 
-const mockOrders: Omit<Order, 'id'>[] = [
-  {
-    customerId: 'CUST-001',
-    customerName: 'Innovate Inc.',
-    orderDate: '2023-05-15',
-    status: 'Fulfilled',
-    items: [
-      { productId: 'PROD-001', productName: 'Premium Widget', quantity: 20, price: 150.00, gst: 18 },
-      { productId: 'PROD-002', productName: 'Standard Gadget', quantity: 50, price: 75.50, gst: 18 },
-    ],
-    total: 8000.00,
-    discount: 225.00,
-    deliveryFees: 0,
-    grandTotal: 7775.00,
-    previousBalance: 0,
-    paymentTerm: 'Full Payment',
-    paymentMode: 'Card',
-    isGstInvoice: true,
-    deliveryAddress: '123 Innovation Drive, Tech City, 12345',
-    deliveryDate: '2023-05-16',
-    balanceDue: 0,
-    payments: [
-        { id: 'PAY-111', amount: 7775, method: 'Card', paymentDate: '2023-05-15'}
-    ]
-  },
-  {
-    customerId: 'CUST-002',
-    customerName: 'Synergy Solutions',
-    orderDate: '2023-05-20',
-    status: 'Pending',
-    items: [{ productId: 'PROD-003', productName: 'Advanced Gizmo', quantity: 10, price: 220.00, gst: 18 }],
-    total: 2596,
-    discount: 0,
-    deliveryFees: 100,
-    grandTotal: 2696,
-    previousBalance: 0,
-    paymentTerm: 'Credit',
-    dueDate: '2023-06-20',
-    isGstInvoice: true,
-    deliveryAddress: '456 Synergy Ave, Business Bay, 67890',
-    payments: [
-      { id: 'PAY-001', paymentDate: '2023-05-21', amount: 1000, method: 'Online Transfer' }
-    ],
-    balanceDue: 1696,
-  },
-  {
-    customerId: 'CUST-003',
-    customerName: 'Quantum Creations',
-    orderDate: '2023-04-28',
-    status: 'Fulfilled',
-    items: [
-      { productId: 'PROD-001', productName: 'Premium Widget', quantity: 50, price: 150.00, gst: 18 },
-      { productId: 'PROD-004', productName: 'Basic Thingamajig', quantity: 200, price: 25.00, gst: 18 },
-    ],
-    total: 14750,
-    discount: 500,
-    deliveryFees: 0,
-    grandTotal: 14250,
-    previousBalance: 0,
-    paymentTerm: 'Full Payment',
-    paymentMode: 'Online Transfer',
-    isGstInvoice: true,
-    deliveryDate: '2023-04-30',
-    balanceDue: 0,
-    payments: [
-        { id: 'PAY-222', amount: 14250, method: 'Online Transfer', paymentDate: '2023-04-28'}
-    ]
-  },
-    {
-    customerId: 'CUST-005',
-    customerName: 'Nexus Corp',
-    orderDate: '2023-05-22',
-    status: 'Pending',
-    items: [
-      { productId: 'PROD-002', productName: 'Standard Gadget', quantity: 100, price: 75.50, gst: 18 },
-      { productId: 'PROD-003', productName: 'Advanced Gizmo', quantity: 30, price: 220.00, gst: 18 },
-    ],
-    total: 16699,
-    discount: 0,
-    deliveryFees: 250,
-    grandTotal: 16949,
-    previousBalance: 0,
-    paymentTerm: 'Credit',
-    dueDate: '2023-06-22',
-    isGstInvoice: false,
-    deliveryDate: '2023-05-25',
-    payments: [],
-    balanceDue: 16949,
-  },
-  {
-    customerId: 'CUST-001',
-    customerName: 'Innovate Inc.',
-    orderDate: '2023-05-25',
-    status: 'Canceled',
-    items: [{ productId: 'PROD-004', productName: 'Basic Thingamajig', quantity: 100, price: 25.00, gst: 18 }],
-    total: 2950,
-    discount: 0,
-    deliveryFees: 0,
-    grandTotal: 2950,
-    previousBalance: 0,
-    paymentTerm: 'Full Payment',
-    isGstInvoice: true,
-  },
-];
+const mockOrders: Omit<Order, 'id'>[] = [];
 
 
 // Function to seed the database
@@ -524,4 +393,32 @@ export const getDashboardData = async () => {
         revenueChartData,
         recentOrders: orders.sort((a,b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()).slice(0, 5).map(o => ({...o, total: o.grandTotal})),
     };
+};
+
+// This function will be called from a server-side context to reset the DB
+export const resetDatabaseForFreshStart = async () => {
+    try {
+        // Delete all customers
+        const customerSnapshot = await getDocs(collection(db, 'customers'));
+        const customerBatch = writeBatch(db);
+        customerSnapshot.docs.forEach(doc => customerBatch.delete(doc.ref));
+        await customerBatch.commit();
+        console.log("All customers deleted.");
+
+        // Delete all orders
+        const orderSnapshot = await getDocs(collection(db, 'orders'));
+        const orderBatch = writeBatch(db);
+        orderSnapshot.docs.forEach(doc => orderBatch.delete(doc.ref));
+        await orderBatch.commit();
+        console.log("All orders deleted.");
+
+        // Reset the order counter
+        const counterRef = doc(db, 'counters', 'orderCounter');
+        await setDoc(counterRef, { currentNumber: 0 });
+        console.log("Order counter has been reset.");
+
+    } catch (error) {
+        console.error("Error during database reset:", error);
+        throw new Error("Failed to reset the database.");
+    }
 };

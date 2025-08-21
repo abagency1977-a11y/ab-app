@@ -16,7 +16,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { addProduct, deleteProduct as deleteProductFromDB } from '@/lib/data';
+import { addProduct, deleteProduct as deleteProductFromDB, getProducts } from '@/lib/data';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value);
@@ -161,6 +161,11 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
         }
     };
     
+    const refreshProducts = async () => {
+        const freshProducts = await getProducts();
+        setProducts(freshProducts);
+    }
+
     const handleProductAdded = (newProduct: Product) => {
         setProducts(prevProducts => [...prevProducts, newProduct]);
     };
@@ -403,5 +408,3 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
         </div>
     );
 }
-
-    

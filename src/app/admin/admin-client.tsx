@@ -4,11 +4,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Terminal, UploadCloud, CheckCircle, AlertCircle, Loader2, Image as ImageIcon } from 'lucide-react';
+import { Terminal, UploadCloud, CheckCircle, AlertCircle, Loader2, Image as ImageIcon, Trash } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { useToast } from '@/hooks/use-toast';
 
 type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
 
@@ -196,6 +198,69 @@ const FileUploader = ({ title, description, requiredFilename, acceptedFileType, 
 };
 
 
+function ResetDatabaseCard() {
+    const [isLoading, setIsLoading] = useState(false);
+    const { toast } = useToast();
+
+    const handleReset = async () => {
+        setIsLoading(true);
+        try {
+            const response = await fetch('/api/reset-db', { method: 'POST' });
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.message || 'Failed to reset database');
+            }
+            
+            toast({
+                title: "Database Reset Successful",
+                description: "Your customers and orders have been cleared. Please refresh the page.",
+            });
+        } catch (error: any) {
+            toast({
+                title: "Error Resetting Database",
+                description: error.message,
+                variant: 'destructive',
+            });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <Card className="border-destructive">
+            <CardHeader>
+                <CardTitle>Reset Application Data</CardTitle>
+                <CardDescription>
+                    This will permanently delete all customers, orders, and invoices. Your inventory will not be affected. This action cannot be undone.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                 <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                        <Button variant="destructive" disabled={isLoading}>
+                             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash className="mr-2 h-4 w-4" />}
+                            {isLoading ? "Resetting..." : "Reset Customer & Order Data"}
+                        </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                This will permanently delete all customer and order data. Your product inventory will remain. This action is irreversible and will start your order and invoice numbers from 1 again.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleReset}>Yes, Reset Data</AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            </CardContent>
+        </Card>
+    );
+}
+
 export function AdminClient() {
     const [logoStatus, setLogoStatus] = useState<UploadResult>({ status: 'idle', message: '' });
 
@@ -220,6 +285,8 @@ export function AdminClient() {
                     />
                 </CardContent>
             </Card>
+
+            <ResetDatabaseCard />
         </div>
     );
 }
