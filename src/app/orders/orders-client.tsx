@@ -183,7 +183,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             let rightColY = billToY;
 
             doc.setFontSize(10).setFont('helvetica', 'bold');
-            doc.text('GSTIN: 33ABCDE1234F1Z5', rightColX, rightColY, { align: 'right'});
+            doc.text('GSTIN: 33DMLPA8598D1ZU', rightColX, rightColY, { align: 'right'});
             rightColY += 8;
 
 
@@ -287,7 +287,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             const textWidth = doc.getTextWidth(grandTotalText);
             
             const boxWidth = textWidth + 40;
-            const boxHeight = 22;
+            const boxHeight = isCredit ? 24 : 22;
             const boxX = (pageWidth - boxWidth) / 2;
 
             const boxBgColor = isCredit ? [254, 226, 226] : [224, 242, 254]; // Light Red or Light Blue
