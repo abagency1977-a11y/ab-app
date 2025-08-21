@@ -269,7 +269,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             
             const textWidth = doc.getTextWidth(grandTotalText);
             const boxWidth = textWidth + 20;
-            const boxHeight = 12;
+            const boxHeight = 14;
             const boxX = (pageWidth - boxWidth) / 2;
 
             const isCredit = (orderToPrint.balanceDue ?? 0) > 0;
