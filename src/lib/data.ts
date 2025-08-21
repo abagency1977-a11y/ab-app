@@ -1,4 +1,5 @@
 
+
 import { db } from './firebase';
 import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference, updateDoc, increment, where } from 'firebase/firestore';
 import type { Customer, Product, Order, Payment, OrderItem } from './types';
@@ -248,10 +249,47 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
 };
 
 export const updateOrder = async (orderData: Order): Promise<void> => {
-    const { id, ...dataToUpdate } = orderData;
-    if (!id) throw new Error("Order ID is required to update.");
-    await setDoc(doc(db, 'orders', id), dataToUpdate, { merge: true });
+    if (!orderData.id) throw new Error("Order ID is required to update.");
+    const orderRef = doc(db, "orders", orderData.id);
+
+    try {
+        await runTransaction(db, async (transaction) => {
+            const originalOrderSnap = await transaction.get(orderRef);
+            if (!originalOrderSnap.exists()) {
+                throw new Error("Order to update does not exist.");
+            }
+            const originalOrder = originalOrderSnap.data() as Order;
+
+            // 1. Restore original stock
+            for (const item of originalOrder.items) {
+                const productRef = doc(db, "products", item.productId);
+                transaction.update(productRef, { stock: increment(item.quantity) });
+            }
+            
+            // 2. Decrement new stock
+            for (const item of orderData.items) {
+                const productRef = doc(db, "products", item.productId);
+                transaction.update(productRef, { stock: increment(-item.quantity) });
+            }
+
+            // 3. Update customer totalSpent (revert old, apply new)
+            const customerRef = doc(db, "customers", orderData.customerId);
+            const totalDifference = orderData.grandTotal - originalOrder.grandTotal;
+            transaction.update(customerRef, { 'transactionHistory.totalSpent': increment(totalDifference) });
+
+
+            // 4. Update the order document itself
+            transaction.set(orderRef, orderData);
+        });
+    } catch(e) {
+        console.error("Update order transaction failed:", e);
+        if (e instanceof Error) {
+            throw new Error(`Failed to update the order. Details: ${e.message}`);
+        }
+        throw new Error("Failed to update the order due to an unknown error.");
+    }
 };
+
 
 export const deleteOrder = async (order: Order): Promise<void> => {
     if (!order.id) throw new Error("Order ID is required for deletion.");

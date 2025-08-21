@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { addOrder, addCustomer, deleteOrder as deleteOrderFromDB, getCustomerBalance, getProducts } from '@/lib/data';
+import { addOrder, addCustomer, deleteOrder as deleteOrderFromDB, getCustomerBalance, getProducts, updateOrder } from '@/lib/data';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
@@ -57,6 +57,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     const [isAddOrderOpen, setIsAddOrderOpen] = useState(false);
     const [orderToPrint, setOrderToPrint] = useState<Order | null>(null);
     const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
+    const [orderToEdit, setOrderToEdit] = useState<Order | null>(null);
     const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
     const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState('');
@@ -83,6 +84,20 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             setIsLoading(false);
         }
     }
+    
+    const openEditDialog = async (order: Order) => {
+        setIsLoading(true);
+        try {
+            const freshProducts = await getProducts();
+            setProducts(freshProducts);
+            setOrderToEdit(order);
+        } catch(e) {
+            toast({ title: 'Error', description: 'Could not fetch latest product data.', variant: 'destructive'});
+        } finally {
+            setIsLoading(false);
+        }
+    }
+
 
     const filteredOrders = useMemo(() => {
         const now = new Date();
@@ -359,6 +374,25 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
        }
     };
 
+    const handleUpdateOrder = async (updatedOrderData: Order) => {
+       try {
+           await updateOrder(updatedOrderData);
+           setOrders(prevOrders => prevOrders.map(o => o.id === updatedOrderData.id ? updatedOrderData : o));
+           toast({
+               title: "Order Updated",
+               description: `Order ${updatedOrderData.id} has been successfully updated.`,
+           });
+       } catch (e: any) {
+           console.error("Error details:", e);
+           toast({
+              title: "Error Updating Order",
+              description: e.message || "Failed to save the order changes.",
+              variant: "destructive"
+          });
+          throw e; // re-throw to be caught in the dialog
+       }
+    };
+
     const handleDeleteOrder = async () => {
         if (!orderToDelete) return;
         try {
@@ -480,7 +514,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                                             </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end">
-                                            <DropdownMenuItem onClick={() => alert('Edit functionality to be implemented!')} disabled={order.status === 'Canceled'}>
+                                            <DropdownMenuItem onClick={() => openEditDialog(order)} disabled={order.status === 'Canceled' || isLoading}>
                                                 <Edit className="mr-2 h-4 w-4" />
                                                 Edit
                                             </DropdownMenuItem>
@@ -503,12 +537,19 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             </div>
             
             <AddOrderDialog
-                isOpen={isAddOrderOpen}
-                onOpenChange={setIsAddOrderOpen}
+                isOpen={isAddOrderOpen || !!orderToEdit}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setIsAddOrderOpen(false);
+                        setOrderToEdit(null);
+                    }
+                }}
                 customers={customers}
                 products={products}
                 onOrderAdded={handleAddOrder}
+                onOrderUpdated={handleUpdateOrder}
                 onCustomerAdded={handleAddCustomer}
+                existingOrder={orderToEdit}
             />
 
             <AlertDialog open={!!orderToDelete} onOpenChange={(open) => !open && setOrderToDelete(null)}>
@@ -533,13 +574,15 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
 const initialItemState = { productId: '', quantity: '', price: '', gst: '', stock: 0 };
 type OrderItemState = { productId: string, quantity: string, price: string, gst: string, stock: number };
 
-function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdded, onCustomerAdded }: {
+function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdded, onOrderUpdated, onCustomerAdded, existingOrder }: {
     isOpen: boolean,
     onOpenChange: (open: boolean) => void,
     customers: Customer[],
     products: Product[],
     onOrderAdded: (order: Omit<Order, 'id' | 'customerName'>) => Promise<Order>,
+    onOrderUpdated: (order: Order) => Promise<void>,
     onCustomerAdded: (customer: Omit<Customer, 'id'|'transactionHistory' | 'orders'>) => Promise<Customer | null>,
+    existingOrder: Order | null,
 }) {
     const [customerId, setCustomerId] = useState<string>('');
     const [items, setItems] = useState<OrderItemState[]>([]);
@@ -560,23 +603,8 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     const [previousBalance, setPreviousBalance] = useState(0);
 
     const { toast } = useToast();
-
-    useEffect(() => {
-        const fetchBalance = async () => {
-            if (customerId) {
-                const balance = await getCustomerBalance(customerId);
-                setPreviousBalance(balance);
-                const customer = customers.find(c => c.id === customerId);
-                if (customer) {
-                    setDeliveryAddress(customer.address);
-                }
-            } else {
-                setPreviousBalance(0);
-                setDeliveryAddress('');
-            }
-        };
-        fetchBalance();
-    }, [customerId, customers]);
+    
+    const isEditMode = !!existingOrder;
 
     const resetForm = useCallback(() => {
         setCustomerId('');
@@ -596,6 +624,54 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         setPreviousBalance(0);
         onOpenChange(false);
     }, [onOpenChange]);
+    
+    useEffect(() => {
+        if (existingOrder) {
+            setCustomerId(existingOrder.customerId);
+            setItems(existingOrder.items.map(item => {
+                const product = products.find(p => p.id === item.productId);
+                return {
+                    productId: item.productId,
+                    quantity: String(item.quantity),
+                    price: String(item.price),
+                    gst: String(item.gst),
+                    stock: (product?.stock ?? 0) + item.quantity // Add back current item quantity to stock for validation
+                }
+            }));
+            setPaymentTerm(existingOrder.paymentTerm);
+            if(existingOrder.paymentTerm === 'Full Payment') {
+                setPaymentMode(existingOrder.paymentMode || 'Cash');
+                setPaymentRemarks(existingOrder.paymentRemarks || '');
+            } else {
+                setDueDate(existingOrder.dueDate ? new Date(existingOrder.dueDate).toISOString().split('T')[0] : '');
+            }
+            setDeliveryDate(existingOrder.deliveryDate ? new Date(existingOrder.deliveryDate).toISOString().split('T')[0] : '');
+            setDeliveryAddress(existingOrder.deliveryAddress || '');
+            setIsGstInvoice(existingOrder.isGstInvoice);
+            setDiscount(existingOrder.discount);
+            setEnableDiscount(existingOrder.discount > 0);
+            setDeliveryFees(existingOrder.deliveryFees);
+            setPreviousBalance(existingOrder.previousBalance);
+        }
+    }, [existingOrder, products]);
+
+
+    useEffect(() => {
+        const fetchBalance = async () => {
+            if (customerId && !isEditMode) { // Don't refetch for existing orders
+                const balance = await getCustomerBalance(customerId);
+                setPreviousBalance(balance);
+                const customer = customers.find(c => c.id === customerId);
+                if (customer) {
+                    setDeliveryAddress(customer.address);
+                }
+            } else if (!customerId) {
+                setPreviousBalance(0);
+                setDeliveryAddress('');
+            }
+        };
+        fetchBalance();
+    }, [customerId, customers, isEditMode]);
 
     const handleProductSelect = (productId: string) => {
         const product = products.find(p => p.id === productId);
@@ -703,9 +779,10 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         const customer = customers.find(c => c.id === customerId);
         if (!customer) return;
 
-        let baseOrderData: Omit<Order, 'id' | 'customerName'> = {
+        let orderData: Omit<Order, 'id' | 'customerName'> | Order = {
             customerId,
-            orderDate: new Date().toISOString().split('T')[0],
+            orderDate: isEditMode ? existingOrder.orderDate : new Date().toISOString().split('T')[0],
+            customerName: customer.name,
             status: 'Pending',
             items: items.map(item => {
                 const product = products.find(p => p.id === item.productId);
@@ -744,13 +821,39 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                 payments: []
             })
         };
+        
+        if (isEditMode) {
+             // In edit mode, we merge existing data with new data
+            const finalOrderData = {
+                ...existingOrder,
+                ...orderData,
+                customerName: customer.name, // ensure customer name is fresh
+            };
 
-       try {
-           await onOrderAdded(baseOrderData);
-           resetForm();
-       } catch (e) {
-            // Error is already toasted in the parent component
-       }
+            // Don't overwrite payments when editing
+            if(finalOrderData.paymentTerm !== 'Full Payment') {
+                finalOrderData.payments = existingOrder.payments;
+                finalOrderData.balanceDue = grandTotal - (existingOrder.payments?.reduce((sum, p) => sum + p.amount, 0) || 0);
+                if (finalOrderData.balanceDue <= 0) {
+                    finalOrderData.status = 'Fulfilled';
+                }
+            }
+
+
+            try {
+                await onOrderUpdated(finalOrderData as Order);
+                resetForm();
+            } catch(e) {
+                // error is toasted in parent
+            }
+        } else {
+             try {
+               await onOrderAdded(orderData as Omit<Order, 'id' | 'customerName'>);
+               resetForm();
+           } catch (e) {
+                // Error is already toasted in the parent component
+           }
+        }
     };
 
     const customerOptions = useMemo(() => customers.map(c => ({ value: c.id, label: c.name })), [customers]);
@@ -762,7 +865,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
             <Dialog open={isOpen} onOpenChange={(open) => { if(!open) resetForm(); else onOpenChange(open);}}>
                 <DialogContent className="max-w-6xl">
                     <DialogHeader>
-                        <DialogTitle>Place New Order</DialogTitle>
+                        <DialogTitle>{isEditMode ? `Edit Order ${existingOrder.id}`: 'Place New Order'}</DialogTitle>
                     </DialogHeader>
                     <form onSubmit={handleSubmit}>
                         <ScrollArea className="h-[70vh]">
@@ -945,7 +1048,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                         </ScrollArea>
                         <DialogFooter className="p-4 border-t">
                             <Button type="button" variant="outline" onClick={() => resetForm()}>Cancel</Button>
-                            <Button type="submit">Submit Order</Button>
+                            <Button type="submit">{isEditMode ? 'Update Order' : 'Submit Order'}</Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>
