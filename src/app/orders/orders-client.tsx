@@ -429,7 +429,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                             <TableHead>Date</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead className="text-right">Total</TableHead>
-                            <TableHead>Actions</TableHead>
+                            <TableHead className="text-center">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -444,7 +444,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                                 <TableCell className="text-right">
                                     {formatNumber(order.grandTotal)}
                                 </TableCell>
-                                <TableCell>
+                                <TableCell className="text-center">
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
                                             <Button variant="ghost" className="h-8 w-8 p-0">
@@ -916,10 +916,3 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         </>
     );
 }
-
-    
-
-    
-
-
-
