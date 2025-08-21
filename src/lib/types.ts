@@ -54,6 +54,7 @@ export interface Order {
   total: number;
   discount: number;
   deliveryFees: number;
+  previousBalance: number;
   grandTotal: number;
   paymentTerm: PaymentTerm;
   paymentMode?: PaymentMode;

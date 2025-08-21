@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { addOrder, addCustomer, deleteOrder as deleteOrderFromDB } from '@/lib/data';
+import { addOrder, addCustomer, deleteOrder as deleteOrderFromDB, getCustomerBalance } from '@/lib/data';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
@@ -40,7 +40,6 @@ const formatCurrencyForPdf = (value: number | undefined): string => {
     const sign = value < 0 ? '-' : '';
     const absValue = Math.abs(value);
     
-    // The replace is a simple way to handle the negative sign placement for discounts
     const formattedValue = `INR ${new Intl.NumberFormat('en-IN', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
@@ -199,8 +198,8 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             let tableStartY = Math.max(yPos, rightColY) + 15;
             
             // --- Items Table ---
-            const subtotal = orderToPrint.items.reduce((acc, item) => acc + item.price * item.quantity, 0);
-            const totalGst = orderToPrint.isGstInvoice ? orderToPrint.items.reduce((acc, item) => acc + (item.price * item.quantity * (item.gst / 100)), 0) : 0;
+            const currentInvoiceAmount = orderToPrint.total;
+            const previousBalance = (orderToPrint.previousBalance ?? 0);
             
             const tableColumns = ['#', 'Item Description', 'Qty', 'Rate', 'Amount'];
             if(orderToPrint.isGstInvoice) tableColumns.splice(4, 0, 'GST');
@@ -237,10 +236,10 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
 
             // --- Totals Section (Right Aligned) ---
             const totalsData = [
-                ['Subtotal:', formatCurrencyForPdf(subtotal)],
-                ...(orderToPrint.isGstInvoice ? [['Total GST:', formatCurrencyForPdf(totalGst)]] : []),
+                ['Current Invoice Total:', formatCurrencyForPdf(currentInvoiceAmount)],
                 ...(orderToPrint.deliveryFees > 0 ? [['Delivery Fees:', formatCurrencyForPdf(orderToPrint.deliveryFees)]] : []),
                 ...(orderToPrint.discount > 0 ? [['Discount:', formatCurrencyForPdf(orderToPrint.discount * -1)]] : []),
+                ...(previousBalance > 0 ? [['Previous Balance:', formatCurrencyForPdf(previousBalance)]] : []),
             ];
             
             autoTable(doc, {
@@ -270,7 +269,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             const isCredit = (orderToPrint.balanceDue ?? 0) > 0;
             const textWidth = doc.getTextWidth(grandTotalText);
             const boxWidth = textWidth + (isCredit ? 30 : 20);
-            const boxHeight = 16;
+            const boxHeight = 18;
             const boxX = (pageWidth - boxWidth) / 2;
 
             const boxBgColor = isCredit ? [254, 226, 226] : [224, 242, 254]; // Light Red or Light Blue
@@ -526,8 +525,26 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     const [enableDiscount, setEnableDiscount] = useState(false);
     const [discount, setDiscount] = useState(0);
     const [deliveryFees, setDeliveryFees] = useState(0);
+    const [previousBalance, setPreviousBalance] = useState(0);
 
     const { toast } = useToast();
+
+    useEffect(() => {
+        const fetchBalance = async () => {
+            if (customerId) {
+                const balance = await getCustomerBalance(customerId);
+                setPreviousBalance(balance);
+                const customer = customers.find(c => c.id === customerId);
+                if (customer) {
+                    setDeliveryAddress(customer.address);
+                }
+            } else {
+                setPreviousBalance(0);
+                setDeliveryAddress('');
+            }
+        };
+        fetchBalance();
+    }, [customerId, customers]);
 
     const resetForm = useCallback(() => {
         setCustomerId('');
@@ -544,6 +561,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         setEnableDiscount(false);
         setDiscount(0);
         setDeliveryFees(0);
+        setPreviousBalance(0);
         onOpenChange(false);
     }, [onOpenChange]);
 
@@ -625,7 +643,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         }
     };
 
-    const { subTotal, totalGst, total } = useMemo(() => {
+    const { subTotal, totalGst, currentInvoiceTotal } = useMemo(() => {
         const subTotal = items.reduce((sum, item) => sum + (parseFloat(item.price) || 0) * (parseInt(item.quantity) || 0), 0);
         
         let totalGst = 0;
@@ -634,10 +652,10 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         }
         
         const totalValue = subTotal + totalGst;
-        return { subTotal, totalGst, total: totalValue };
+        return { subTotal, totalGst, currentInvoiceTotal: totalValue };
     }, [items, isGstInvoice]);
 
-    const grandTotal = useMemo(() => total - discount + deliveryFees, [total, discount, deliveryFees]);
+    const grandTotal = useMemo(() => currentInvoiceTotal - discount + deliveryFees + previousBalance, [currentInvoiceTotal, discount, deliveryFees, previousBalance]);
 
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -656,7 +674,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         let baseOrderData: Omit<Order, 'id' | 'customerName'> = {
             customerId,
             orderDate: new Date().toISOString().split('T')[0],
-            status: 'Pending', // Default status
+            status: 'Pending',
             items: items.map(item => {
                 const product = products.find(p => p.id === item.productId);
                 return {
@@ -667,7 +685,8 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                     gst: parseFloat(item.gst) || 0,
                 };
             }),
-            total,
+            total: currentInvoiceTotal,
+            previousBalance: previousBalance,
             discount,
             deliveryFees,
             grandTotal,
@@ -736,6 +755,14 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                                     <Button type="button" variant="outline" onClick={() => setIsAddCustomerOpen(true)}>Add New</Button>
                                                 </div>
                                             </div>
+                                             {previousBalance > 0 && (
+                                                <div className="flex items-center justify-end">
+                                                    <div className="text-right p-2 bg-amber-100 border border-amber-200 rounded-md">
+                                                        <div className="text-sm font-medium text-amber-800">Previous Balance</div>
+                                                        <div className="text-lg font-bold text-amber-900">{formatNumber(previousBalance)}</div>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
                                             <div className="space-y-2 col-span-2">
@@ -851,8 +878,8 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                     <div className="space-y-4">
                                         <Card><CardContent className="p-4 space-y-2">
                                             <DialogTitle className="text-lg">Order Summary</DialogTitle>
-                                            <div className="flex justify-between"><span>Subtotal:</span> <span className="font-semibold">{formatNumber(subTotal)}</span></div>
-                                            {isGstInvoice && <div className="flex justify-between"><span>Total GST:</span> <span className="font-semibold">{formatNumber(totalGst)}</span></div>}
+                                            <div className="flex justify-between"><span>Current Invoice Total:</span> <span className="font-semibold">{formatNumber(currentInvoiceTotal)}</span></div>
+                                            {previousBalance > 0 && <div className="flex justify-between text-destructive"><span>Previous Balance:</span> <span className="font-semibold">{formatNumber(previousBalance)}</span></div>}
                                              <div className="flex justify-between items-center">
                                                 <Label htmlFor="delivery_fees" className="flex-1">Delivery Fees</Label>
                                                 <Input type="number" placeholder="0.00" className="w-24 h-8" value={String(deliveryFees)} onChange={e => setDeliveryFees(parseFloat(e.target.value) || 0)} />

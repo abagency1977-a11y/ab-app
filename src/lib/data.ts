@@ -1,6 +1,6 @@
 
 import { db } from './firebase';
-import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference, updateDoc, increment } from 'firebase/firestore';
+import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference, updateDoc, increment, where } from 'firebase/firestore';
 import type { Customer, Product, Order, Payment, OrderItem } from './types';
 
 // MOCK DATA - This will be used to seed the database for the first time.
@@ -115,6 +115,7 @@ const mockOrders: Omit<Order, 'id'>[] = [
     discount: 225.00,
     deliveryFees: 0,
     grandTotal: 7775.00,
+    previousBalance: 0,
     paymentTerm: 'Full Payment',
     paymentMode: 'Card',
     isGstInvoice: true,
@@ -135,6 +136,7 @@ const mockOrders: Omit<Order, 'id'>[] = [
     discount: 0,
     deliveryFees: 100,
     grandTotal: 2696,
+    previousBalance: 0,
     paymentTerm: 'Credit',
     dueDate: '2023-06-20',
     isGstInvoice: true,
@@ -157,6 +159,7 @@ const mockOrders: Omit<Order, 'id'>[] = [
     discount: 500,
     deliveryFees: 0,
     grandTotal: 14250,
+    previousBalance: 0,
     paymentTerm: 'Full Payment',
     paymentMode: 'Online Transfer',
     isGstInvoice: true,
@@ -179,6 +182,7 @@ const mockOrders: Omit<Order, 'id'>[] = [
     discount: 0,
     deliveryFees: 250,
     grandTotal: 16949,
+    previousBalance: 0,
     paymentTerm: 'Credit',
     dueDate: '2023-06-22',
     isGstInvoice: false,
@@ -196,6 +200,7 @@ const mockOrders: Omit<Order, 'id'>[] = [
     discount: 0,
     deliveryFees: 0,
     grandTotal: 2950,
+    previousBalance: 0,
     paymentTerm: 'Full Payment',
     isGstInvoice: true,
   },
@@ -246,6 +251,23 @@ export const getCustomers = async (): Promise<Customer[]> => {
         return [];
     }
 };
+
+export const getCustomerBalance = async (customerId: string): Promise<number> => {
+    if (!customerId) return 0;
+    try {
+        const ordersQuery = query(collection(db, 'orders'), where('customerId', '==', customerId));
+        const snapshot = await getDocs(ordersQuery);
+        const totalBalance = snapshot.docs.reduce((acc, doc) => {
+            const order = doc.data() as Order;
+            return acc + (order.balanceDue ?? 0);
+        }, 0);
+        return totalBalance;
+    } catch (error) {
+        console.error(`Error fetching balance for customer ${customerId}:`, error);
+        return 0;
+    }
+}
+
 
 export const addCustomer = async (customerData: Omit<Customer, 'id' | 'transactionHistory' | 'orders'>): Promise<Customer> => {
     const newCustomer: Omit<Customer, 'id'> = {
@@ -335,14 +357,36 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
             const orderId = await getNextId('orderCounter', 'ORD');
             newOrderWithId = { ...orderData, customerName, id: orderId };
 
-            // Add new payment IDs if they exist
             if (newOrderWithId.payments) {
                 let paymentCounter = 0;
                 newOrderWithId.payments = newOrderWithId.payments.map(p => {
                     paymentCounter++;
-                    return { ...p, id: `${orderId}-PAY-${String(paymentCounter).padStart(2, '0')}` }
+                    const paymentId = `${orderId}-PAY-${String(paymentCounter).padStart(2, '0')}`;
+                    return { ...p, id: paymentId };
                 });
             }
+            
+            // In a transaction, first read all data, then write.
+            // Settle previous balances if any.
+            if (orderData.previousBalance && orderData.previousBalance > 0) {
+                 const outstandingOrdersQuery = query(
+                    collection(db, 'orders'), 
+                    where('customerId', '==', orderData.customerId), 
+                    where('balanceDue', '>', 0)
+                );
+                const outstandingDocs = await transaction.get(outstandingOrdersQuery);
+                
+                // Set the previous balance on the new order from the provided data
+                newOrderWithId.previousBalance = orderData.previousBalance;
+
+                // Clear the balance on all old orders
+                outstandingDocs.forEach(docSnap => {
+                    if (docSnap.id !== orderId) { // Don't clear the balance of the order we are just creating
+                        transaction.update(docSnap.ref, { balanceDue: 0 });
+                    }
+                });
+            }
+
 
             // 1. Create the new order document
             transaction.set(doc(db, "orders", orderId), newOrderWithId);

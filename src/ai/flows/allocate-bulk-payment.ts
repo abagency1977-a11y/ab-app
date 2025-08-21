@@ -14,9 +14,9 @@ import { z } from 'genkit';
 import type { Order } from '@/lib/types';
 
 const OutstandingInvoiceSchema = z.object({
-  id: z.string(),
+  id: z.string().describe("The ID of the invoice to apply payment to."),
   orderDate: z.string(),
-  balanceDue: z.number(),
+  balanceDue: z.number().describe("The outstanding balance of this specific invoice."),
   grandTotal: z.number(),
 });
 
@@ -25,7 +25,7 @@ const AllocateBulkPaymentInputSchema = z.object({
   paymentAmount: z.number().describe('The total amount of the payment received.'),
   paymentDate: z.string().describe('The date the payment was received.'),
   paymentMethod: z.string().describe('The method of payment (e.g., Cash, UPI).'),
-  outstandingInvoices: z.array(OutstandingInvoiceSchema).describe("A list of the customer's outstanding invoices, sorted from oldest to newest."),
+  invoicesToPay: z.array(OutstandingInvoiceSchema).describe("A list of the specific invoices the user has selected to apply the payment towards."),
 });
 export type AllocateBulkPaymentInput = z.infer<typeof AllocateBulkPaymentInputSchema>;
 
@@ -37,8 +37,8 @@ const AllocatedPaymentSchema = z.object({
 });
 
 const AllocateBulkPaymentOutputSchema = z.object({
-  allocations: z.array(AllocatedPaymentSchema).describe('A list of how the payment was allocated across invoices.'),
-  remainingCredit: z.number().describe("The amount of payment left over after settling all possible invoices. This can be used as a credit for the customer."),
+  allocations: z.array(AllocatedPaymentSchema).describe('A list of how the payment was allocated across the selected invoices.'),
+  remainingCredit: z.number().describe("The amount of payment left over after settling the selected invoices. This can be used as a credit for the customer."),
   summary: z.string().describe("A brief, human-readable summary of the allocation process. e.g. 'Allocated 5000 to INV-001 and 1000 to INV-002, with 0 remaining.'"),
 });
 export type AllocateBulkPaymentOutput = z.infer<typeof AllocateBulkPaymentOutputSchema>;
@@ -57,18 +57,18 @@ const prompt = ai.definePrompt({
 
 A customer has made a payment of {{{paymentAmount}}} via {{{paymentMethod}}} on {{{paymentDate}}}.
 
-Here is a list of their outstanding invoices, sorted from oldest to newest:
-{{#each outstandingInvoices}}
+The user has explicitly chosen to apply this payment to the following invoices:
+{{#each invoicesToPay}}
 - Invoice ID: {{id}}, Due: {{balanceDue}}, Total: {{grandTotal}}, Date: {{orderDate}}
 {{/each}}
 
-Your task is to apply the payment amount to these invoices, starting with the OLDEST invoice first.
+Your task is to apply the payment amount to these selected invoices.
 
-1.  For each invoice, determine how much of the payment can be applied.
+1.  For each selected invoice, determine how much of the payment can be applied. The payment should fully clear an invoice before moving to the next one in the provided list.
 2.  Calculate the new balance due for each invoice.
 3.  Determine the new status for each invoice. If the new balance is 0 or less, the status should be "Fulfilled". Otherwise, it remains "Pending".
 4.  Keep track of the remaining payment amount as you allocate it.
-5.  If there is any payment amount left after clearing all invoices, this is the remaining credit.
+5.  If there is any payment amount left after clearing all selected invoices, this is the remaining credit.
 6.  Provide a clear summary of the allocations.
 
 Return the result in the specified JSON format.
@@ -82,11 +82,11 @@ const allocateBulkPaymentFlow = ai.defineFlow(
     outputSchema: AllocateBulkPaymentOutputSchema,
   },
   async input => {
-    if (input.outstandingInvoices.length === 0) {
+    if (input.invoicesToPay.length === 0) {
         return {
             allocations: [],
             remainingCredit: input.paymentAmount,
-            summary: `No outstanding invoices to apply payment to. A credit of ${input.paymentAmount} has been recorded.`
+            summary: `No invoices were selected to apply payment to. A credit of ${input.paymentAmount} has been recorded.`
         }
     }
     

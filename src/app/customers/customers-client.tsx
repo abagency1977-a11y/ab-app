@@ -16,6 +16,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { getOrders, getCustomers, addCustomer, deleteCustomer as deleteCustomerFromDB, updateOrder } from '@/lib/data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { allocateBulkPayment, AllocateBulkPaymentOutput } from '@/ai/flows/allocate-bulk-payment';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value);
 
@@ -196,7 +199,7 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
     
     const openBulkPaymentDialog = (customer: Customer) => {
         const customerOrders = orders
-            .filter(o => o.customerId === customer.id && (o.balanceDue ?? o.grandTotal) > 0)
+            .filter(o => o.customerId === customer.id && (o.balanceDue ?? 0) > 0)
             .sort((a, b) => new Date(a.orderDate).getTime() - new Date(b.orderDate).getTime()); // oldest first
         setCustomerForBulkPayment({ ...customer, orders: customerOrders });
         setIsBulkPaymentOpen(true);
@@ -315,13 +318,15 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                 </AlertDialogContent>
             </AlertDialog>
             
-            <BulkPaymentDialog 
-                isOpen={isBulkPaymentOpen} 
-                onOpenChange={setIsBulkPaymentOpen}
-                customer={customerForBulkPayment}
-                allOrders={orders}
-                onPaymentSuccess={refreshData}
-            />
+            {isBulkPaymentOpen && (
+                <BulkPaymentDialog 
+                    isOpen={isBulkPaymentOpen} 
+                    onOpenChange={setIsBulkPaymentOpen}
+                    customer={customerForBulkPayment}
+                    allOrders={orders}
+                    onPaymentSuccess={refreshData}
+                />
+            )}
         </div>
     );
 }
@@ -338,12 +343,33 @@ function BulkPaymentDialog({ isOpen, onOpenChange, customer, allOrders, onPaymen
     const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
     const [paymentMethod, setPaymentMethod] = useState('Cash');
     const [notes, setNotes] = useState('');
+    const [selectedInvoices, setSelectedInvoices] = useState<Record<string, boolean>>({});
     const [isProcessing, setIsProcessing] = useState(false);
     const { toast } = useToast();
 
+    const outstandingInvoices = useMemo(() => customer?.orders ?? [], [customer]);
+    
+    const { totalSelected, remainingToAllocate } = useMemo(() => {
+        const paymentAmount = parseFloat(amount) || 0;
+        let totalSelected = 0;
+        for (const invoiceId in selectedInvoices) {
+            if (selectedInvoices[invoiceId]) {
+                const invoice = outstandingInvoices.find(inv => inv.id === invoiceId);
+                if (invoice) {
+                    totalSelected += invoice.balanceDue ?? 0;
+                }
+            }
+        }
+        return { totalSelected, remainingToAllocate: paymentAmount - totalSelected };
+    }, [selectedInvoices, outstandingInvoices, amount]);
+
+    const handleSelectInvoice = (invoiceId: string, isChecked: boolean) => {
+        setSelectedInvoices(prev => ({ ...prev, [invoiceId]: isChecked }));
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!customer || !customer.orders) return;
+        if (!customer) return;
         
         setIsProcessing(true);
         try {
@@ -352,22 +378,36 @@ function BulkPaymentDialog({ isOpen, onOpenChange, customer, allOrders, onPaymen
                 throw new Error("Please enter a valid payment amount.");
             }
 
-            const outstandingInvoices = customer.orders.map(o => ({
-                id: o.id,
-                orderDate: o.orderDate,
-                balanceDue: o.balanceDue ?? o.grandTotal,
-                grandTotal: o.grandTotal,
-            }));
+            const invoicesToPay = outstandingInvoices.filter(inv => selectedInvoices[inv.id]);
+            if (invoicesToPay.length === 0) {
+                throw new Error("Please select at least one invoice to pay.");
+            }
+            
+            const totalAmountOfSelectedInvoices = invoicesToPay.reduce((sum, inv) => sum + (inv.balanceDue ?? 0), 0);
+            if (paymentAmount > totalAmountOfSelectedInvoices) {
+                 toast({
+                    title: "Payment amount too high",
+                    description: `Payment of ${formatNumber(paymentAmount)} is more than the selected invoices total of ${formatNumber(totalAmountOfSelectedInvoices)}.`,
+                    variant: 'destructive',
+                });
+                setIsProcessing(false);
+                return;
+            }
+
 
             const result = await allocateBulkPayment({
                 customerId: customer.id,
                 paymentAmount,
                 paymentDate,
                 paymentMethod,
-                outstandingInvoices,
+                invoicesToPay: invoicesToPay.map(o => ({
+                    id: o.id,
+                    orderDate: o.orderDate,
+                    balanceDue: o.balanceDue ?? o.grandTotal,
+                    grandTotal: o.grandTotal,
+                })),
             });
             
-            // Now, update the orders in Firestore based on the allocations
             for (const allocation of result.allocations) {
                 const orderToUpdate = allOrders.find(o => o.id === allocation.invoiceId);
                 if (orderToUpdate) {
@@ -396,8 +436,8 @@ function BulkPaymentDialog({ isOpen, onOpenChange, customer, allOrders, onPaymen
                 description: result.summary,
             });
 
-            onPaymentSuccess(); // Refresh data on the main page
-            onOpenChange(false); // Close dialog
+            onPaymentSuccess();
+            onOpenChange(false);
 
         } catch (error: any) {
             console.error("Bulk payment error:", error);
@@ -415,24 +455,26 @@ function BulkPaymentDialog({ isOpen, onOpenChange, customer, allOrders, onPaymen
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent>
+            <DialogContent className="max-w-2xl">
                 <DialogHeader>
                     <DialogTitle>Record Bulk Payment for {customer.name}</DialogTitle>
                     <DialogDescription>
-                        Enter the total payment received. It will be automatically allocated to the oldest outstanding invoices first.
+                        Enter payment details and select which invoices to apply it to.
                     </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit}>
                     <div className="grid gap-4 py-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="bulk-amount">Amount Received</Label>
-                            <Input id="bulk-amount" type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" required />
-                        </div>
                         <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="bulk-amount">Amount Received</Label>
+                                <Input id="bulk-amount" type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" required />
+                            </div>
                             <div className="space-y-2">
                                 <Label htmlFor="bulk-paymentDate">Payment Date</Label>
                                 <Input id="bulk-paymentDate" type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} required />
                             </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <Label htmlFor="bulk-paymentMethod">Payment Method</Label>
                                 <Select value={paymentMethod} onValueChange={setPaymentMethod}>
@@ -446,15 +488,53 @@ function BulkPaymentDialog({ isOpen, onOpenChange, customer, allOrders, onPaymen
                                     </SelectContent>
                                 </Select>
                             </div>
+                             <div className="space-y-2">
+                                <Label htmlFor="bulk-notes">Notes (Optional)</Label>
+                                <Input id="bulk-notes" value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g., Consolidated payment" />
+                            </div>
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="bulk-notes">Notes (Optional)</Label>
-                            <Input id="bulk-notes" value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g., Consolidated payment" />
+                        
+                        <div>
+                            <h4 className="font-medium my-2">Outstanding Invoices</h4>
+                            <ScrollArea className="h-64 border rounded-md">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead className="w-10"></TableHead>
+                                            <TableHead>Invoice ID</TableHead>
+                                            <TableHead>Date</TableHead>
+                                            <TableHead className="text-right">Balance Due</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {outstandingInvoices.map(inv => (
+                                            <TableRow key={inv.id}>
+                                                <TableCell>
+                                                    <Checkbox
+                                                        checked={selectedInvoices[inv.id]}
+                                                        onCheckedChange={(checked) => handleSelectInvoice(inv.id, !!checked)}
+                                                    />
+                                                </TableCell>
+                                                <TableCell>{inv.id.replace("ORD", "INV")}</TableCell>
+                                                <TableCell>{new Date(inv.orderDate).toLocaleDateString('en-IN')}</TableCell>
+                                                <TableCell className="text-right">{formatNumber(inv.balanceDue ?? 0)}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </ScrollArea>
                         </div>
+                         <div className="grid grid-cols-2 gap-4 text-sm mt-2 p-3 bg-muted rounded-md">
+                            <div>Total Selected: <Badge variant="secondary">{formatNumber(totalSelected)}</Badge></div>
+                            <div className={remainingToAllocate < 0 ? 'text-red-600' : ''}>
+                                {remainingToAllocate < 0 ? 'Over Allocated:' : 'Remaining:'} <Badge variant={remainingToAllocate < 0 ? 'destructive' : 'default'}>{formatNumber(Math.abs(remainingToAllocate))}</Badge>
+                            </div>
+                        </div>
+
                     </div>
                     <DialogFooter>
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                        <Button type="submit" disabled={isProcessing}>
+                        <Button type="submit" disabled={isProcessing || Object.values(selectedInvoices).every(v => !v)}>
                              {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Allocate Payment
                         </Button>
