@@ -183,7 +183,11 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             let rightColY = billToY;
 
             doc.setFontSize(16).setFont('helvetica', 'bold');
-            doc.text('Invoice', rightColX, rightColY, { align: 'right'});
+            if (orderToPrint.paymentTerm === 'Credit') {
+                doc.text('Credit Invoice', rightColX, rightColY, { align: 'right'});
+            } else {
+                doc.text('Invoice', rightColX, rightColY, { align: 'right'});
+            }
             rightColY += 8;
             
             doc.setFontSize(10).setFont('helvetica', 'normal');
@@ -191,6 +195,14 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             rightColY += 5;
             doc.text(`Date: ${new Date(orderToPrint.orderDate).toLocaleDateString('en-GB')}`, rightColX, rightColY, { align: 'right'});
             rightColY += 5;
+
+            if (orderToPrint.paymentTerm === 'Credit' && orderToPrint.dueDate) {
+                doc.setFont('helvetica', 'bold');
+                doc.text(`Due Date: ${new Date(orderToPrint.dueDate).toLocaleDateString('en-GB')}`, rightColX, rightColY, { align: 'right'});
+                doc.setFont('helvetica', 'normal');
+                rightColY += 5;
+            }
+
             if(orderToPrint.deliveryDate) {
                 doc.text(`Delivery Date: ${new Date(orderToPrint.deliveryDate).toLocaleDateString('en-GB')}`, rightColX, rightColY, { align: 'right'});
             }
@@ -268,8 +280,9 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             
             const isCredit = (orderToPrint.balanceDue ?? 0) > 0;
             const textWidth = doc.getTextWidth(grandTotalText);
-            const boxWidth = textWidth + (isCredit ? 30 : 20);
-            const boxHeight = 18;
+            
+            const boxWidth = textWidth + 40;
+            const boxHeight = 20;
             const boxX = (pageWidth - boxWidth) / 2;
 
             const boxBgColor = isCredit ? [254, 226, 226] : [224, 242, 254]; // Light Red or Light Blue
@@ -939,4 +952,5 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         </>
     );
 }
+
 
