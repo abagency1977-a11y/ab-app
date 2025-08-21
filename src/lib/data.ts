@@ -36,14 +36,6 @@ const mockProducts: Omit<Product, 'id'>[] = [
         { date: '2023-05-28', quantity: 65 },
     ]
   },
-   {
-    name: 'Opening Balance',
-    sku: 'OB-001',
-    stock: 1000000,
-    price: 1.00,
-    gst: 0,
-     historicalData: []
-  },
   {
     name: 'Advanced Gizmo',
     sku: 'AG-3000',
@@ -201,6 +193,11 @@ async function getNextId(counterName: string, prefix: string): Promise<string> {
     return `${prefix}-${String(nextNumber).padStart(4, '0')}`;
 }
 
+const isOpeningBalanceOrder = (order: Order | Omit<Order, 'id' | 'customerName'>) => {
+    return order.items.some(item => item.productName === 'Opening Balance');
+}
+
+
 export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): Promise<Order> => {
     const customerRef = doc(db, "customers", orderData.customerId);
     
@@ -232,12 +229,15 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
             // 1. Create the new order document
             transaction.set(doc(db, "orders", orderId), newOrderWithId);
 
-            // 2. Update the customer's transaction history with the net value of the new order
-            const netOrderValue = newOrderWithId.total - newOrderWithId.discount + newOrderWithId.deliveryFees;
-            transaction.update(customerRef, {
-                'transactionHistory.totalSpent': increment(netOrderValue),
-                'transactionHistory.lastPurchaseDate': newOrderWithId.orderDate
-            });
+            // 2. Update the customer's transaction history, unless it's an opening balance order.
+            if (!isOpeningBalanceOrder(newOrderWithId)) {
+                const netOrderValue = newOrderWithId.total - newOrderWithId.discount + newOrderWithId.deliveryFees;
+                transaction.update(customerRef, {
+                    'transactionHistory.totalSpent': increment(netOrderValue),
+                    'transactionHistory.lastPurchaseDate': newOrderWithId.orderDate
+                });
+            }
+
 
             // 3. Decrement stock for each item in the order
             for (const item of newOrderWithId.items) {
@@ -281,13 +281,31 @@ export const updateOrder = async (orderData: Order): Promise<void> => {
                 transaction.update(productRef, { stock: increment(-item.quantity) });
             }
 
-            // 3. Update customer totalSpent (revert old net value, apply new net value)
+            // 3. Update customer totalSpent
+            const customerRef = doc(db, "customers", orderData.customerId);
+            let netValueDifference = 0;
+
+            const wasOriginalOB = isOpeningBalanceOrder(originalOrder);
+            const isNewOB = isOpeningBalanceOrder(orderData);
+            
             const originalNetValue = originalOrder.total - originalOrder.discount + originalOrder.deliveryFees;
             const newNetValue = orderData.total - orderData.discount + orderData.deliveryFees;
-            const netValueDifference = newNetValue - originalNetValue;
-            
-            const customerRef = doc(db, "customers", orderData.customerId);
-            transaction.update(customerRef, { 'transactionHistory.totalSpent': increment(netValueDifference) });
+
+            if (wasOriginalOB && !isNewOB) {
+                // Was OB, now is not. Add new value.
+                netValueDifference = newNetValue;
+            } else if (!wasOriginalOB && isNewOB) {
+                // Was not OB, now is. Remove old value.
+                netValueDifference = -originalNetValue;
+            } else if (!wasOriginalOB && !isNewOB) {
+                // Neither are OB. Calculate difference.
+                netValueDifference = newNetValue - originalNetValue;
+            }
+            // If both were OB, difference is 0.
+
+            if (netValueDifference !== 0) {
+                 transaction.update(customerRef, { 'transactionHistory.totalSpent': increment(netValueDifference) });
+            }
 
 
             // 4. Update the order document itself
@@ -310,26 +328,21 @@ export const deleteOrder = async (order: Order): Promise<void> => {
 
     try {
         await runTransaction(db, async (transaction) => {
-            // First, read the customer document
             const customerSnap = await transaction.get(customerRef);
-
-            // Now perform writes
             transaction.delete(orderRef);
 
-            // Only update the customer if they exist and the order wasn't canceled
-            if (customerSnap.exists() && order.status !== 'Canceled') {
+            // Only update the customer if they exist and it was not an Opening Balance order.
+            if (customerSnap.exists() && !isOpeningBalanceOrder(order)) {
                 const netOrderValue = order.total - order.discount + order.deliveryFees;
                 transaction.update(customerRef, {
                     'transactionHistory.totalSpent': increment(-netOrderValue)
                 });
             }
 
-            // Only restore stock if the order wasn't canceled
-            if (order.status !== 'Canceled') {
-                for (const item of order.items) {
-                    const productRef = doc(db, "products", item.productId);
-                    transaction.update(productRef, { stock: increment(item.quantity) });
-                }
+            // Always restore stock.
+            for (const item of order.items) {
+                const productRef = doc(db, "products", item.productId);
+                transaction.update(productRef, { stock: increment(item.quantity) });
             }
         });
     } catch(e) {
@@ -432,12 +445,10 @@ export const resetDatabaseForFreshStart = async () => {
 
         console.log("Database collections (customers, orders, counters) have been cleared.");
 
-        // Re-seed only the products, as customers and orders should be empty.
-        await seedCollection('products', mockProducts, 'PROD');
+        // We don't need to re-seed products, they should be preserved.
 
     } catch (error) {
         console.error("Error during database reset:", error);
         throw new Error("Failed to reset the database.");
     }
 };
-
