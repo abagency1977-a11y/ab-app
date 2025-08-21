@@ -46,7 +46,7 @@ const formatCurrencyForPdf = (value: number | undefined): string => {
       maximumFractionDigits: 2,
     }).format(absValue)}`;
     
-    return sign ? formattedValue.replace('INR', '- INR') : formattedValue;
+    return sign ? formattedValue.replace('INR ', 'INR -') : formattedValue;
 }
 
 
@@ -269,7 +269,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             
             const isCredit = (orderToPrint.balanceDue ?? 0) > 0;
             const textWidth = doc.getTextWidth(grandTotalText);
-            const boxWidth = textWidth + (isCredit ? 25 : 20);
+            const boxWidth = textWidth + (isCredit ? 30 : 20);
             const boxHeight = 16;
             const boxX = (pageWidth - boxWidth) / 2;
 
@@ -427,7 +427,6 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                             <TableHead>Order ID</TableHead>
                             <TableHead>Customer</TableHead>
                             <TableHead>Date</TableHead>
-                            <TableHead>Status</TableHead>
                             <TableHead className="text-right">Total</TableHead>
                             <TableHead className="text-center">Actions</TableHead>
                         </TableRow>
@@ -438,9 +437,6 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                                 <TableCell className="font-medium">{order.id}</TableCell>
                                 <TableCell>{order.customerName}</TableCell>
                                 <TableCell>{new Date(order.orderDate).toLocaleDateString('en-IN')}</TableCell>
-                                <TableCell>
-                                    <Badge variant={order.status === 'Fulfilled' ? 'default' : order.status === 'Pending' ? 'secondary' : 'destructive'} className="capitalize">{order.status}</Badge>
-                                </TableCell>
                                 <TableCell className="text-right">
                                     {formatNumber(order.grandTotal)}
                                 </TableCell>
@@ -916,3 +912,4 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         </>
     );
 }
+
