@@ -26,7 +26,6 @@ import { InvoiceTemplate } from '@/components/invoice-template';
 import { startOfWeek, startOfMonth, subMonths, isWithinInterval } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Combobox } from '@/components/ui/combobox';
-import { InterMedium } from '@/lib/fonts';
 
 
 const formatNumber = (value: number | undefined) => {
@@ -43,8 +42,8 @@ const formatNumberForPdf = (value: number | undefined): string => {
 };
 
 const formatCurrencyForPdf = (value: number | undefined): string => {
-    if (value === undefined || isNaN(value)) return '₹ 0.00';
-     return `₹ ${formatNumberForPdf(value)}`;
+    if (value === undefined || isNaN(value)) return 'INR 0.00';
+     return `INR ${formatNumberForPdf(value)}`;
 }
 
 
@@ -120,12 +119,6 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         try {
             const doc = new jsPDF();
 
-            // Embed the Inter font that supports the Rupee symbol
-            doc.addFileToVFS('Inter-Medium.ttf', InterMedium);
-            doc.addFont('Inter-Medium.ttf', 'Inter', 'normal');
-            doc.setFont('Inter');
-
-
             const pageWidth = doc.internal.pageSize.getWidth();
             const margin = 15;
             let yPos = 20;
@@ -133,19 +126,26 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             // --- Header ---
             if (logoUrl) {
                 try {
-                    doc.addImage(logoUrl, 'PNG', pageWidth / 2 - 12.5, yPos, 25, 25);
-                    yPos += 27;
+                    const img = new Image();
+                    img.src = logoUrl;
+                    await new Promise(resolve => {
+                        img.onload = resolve;
+                        img.onerror = resolve; // Continue even if logo fails
+                    });
+                    if (img.complete && img.width > 0) {
+                        doc.addImage(logoUrl, 'PNG', pageWidth / 2 - 12.5, yPos, 25, 25);
+                        yPos += 27;
+                    }
                 } catch(e) {
                     console.error("Error adding logo image to PDF:", e);
-                    // Continue without logo if it fails
                 }
             }
             
-            doc.setFontSize(14).setFont('Inter', 'normal', 'bold');
+            doc.setFontSize(14).setFont('helvetica', 'bold');
             doc.text('AB Agency', pageWidth / 2, yPos, { align: 'center' });
             yPos += 6;
 
-            doc.setFontSize(9).setFont('Inter', 'normal');
+            doc.setFontSize(9).setFont('helvetica', 'normal');
             doc.text('No.1, Ayyanchery main road, Ayyanchery, Urapakkam, Chennai - 603210', pageWidth / 2, yPos, { align: 'center' });
             yPos += 4;
             doc.text(`Email: abagency1977@gmail.com | MOB: 95511 95505 / 95001 82975`, pageWidth / 2, yPos, { align: 'center' });
@@ -157,11 +157,11 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             
             // --- Billed To and Invoice Details ---
             const billToY = yPos;
-            doc.setFontSize(10).setFont('Inter', 'normal', 'bold');
+            doc.setFontSize(10).setFont('helvetica', 'bold');
             doc.text('Billed To:', margin, yPos);
             yPos += 6;
             
-            doc.setFontSize(10).setFont('Inter', 'normal');
+            doc.setFontSize(10).setFont('helvetica', 'normal');
             doc.text(customer.name, margin, yPos);
             yPos += 5;
 
@@ -177,11 +177,11 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             const rightColX = pageWidth - margin;
             let rightColY = billToY;
 
-            doc.setFontSize(16).setFont('Inter', 'normal', 'bold');
+            doc.setFontSize(16).setFont('helvetica', 'bold');
             doc.text('Invoice', rightColX, rightColY, { align: 'right'});
             rightColY += 8;
             
-            doc.setFontSize(10).setFont('Inter', 'normal');
+            doc.setFontSize(10).setFont('helvetica', 'normal');
             doc.text(`# ${orderToPrint.id.replace('ORD', 'INV')}`, rightColX, rightColY, { align: 'right'});
             rightColY += 5;
             doc.text(`Date: ${new Date(orderToPrint.orderDate).toLocaleDateString('en-GB')}`, rightColX, rightColY, { align: 'right'});
@@ -210,14 +210,14 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 if(orderToPrint.isGstInvoice) rowData.splice(4, 0, `${item.gst}%`);
                 return rowData;
             });
-
+            
             autoTable(doc, {
                 startY: tableStartY,
                 head: [tableColumns],
                 body: tableRows,
                 theme: 'grid',
-                headStyles: { fillColor: [34, 34, 34], textColor: 255, font: 'Inter', fontStyle: 'bold', fontSize: 9 },
-                styles: { fontSize: 9, font: 'Inter', cellPadding: 2 },
+                headStyles: { fillColor: [34, 34, 34], textColor: 255, font: 'helvetica', fontStyle: 'bold', fontSize: 9 },
+                styles: { fontSize: 9, font: 'helvetica', cellPadding: 2 },
                 columnStyles: {
                     0: { cellWidth: 8, halign: 'center' },
                     2: { halign: 'right' },
@@ -229,12 +229,6 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                     let finalY = (doc as any).lastAutoTable.finalY || data.cursor?.y || 200;
                     
                     // --- Totals Section ---
-                    const totalsX = pageWidth - margin - 80;
-                    doc.setFont('Inter', 'normal', 'bold');
-                    doc.setFontSize(10);
-                    
-                    let totalsY = finalY + 8;
-                    
                     const totalsData = [
                         ['Subtotal:', formatCurrencyForPdf(subtotal)],
                         ...(orderToPrint.isGstInvoice ? [['Total GST:', formatCurrencyForPdf(totalGst)]] : []),
@@ -242,23 +236,27 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                         ...(orderToPrint.discount > 0 ? [['Discount:', `-${formatCurrencyForPdf(orderToPrint.discount)}`]] : []),
                     ];
 
+                    let totalsY = finalY + 8;
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(10);
+                    
                     totalsData.forEach(([label, value]) => {
-                        doc.text(label, totalsX, totalsY);
+                        doc.text(label, pageWidth - margin - 50, totalsY);
                         doc.text(value, pageWidth - margin, totalsY, { align: 'right' });
                         totalsY += 6;
                     });
-
+                    
                     // --- Grand Total ---
-                    totalsY += 2; // Add a little space before the grand total
+                    totalsY += 2;
                     doc.setFontSize(12);
-                    doc.setFont('Inter', 'normal', 'bold');
-                    doc.text('Grand Total:', totalsX, totalsY);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('Grand Total:', pageWidth - margin - 50, totalsY);
                     doc.text(formatCurrencyForPdf(orderToPrint.grandTotal), pageWidth - margin, totalsY, { align: 'right' });
 
 
                     // --- Final Footer ---
                     const pageCount = (doc as any).internal.getNumberOfPages();
-                    doc.setFont('Inter', 'normal').setFontSize(8);
+                    doc.setFont('helvetica', 'normal').setFontSize(8);
                     doc.setTextColor(100,116,139); // gray-500
                     for (let i = 1; i <= pageCount; i++) {
                         doc.setPage(i);
@@ -842,5 +840,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         </>
     );
 }
+
+    
 
     
