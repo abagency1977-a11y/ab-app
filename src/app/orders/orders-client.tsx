@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { addOrder, addCustomer, deleteOrder as deleteOrderFromDB, getCustomerBalance } from '@/lib/data';
+import { addOrder, addCustomer, deleteOrder as deleteOrderFromDB, getCustomerBalance, getProducts } from '@/lib/data';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
@@ -70,6 +70,19 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             setLogoUrl(savedLogo);
         }
     }, []);
+
+    const openOrderDialog = async () => {
+        setIsLoading(true);
+        try {
+            const freshProducts = await getProducts();
+            setProducts(freshProducts);
+            setIsAddOrderOpen(true);
+        } catch(e) {
+            toast({ title: 'Error', description: 'Could not fetch latest product data.', variant: 'destructive'});
+        } finally {
+            setIsLoading(false);
+        }
+    }
 
     const filteredOrders = useMemo(() => {
         const now = new Date();
@@ -414,8 +427,9 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         <div className="space-y-4">
             <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-bold">Orders</h1>
-                 <Button onClick={() => setIsAddOrderOpen(true)}>
-                    <PlusCircle className="mr-2 h-4 w-4" /> Place Order
+                 <Button onClick={openOrderDialog} disabled={isLoading}>
+                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
+                     Place Order
                 </Button>
             </div>
             <div className="flex items-center gap-4">

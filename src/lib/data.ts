@@ -50,18 +50,12 @@ const mockProducts: Omit<Product, 'id'>[] = [
     ]
   },
   {
-    name: 'Basic Thingamajig',
-    sku: 'BT-4000',
-    stock: 500,
-    price: 25.00,
-    gst: 18,
-     historicalData: [
-        { date: '2023-01-25', quantity: 100 },
-        { date: '2023-02-20', quantity: 120 },
-        { date: '2023-03-28', quantity: 90 },
-        { date: '2023-04-30', quantity: 110 },
-        { date: '2023-05-30', quantity: 130 },
-    ]
+    name: 'Opening Balance',
+    sku: 'OB-001',
+    stock: 9999,
+    price: 1,
+    gst: 0,
+    historicalData: []
   }
 ];
 
@@ -160,6 +154,13 @@ export const addProduct = async (productData: Omit<Product, 'id' | 'historicalDa
     const docRef = await addDoc(collection(db, 'products'), newProduct);
     return { id: docRef.id, ...newProduct };
 };
+
+export const updateProduct = async (productData: Product): Promise<void> => {
+    const { id, ...dataToUpdate } = productData;
+    if (!id) throw new Error("Product ID is required to update.");
+    await setDoc(doc(db, 'products', id), dataToUpdate, { merge: true });
+};
+
 
 export const deleteProduct = async(id: string) => {
     await deleteDoc(doc(db, 'products', id));
@@ -289,20 +290,16 @@ export const deleteOrder = async (order: Order): Promise<void> => {
 
     try {
         await runTransaction(db, async (transaction) => {
-            // Check if customer exists before trying to update
             const customerSnap = await transaction.get(customerRef);
 
-            // 1. Delete the order document
             transaction.delete(orderRef);
 
-            // 2. Update customer's transaction history, if the customer exists
             if (customerSnap.exists() && order.status !== 'Canceled') {
                 transaction.update(customerRef, {
                     'transactionHistory.totalSpent': increment(-order.grandTotal)
                 });
             }
 
-            // 3. Restore stock for each item, but only if the order wasn't canceled
             if (order.status !== 'Canceled') {
                 for (const item of order.items) {
                     const productRef = doc(db, "products", item.productId);
@@ -390,24 +387,21 @@ export const getDashboardData = async () => {
 // This function will be called from a server-side context to reset the DB
 export const resetDatabaseForFreshStart = async () => {
     try {
-        // Delete all customers
-        const customerSnapshot = await getDocs(collection(db, 'customers'));
-        const customerBatch = writeBatch(db);
-        customerSnapshot.docs.forEach(doc => customerBatch.delete(doc.ref));
-        await customerBatch.commit();
-        console.log("All customers deleted.");
+        const collectionsToDelete = ['customers', 'orders', 'products'];
+        
+        for (const collectionName of collectionsToDelete) {
+            const snapshot = await getDocs(collection(db, collectionName));
+            const batch = writeBatch(db);
+            snapshot.docs.forEach(doc => batch.delete(doc.ref));
+            await batch.commit();
+            console.log(`All documents in ${collectionName} deleted.`);
+        }
 
-        // Delete all orders
-        const orderSnapshot = await getDocs(collection(db, 'orders'));
-        const orderBatch = writeBatch(db);
-        orderSnapshot.docs.forEach(doc => orderBatch.delete(doc.ref));
-        await orderBatch.commit();
-        console.log("All orders deleted.");
-
-        // Reset the order counter
         const counterRef = doc(db, 'counters', 'orderCounter');
         await setDoc(counterRef, { currentNumber: 0 });
         console.log("Order counter has been reset.");
+
+        await seedDatabase();
 
     } catch (error) {
         console.error("Error during database reset:", error);

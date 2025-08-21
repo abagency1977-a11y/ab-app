@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -16,7 +17,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { addProduct, deleteProduct as deleteProductFromDB, getProducts } from '@/lib/data';
+import { addProduct, deleteProduct as deleteProductFromDB, getProducts, updateProduct } from '@/lib/data';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value);
@@ -171,7 +172,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
     };
 
 
-    const handleEditProduct = (event: React.FormEvent<HTMLFormElement>) => {
+    const handleEditProduct = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (!productToEdit) return;
 
@@ -185,19 +186,25 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             gst: Number(formData.get('gst')),
         };
 
-        // Here you would call an updateProduct function to update the database
-        // For now, we update the local state
-        const newProducts = products.map(p => p.id === updatedProduct.id ? updatedProduct : p);
-        setProducts(newProducts);
-        // localStorage.setItem('products', JSON.stringify(newProducts));
+        try {
+            await updateProduct(updatedProduct);
+            const newProducts = products.map(p => p.id === updatedProduct.id ? updatedProduct : p);
+            setProducts(newProducts);
+            
+            setIsEditDialogOpen(false);
+            setProductToEdit(null);
+            toast({
+                title: "Product Updated",
+                description: `${updatedProduct.name} has been successfully updated.`,
+            });
 
-
-        setIsEditDialogOpen(false);
-        setProductToEdit(null);
-        toast({
-            title: "Product Updated",
-            description: `${updatedProduct.name} has been successfully updated.`,
-        });
+        } catch (e) {
+             toast({
+                title: "Error Updating Product",
+                description: "Could not save changes to the product.",
+                variant: 'destructive',
+            });
+        }
     };
 
     const handleDeleteProduct = async () => {
