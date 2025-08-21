@@ -103,7 +103,11 @@ export const getCustomers = async (): Promise<Customer[]> => {
 export const getCustomerBalance = async (customerId: string): Promise<number> => {
     if (!customerId) return 0;
     try {
-        const ordersQuery = query(collection(db, 'orders'), where('customerId', '==', customerId));
+        const ordersQuery = query(
+            collection(db, 'orders'), 
+            where('customerId', '==', customerId),
+            where('isOpeningBalance', '==', false) // Ignore opening balance orders for new balances
+        );
         const snapshot = await getDocs(ordersQuery);
         const totalBalance = snapshot.docs.reduce((acc, doc) => {
             const order = doc.data() as Order;
@@ -239,8 +243,10 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
 
             // 3. Decrement stock for each item in the order
             for (const item of newOrderWithId.items) {
-                const productRef = doc(db, "products", item.productId);
-                transaction.update(productRef, { stock: increment(-item.quantity) });
+                if(item.productId !== 'OPENING_BALANCE') {
+                    const productRef = doc(db, "products", item.productId);
+                    transaction.update(productRef, { stock: increment(-item.quantity) });
+                }
             }
         });
 
@@ -272,14 +278,18 @@ export const updateOrder = async (orderData: Order): Promise<void> => {
 
             // 1. Restore original stock
             for (const item of originalOrder.items) {
-                const productRef = doc(db, "products", item.productId);
-                transaction.update(productRef, { stock: increment(item.quantity) });
+                 if(item.productId !== 'OPENING_BALANCE') {
+                    const productRef = doc(db, "products", item.productId);
+                    transaction.update(productRef, { stock: increment(item.quantity) });
+                }
             }
             
             // 2. Decrement new stock
             for (const item of orderData.items) {
-                const productRef = doc(db, "products", item.productId);
-                transaction.update(productRef, { stock: increment(-item.quantity) });
+                if(item.productId !== 'OPENING_BALANCE') {
+                    const productRef = doc(db, "products", item.productId);
+                    transaction.update(productRef, { stock: increment(-item.quantity) });
+                }
             }
 
             // 3. Update customer totalSpent
@@ -338,8 +348,10 @@ export const deleteOrder = async (order: Order): Promise<void> => {
 
             // Always restore stock.
             for (const item of order.items) {
-                const productRef = doc(db, "products", item.productId);
-                transaction.update(productRef, { stock: increment(item.quantity) });
+                if(item.productId !== 'OPENING_BALANCE') {
+                    const productRef = doc(db, "products", item.productId);
+                    transaction.update(productRef, { stock: increment(item.quantity) });
+                }
             }
         });
     } catch(e) {
@@ -449,3 +461,4 @@ export const resetDatabaseForFreshStart = async () => {
         throw new Error("Failed to reset the database.");
     }
 };
+

@@ -677,9 +677,10 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     useEffect(() => {
         const fetchBalance = async () => {
             if (customerId) {
-                if (isEditMode && existingOrder) {
+                // When editing, we want to show the balance *at the time of the order*
+                 if (isEditMode && existingOrder) {
                      setPreviousBalance(existingOrder.previousBalance);
-                } else if (!isEditMode) {
+                 } else if (!isEditMode) {
                     const balance = await getCustomerBalance(customerId);
                     setPreviousBalance(balance);
                 }
@@ -755,7 +756,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         
         let stock = product?.stock || 0;
         if (isEditMode) {
-            const originalItem = existingOrder.items.find(i => i.productId === itemToEdit.productId);
+            const originalItem = existingOrder?.items.find(i => i.productId === itemToEdit.productId);
             if (originalItem) {
                 stock += originalItem.quantity;
             }
@@ -814,7 +815,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
 
         let orderData: Omit<Order, 'id' | 'customerName'> | Order = {
             customerId,
-            orderDate: isEditMode ? existingOrder.orderDate : new Date().toISOString().split('T')[0],
+            orderDate: isEditMode && existingOrder ? existingOrder.orderDate : new Date().toISOString().split('T')[0],
             customerName: customer.name,
             status: 'Pending',
             items: items.map(item => {
@@ -835,7 +836,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
             paymentTerm,
             deliveryAddress: deliveryAddress || customer.address,
             isGstInvoice,
-            isOpeningBalance: false, // This will be set in the backend function
+            isOpeningBalance: items.some(item => item.productId === 'OPENING_BALANCE'), // This will be set in the backend function
             ...(deliveryDate && { deliveryDate }),
             ...(paymentTerm === 'Full Payment' && { 
                 paymentMode, 
@@ -843,6 +844,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                 balanceDue: 0,
                 status: 'Fulfilled',
                 payments: [{
+                    id: 'temp-payment-id',
                     paymentDate: new Date().toISOString().split('T')[0],
                     amount: grandTotal,
                     method: paymentMode,
@@ -856,20 +858,22 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
             })
         };
         
-        if (isEditMode) {
+        if (isEditMode && existingOrder) {
              // In edit mode, we merge existing data with new data
-            const finalOrderData = {
+            let finalOrderData = {
                 ...existingOrder,
                 ...orderData,
                 customerName: customer.name, // ensure customer name is fresh
             };
 
-            // Don't overwrite payments when editing
-            if(finalOrderData.paymentTerm !== 'Full Payment') {
+            // Don't overwrite payments when editing, unless it's being switched to full payment now
+            if(finalOrderData.paymentTerm === 'Credit') {
                 finalOrderData.payments = existingOrder.payments;
                 finalOrderData.balanceDue = grandTotal - (existingOrder.payments?.reduce((sum, p) => sum + p.amount, 0) || 0);
-                if (finalOrderData.balanceDue <= 0) {
+                 if (finalOrderData.balanceDue <= 0) {
                     finalOrderData.status = 'Fulfilled';
+                } else {
+                    finalOrderData.status = 'Pending';
                 }
             }
 
@@ -891,7 +895,12 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     };
 
     const customerOptions = useMemo(() => customers.map(c => ({ value: c.id, label: c.name })), [customers]);
-    const productOptions = useMemo(() => products.map(p => ({ value: p.id, label: p.name })), [products]);
+    const productOptions = useMemo(() => {
+        const standardProducts = products.map(p => ({ value: p.id, label: p.name }));
+        // Add a special "Opening Balance" product option
+        const openingBalanceOption = { value: 'OPENING_BALANCE', label: 'Opening Balance' };
+        return [openingBalanceOption, ...standardProducts];
+    }, [products]);
 
 
     return (
@@ -947,7 +956,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                             </div>
                                             <div className="space-y-2">
                                                 <Label>Stock Left</Label>
-                                                <Input value={currentItem.stock} readOnly disabled />
+                                                <Input value={currentItem.productId === 'OPENING_BALANCE' ? 'N/A' : currentItem.stock} readOnly disabled />
                                             </div>
                                             <div className="space-y-2">
                                                 <Label>Quantity</Label>
@@ -988,7 +997,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                                         : price * quantity;
                                                     return (
                                                         <TableRow key={index}>
-                                                            <TableCell>{product?.name}</TableCell>
+                                                            <TableCell>{item.productId === 'OPENING_BALANCE' ? 'Opening Balance' : product?.name}</TableCell>
                                                             <TableCell>{item.quantity}</TableCell>
                                                             <TableCell>{formatNumber(price)}</TableCell>
                                                             <TableCell>{isGstInvoice ? `${item.gst}%` : 'N/A'}</TableCell>
@@ -1114,3 +1123,4 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     
 
     
+
