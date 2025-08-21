@@ -269,10 +269,10 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             
             const textWidth = doc.getTextWidth(grandTotalText);
             const boxWidth = textWidth + 20;
-            const boxHeight = 14;
+            const isCredit = (orderToPrint.balanceDue ?? 0) > 0;
+            const boxHeight = isCredit ? 16 : 14;
             const boxX = (pageWidth - boxWidth) / 2;
 
-            const isCredit = (orderToPrint.balanceDue ?? 0) > 0;
             const boxBgColor = isCredit ? [254, 226, 226] : [224, 242, 254]; // Light Red or Light Blue
             const boxTextColor = isCredit ? [153, 27, 27] : [23, 78, 166];   // Dark Red or Dark Blue
             
