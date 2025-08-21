@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
@@ -43,7 +44,9 @@ const formatNumberForPdf = (value: number | undefined): string => {
 
 const formatCurrencyForPdf = (value: number | undefined): string => {
     if (value === undefined || isNaN(value)) return 'INR 0.00';
-     return `INR ${formatNumberForPdf(value)}`;
+    const sign = value < 0 ? '-' : '';
+    const absValue = Math.abs(value);
+    return `${sign}INR ${formatNumberForPdf(absValue)}`;
 }
 
 
@@ -233,25 +236,35 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                         ['Subtotal:', formatCurrencyForPdf(subtotal)],
                         ...(orderToPrint.isGstInvoice ? [['Total GST:', formatCurrencyForPdf(totalGst)]] : []),
                         ...(orderToPrint.deliveryFees > 0 ? [['Delivery Fees:', formatCurrencyForPdf(orderToPrint.deliveryFees)]] : []),
-                        ...(orderToPrint.discount > 0 ? [['Discount:', `-${formatCurrencyForPdf(orderToPrint.discount)}`]] : []),
+                        ...(orderToPrint.discount > 0 ? [['Discount:', formatCurrencyForPdf(orderToPrint.discount * -1)]] : []),
                     ];
 
-                    let totalsY = finalY + 8;
-                    doc.setFont('helvetica', 'bold');
-                    doc.setFontSize(10);
-                    
-                    totalsData.forEach(([label, value]) => {
-                        doc.text(label, pageWidth - margin - 50, totalsY);
-                        doc.text(value, pageWidth - margin, totalsY, { align: 'right' });
-                        totalsY += 6;
+                    const grandTotalRow = ['Grand Total:', formatCurrencyForPdf(orderToPrint.grandTotal)];
+
+                    autoTable(doc, {
+                        startY: finalY + 8,
+                        body: [...totalsData, grandTotalRow],
+                        theme: 'plain',
+                        tableWidth: 'wrap',
+                        margin: { right: margin },
+                        styles: {
+                            font: 'helvetica',
+                            overflow: 'linebreak',
+                            cellPadding: 1,
+                        },
+                        columnStyles: {
+                            0: { halign: 'right', fontStyle: 'bold' },
+                            1: { halign: 'right' },
+                        },
+                        didParseCell: function (data) {
+                            if (data.row.raw[0] === 'Grand Total:') {
+                                data.cell.styles.fontStyle = 'bold';
+                                data.cell.styles.fontSize = 12;
+                                data.row.cells[0].styles.minCellHeight = 8;
+                                data.row.cells[1].styles.minCellHeight = 8;
+                            }
+                        }
                     });
-                    
-                    // --- Grand Total ---
-                    totalsY += 2;
-                    doc.setFontSize(12);
-                    doc.setFont('helvetica', 'bold');
-                    doc.text('Grand Total:', pageWidth - margin - 50, totalsY);
-                    doc.text(formatCurrencyForPdf(orderToPrint.grandTotal), pageWidth - margin, totalsY, { align: 'right' });
 
 
                     // --- Final Footer ---
