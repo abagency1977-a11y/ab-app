@@ -7,7 +7,7 @@ import type { Order, Customer, Product, PaymentTerm, PaymentMode, OrderStatus } 
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, FileText, Receipt, Loader2, PlusCircle, Trash2, Download, Edit } from 'lucide-react';
+import { MoreHorizontal, FileText, Receipt, Loader2, PlusCircle, Trash2, Download, Edit, Share2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
@@ -135,6 +135,20 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             handlePrint();
         }
     }, [orderToPrint]);
+
+    const handleWhatsAppShare = (order: Order) => {
+        const customer = customers.find(c => c.id === order.customerId);
+        if (!customer || !customer.phone) {
+            toast({ title: 'Error', description: "Customer's phone number is not available.", variant: 'destructive'});
+            return;
+        }
+
+        const message = `Hello ${customer.name}, here is your invoice ${order.id.replace('ORD', 'INV')}. Total amount: ${formatNumber(order.grandTotal)}. Thank you for your business!`;
+        const whatsappUrl = `https://wa.me/${customer.phone}?text=${encodeURIComponent(message)}`;
+        
+        window.open(whatsappUrl, '_blank');
+        toast({ title: 'Success', description: 'WhatsApp chat opened. Please attach the downloaded invoice.' });
+    };
 
     const handlePrint = async () => {
         if (!orderToPrint) return;
@@ -522,6 +536,10 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                                                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> :<FileText className="mr-2 h-4 w-4" />}
                                                 Generate Invoice
                                             </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => handleWhatsAppShare(order)} disabled={order.status === 'Canceled'}>
+                                                <Share2 className="mr-2 h-4 w-4" />
+                                                Share via WhatsApp
+                                            </DropdownMenuItem>
                                             <DropdownMenuSeparator />
                                             <DropdownMenuItem onClick={() => setOrderToDelete(order)} className="text-red-600">
                                                 <Trash2 className="mr-2 h-4 w-4" />
@@ -658,22 +676,26 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
 
     useEffect(() => {
         const fetchBalance = async () => {
-            if (customerId && !isEditMode) {
-                const balance = await getCustomerBalance(customerId);
-                setPreviousBalance(balance);
+            if (customerId) {
+                if (isEditMode && existingOrder) {
+                     setPreviousBalance(existingOrder.previousBalance);
+                } else if (!isEditMode) {
+                    const balance = await getCustomerBalance(customerId);
+                    setPreviousBalance(balance);
+                }
                 const customer = customers.find(c => c.id === customerId);
                 if (customer) {
                     setDeliveryAddress(customer.address);
                 }
-            } else if (!customerId) {
+            } else {
                 setPreviousBalance(0);
                 setDeliveryAddress('');
             }
         };
-        if (isOpen && !isEditMode) {
+        if (isOpen) {
           fetchBalance();
         }
-    }, [customerId, customers, isEditMode, isOpen]);
+    }, [customerId, customers, isEditMode, existingOrder, isOpen]);
 
     const handleProductSelect = (productId: string) => {
         const product = products.find(p => p.id === productId);
@@ -1087,5 +1109,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
 }
 
 
+
+    
 
     

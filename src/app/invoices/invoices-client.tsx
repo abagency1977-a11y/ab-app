@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
@@ -14,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Receipt, Trash2 } from 'lucide-react';
+import { Loader2, Receipt, Trash2, Share2 } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -136,6 +137,22 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
             }, 100);
         }
     }, [receiptToPrint]);
+
+    const handleWhatsAppShare = (payment: Payment) => {
+        if (!selectedInvoice) return;
+        const customer = allCustomers.find(c => c.id === selectedInvoice.customerId);
+        if (!customer || !customer.phone) {
+            toast({ title: 'Error', description: "Customer's phone number is not available.", variant: 'destructive'});
+            return;
+        }
+
+        const message = `Hello ${customer.name}, here is the receipt for your payment of ${formatNumber(payment.amount)} towards invoice ${selectedInvoice.id.replace('ORD', 'INV')}. Thank you!`;
+        const whatsappUrl = `https://wa.me/${customer.phone}?text=${encodeURIComponent(message)}`;
+        
+        window.open(whatsappUrl, '_blank');
+        toast({ title: 'Success', description: 'WhatsApp chat opened. Please attach the downloaded receipt.' });
+    };
+
 
     const handlePrintReceipt = async () => {
         if (!receiptToPrint || !receiptRef.current) return;
@@ -260,10 +277,16 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
                                                     <p className="font-medium">{formatNumber(payment.amount)}</p>
                                                     <p className="text-xs text-muted-foreground">{new Date(payment.paymentDate).toLocaleDateString('en-IN')} via {payment.method}</p>
                                                 </div>
-                                                <Button size="sm" variant="outline" onClick={() => handleGenerateReceipt(payment)} disabled={isReceiptLoading}>
-                                                    {isReceiptLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Receipt className="mr-2 h-4 w-4" />}
-                                                    <span>Receipt</span>
-                                                </Button>
+                                                <div className="flex items-center gap-1">
+                                                    <Button size="sm" variant="outline" onClick={() => handleGenerateReceipt(payment)} disabled={isReceiptLoading}>
+                                                        {isReceiptLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Receipt className="mr-2 h-4 w-4" />}
+                                                        <span>Receipt</span>
+                                                    </Button>
+                                                     <Button size="sm" variant="outline" onClick={() => handleWhatsAppShare(payment)} >
+                                                        <Share2 className="mr-2 h-4 w-4" />
+                                                        <span>Share</span>
+                                                    </Button>
+                                                </div>
                                              </div>
                                         ))
                                     ) : (
@@ -382,3 +405,5 @@ function PaymentForm({ balanceDue, onAddPayment }: { balanceDue: number; onAddPa
         </Card>
     );
 }
+
+    
