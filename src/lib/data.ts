@@ -48,14 +48,6 @@ const mockProducts: Omit<Product, 'id'>[] = [
         { date: '2023-04-14', quantity: 11 },
         { date: '2023-05-19', quantity: 18 },
     ]
-  },
-  {
-    name: 'Opening Balance',
-    sku: 'OB-001',
-    stock: 9999,
-    price: 1,
-    gst: 0,
-    historicalData: []
   }
 ];
 
@@ -228,28 +220,6 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
                 });
             }
             
-            // In a transaction, first read all data, then write.
-            // Settle previous balances if any.
-            if (orderData.previousBalance && orderData.previousBalance > 0) {
-                 const outstandingOrdersQuery = query(
-                    collection(db, 'orders'), 
-                    where('customerId', '==', orderData.customerId), 
-                    where('balanceDue', '>', 0)
-                );
-                const outstandingDocs = await getDocs(outstandingOrdersQuery);
-                
-                // Set the previous balance on the new order from the provided data
-                newOrderWithId.previousBalance = orderData.previousBalance;
-
-                // Clear the balance on all old orders
-                outstandingDocs.forEach(docSnap => {
-                    if (docSnap.id !== orderId) { // Don't clear the balance of the order we are just creating
-                        transaction.update(docSnap.ref, { balanceDue: 0 });
-                    }
-                });
-            }
-
-
             // 1. Create the new order document
             transaction.set(doc(db, "orders", orderId), newOrderWithId);
 
@@ -290,16 +260,20 @@ export const deleteOrder = async (order: Order): Promise<void> => {
 
     try {
         await runTransaction(db, async (transaction) => {
+            // First, read the customer document
             const customerSnap = await transaction.get(customerRef);
 
+            // Now perform writes
             transaction.delete(orderRef);
 
+            // Only update the customer if they exist and the order wasn't canceled
             if (customerSnap.exists() && order.status !== 'Canceled') {
                 transaction.update(customerRef, {
                     'transactionHistory.totalSpent': increment(-order.grandTotal)
                 });
             }
 
+            // Only restore stock if the order wasn't canceled
             if (order.status !== 'Canceled') {
                 for (const item of order.items) {
                     const productRef = doc(db, "products", item.productId);
