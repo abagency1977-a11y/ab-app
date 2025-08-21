@@ -267,10 +267,10 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             finalY += 10;
             const grandTotalText = `Grand Total: ${formatCurrencyForPdf(orderToPrint.grandTotal)}`;
             
-            const textWidth = doc.getTextWidth(grandTotalText);
-            const boxWidth = textWidth + 20;
             const isCredit = (orderToPrint.balanceDue ?? 0) > 0;
-            const boxHeight = isCredit ? 16 : 14;
+            const textWidth = doc.getTextWidth(grandTotalText);
+            const boxWidth = textWidth + (isCredit ? 25 : 20);
+            const boxHeight = 16;
             const boxX = (pageWidth - boxWidth) / 2;
 
             const boxBgColor = isCredit ? [254, 226, 226] : [224, 242, 254]; // Light Red or Light Blue
