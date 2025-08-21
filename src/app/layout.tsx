@@ -9,7 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'AB Account',
+  title: 'AB AGENCY',
   description: 'Accounting app for AB Agency',
 };
 

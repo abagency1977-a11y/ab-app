@@ -16,9 +16,15 @@ export default function LoginPage() {
   const [password, setPassword] = useState('password');
   const [year, setYear] = useState<number | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
 
   useEffect(() => {
     setYear(new Date().getFullYear());
+    const savedLogo = localStorage.getItem('companyLogo');
+    if (savedLogo) {
+        setLogoUrl(savedLogo);
+    }
     setIsMounted(true);
   }, []);
 
@@ -28,16 +34,24 @@ export default function LoginPage() {
     // For this mock, we'll just redirect to the dashboard.
     router.push('/dashboard');
   };
+  
+  const Logo = () => {
+    if (logoUrl) {
+        return <img src={logoUrl} alt="Company Logo" className="h-16 mx-auto" data-ai-hint="logo" />;
+    }
+    return <Icons.logo className="h-12 w-12 text-primary" />;
+  }
+
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-md">
         <Card className="shadow-2xl">
           <CardHeader className="text-center">
-            <div className="mx-auto mb-4">
-              <Icons.logo className="h-12 w-12 text-primary" />
+            <div className="mx-auto mb-4 h-16 flex items-center justify-center">
+              <Logo />
             </div>
-            <CardTitle className="text-3xl font-bold">AB Account</CardTitle>
+            <CardTitle className="text-3xl font-bold">AB AGENCY</CardTitle>
             <CardDescription>Welcome back! Please log in to your account.</CardDescription>
           </CardHeader>
           <CardContent>

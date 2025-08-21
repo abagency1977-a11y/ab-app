@@ -46,12 +46,10 @@ function Logo() {
         setLogoUrl(savedLogo);
     }, []);
     
-    // On the server, or before the client has mounted, we can't know the logo.
-    // We render the default to prevent hydration errors.
     const renderDefaultLogo = () => (
         <>
             <Icons.logo className="w-8 h-8 text-primary" />
-            <span className="text-lg font-semibold">AB Account</span>
+            <span className="text-lg font-semibold">AB AGENCY</span>
         </>
     );
 
@@ -60,7 +58,7 @@ function Logo() {
     }
 
     if (logoUrl) {
-        return <img src={logoUrl} alt="Company Logo" className="h-16" />;
+        return <img src={logoUrl} alt="Company Logo" className="h-16" data-ai-hint="logo" />;
     }
 
     return renderDefaultLogo();
