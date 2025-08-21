@@ -1,7 +1,7 @@
 
 import { db } from './firebase';
 import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference, updateDoc, increment } from 'firebase/firestore';
-import type { Customer, Product, Order, Payment } from './types';
+import type { Customer, Product, Order, Payment, OrderItem } from './types';
 
 // MOCK DATA - This will be used to seed the database for the first time.
 const mockCustomers: Omit<Customer, 'id'>[] = [
@@ -318,30 +318,32 @@ async function getNextId(counterName: string, prefix: string): Promise<string> {
 
 export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): Promise<Order> => {
     const customerRef = doc(db, "customers", orderData.customerId);
-    const customerSnap = await getDoc(customerRef);
-     if (!customerSnap.exists()) {
-        throw new Error("Customer not found");
-    }
-    const customerDocData = customerSnap.data();
-    const customerName = customerDocData?.name;
-    if (!customerName || typeof customerName !== 'string') {
-        throw new Error(`Customer with ID ${orderData.customerId} has no name or name is invalid.`);
-    }
+    
+    let newOrderWithId: Order;
 
-    const orderId = await getNextId('orderCounter', 'ORD');
-    let newOrderWithId: Order = { ...orderData, customerName, id: orderId };
-    
-    // Add new payment IDs if they exist
-    if (newOrderWithId.payments) {
-        let paymentCounter = 0;
-        newOrderWithId.payments = newOrderWithId.payments.map(p => {
-             paymentCounter++;
-             return {...p, id: `${orderId}-PAY-${String(paymentCounter).padStart(2, '0')}`}
-        });
-    }
-    
     try {
         await runTransaction(db, async (transaction) => {
+            const customerSnap = await transaction.get(customerRef);
+            if (!customerSnap.exists()) {
+                throw new Error("Customer not found");
+            }
+            const customerName = customerSnap.data()?.name;
+            if (!customerName) {
+                throw new Error(`Customer with ID ${orderData.customerId} has no name.`);
+            }
+
+            const orderId = await getNextId('orderCounter', 'ORD');
+            newOrderWithId = { ...orderData, customerName, id: orderId };
+
+            // Add new payment IDs if they exist
+            if (newOrderWithId.payments) {
+                let paymentCounter = 0;
+                newOrderWithId.payments = newOrderWithId.payments.map(p => {
+                    paymentCounter++;
+                    return { ...p, id: `${orderId}-PAY-${String(paymentCounter).padStart(2, '0')}` }
+                });
+            }
+
             // 1. Create the new order document
             transaction.set(doc(db, "orders", orderId), newOrderWithId);
 
@@ -350,14 +352,20 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
                 'transactionHistory.totalSpent': increment(newOrderWithId.grandTotal),
                 'transactionHistory.lastPurchaseDate': newOrderWithId.orderDate
             });
+
+            // 3. Decrement stock for each item in the order
+            for (const item of newOrderWithId.items) {
+                const productRef = doc(db, "products", item.productId);
+                transaction.update(productRef, { stock: increment(-item.quantity) });
+            }
         });
 
         // After successful transaction, return the new order data
-        return newOrderWithId;
+        return newOrderWithId!;
     } catch (e) {
         console.error("Add order transaction failed: ", e);
         if (e instanceof Error) {
-           throw new Error(`Failed to save the new order. Details: ${e.message}`);
+            throw new Error(`Failed to save the new order. Details: ${e.message}`);
         }
         throw new Error("Failed to save the new order due to an unknown error.");
     }
@@ -368,6 +376,41 @@ export const updateOrder = async (orderData: Order): Promise<void> => {
     if (!id) throw new Error("Order ID is required to update.");
     await setDoc(doc(db, 'orders', id), dataToUpdate, { merge: true });
 };
+
+export const deleteOrder = async (order: Order): Promise<void> => {
+    if (!order.id) throw new Error("Order ID is required for deletion.");
+    const orderRef = doc(db, "orders", order.id);
+    const customerRef = doc(db, "customers", order.customerId);
+
+    try {
+        await runTransaction(db, async (transaction) => {
+            // 1. Delete the order document
+            transaction.delete(orderRef);
+
+            // 2. Update customer's transaction history
+            // We only adjust total spent if the order was fulfilled/paid
+             if (order.status !== 'Canceled') {
+                transaction.update(customerRef, {
+                    'transactionHistory.totalSpent': increment(-order.grandTotal)
+                });
+            }
+
+            // 3. Restore stock for each item, but only if the order wasn't canceled
+            if (order.status !== 'Canceled') {
+                for (const item of order.items) {
+                    const productRef = doc(db, "products", item.productId);
+                    transaction.update(productRef, { stock: increment(item.quantity) });
+                }
+            }
+        });
+    } catch(e) {
+        console.error("Delete order transaction failed: ", e);
+         if (e instanceof Error) {
+            throw new Error(`Failed to delete order ${order.id}. Details: ${e.message}`);
+        }
+        throw new Error(`Failed to delete order ${order.id} due to an unknown error.`);
+    }
+}
 
 export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 'id'>): Promise<Order> => {
     const orderRef = doc(db, "orders", orderId);

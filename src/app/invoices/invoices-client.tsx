@@ -14,11 +14,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Receipt } from 'lucide-react';
+import { Loader2, Receipt, Trash2 } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { ReceiptTemplate } from '@/components/receipt-template';
-import { getCustomers, getOrders, addPaymentToOrder } from '@/lib/data';
+import { getCustomers, getOrders, addPaymentToOrder, deleteOrder } from '@/lib/data';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const formatNumber = (value: number | undefined) => {
@@ -26,7 +27,7 @@ const formatNumber = (value: number | undefined) => {
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value);
 };
 
-const InvoiceTable = ({ invoices, onRowClick }: { invoices: Order[], onRowClick?: (invoice: Order) => void }) => (
+const InvoiceTable = ({ invoices, onRowClick, onDeleteClick }: { invoices: Order[], onRowClick?: (invoice: Order) => void, onDeleteClick?: (invoice: Order) => void }) => (
     <div className="rounded-lg border shadow-sm">
         <Table>
             <TableHeader>
@@ -37,22 +38,28 @@ const InvoiceTable = ({ invoices, onRowClick }: { invoices: Order[], onRowClick?
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Balance Due</TableHead>
                     <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="text-center">Actions</TableHead>
                 </TableRow>
             </TableHeader>
             <TableBody>
                 {invoices.map((invoice) => (
-                    <TableRow key={invoice.id} onClick={() => onRowClick?.(invoice)} className={onRowClick ? 'cursor-pointer' : ''}>
-                        <TableCell className="font-medium">{invoice.id.replace('ORD', 'INV')}</TableCell>
-                        <TableCell>{invoice.customerName}</TableCell>
-                        <TableCell>{new Date(invoice.orderDate).toLocaleDateString('en-IN')}</TableCell>
-                        <TableCell>
+                    <TableRow key={invoice.id}>
+                        <TableCell onClick={() => onRowClick?.(invoice)} className="font-medium cursor-pointer">{invoice.id.replace('ORD', 'INV')}</TableCell>
+                        <TableCell onClick={() => onRowClick?.(invoice)} className="cursor-pointer">{invoice.customerName}</TableCell>
+                        <TableCell onClick={() => onRowClick?.(invoice)} className="cursor-pointer">{new Date(invoice.orderDate).toLocaleDateString('en-IN')}</TableCell>
+                        <TableCell onClick={() => onRowClick?.(invoice)} className="cursor-pointer">
                             <Badge variant={invoice.status === 'Fulfilled' ? 'default' : invoice.status === 'Pending' ? 'secondary' : 'destructive'} className="capitalize">{invoice.status}</Badge>
                         </TableCell>
-                        <TableCell className={`text-right font-medium ${invoice.balanceDue && invoice.balanceDue > 0 ? 'text-red-600' : ''}`}>
+                        <TableCell onClick={() => onRowClick?.(invoice)} className={`text-right font-medium cursor-pointer ${invoice.balanceDue && invoice.balanceDue > 0 ? 'text-red-600' : ''}`}>
                             {formatNumber(invoice.balanceDue)}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell onClick={() => onRowClick?.(invoice)} className="text-right cursor-pointer">
                             {formatNumber(invoice.grandTotal)}
+                        </TableCell>
+                         <TableCell className="text-center">
+                            <Button variant="ghost" size="icon" onClick={() => onDeleteClick?.(invoice)}>
+                                <Trash2 className="h-4 w-4 text-red-600" />
+                            </Button>
                         </TableCell>
                     </TableRow>
                 ))}
@@ -66,6 +73,7 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
     const [allInvoices, setAllInvoices] = useState<Order[]>(initialOrders);
     const [allCustomers, setAllCustomers] = useState<Customer[]>(initialCustomers);
     const [selectedInvoice, setSelectedInvoice] = useState<Order | null>(null);
+    const [invoiceToDelete, setInvoiceToDelete] = useState<Order | null>(null);
     const [receiptToPrint, setReceiptToPrint] = useState<{order: Order, payment: Payment, historicalPayments: Payment[]} | null>(null);
     const [isReceiptLoading, setIsReceiptLoading] = useState(false);
     const { toast } = useToast();
@@ -153,6 +161,26 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
             setReceiptToPrint(null);
         }
     };
+
+    const handleDeleteInvoice = async () => {
+        if (!invoiceToDelete) return;
+        try {
+            await deleteOrder(invoiceToDelete);
+            setAllInvoices(prev => prev.filter(inv => inv.id !== invoiceToDelete.id));
+            toast({
+                title: "Invoice Deleted",
+                description: `Invoice ${invoiceToDelete.id.replace('ORD', 'INV')} has been successfully deleted.`
+            });
+        } catch(e: any) {
+            toast({
+                title: 'Error Deleting Invoice',
+                description: e.message || 'Could not delete the invoice.',
+                variant: 'destructive',
+            });
+        } finally {
+            setInvoiceToDelete(null);
+        }
+    };
     
     const customerForReceipt = useMemo(() => {
         if (!receiptToPrint) return null;
@@ -183,10 +211,10 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
                     <TabsTrigger value="full-paid">Full Paid Invoices</TabsTrigger>
                 </TabsList>
                 <TabsContent value="full-paid">
-                    <InvoiceTable invoices={fullPaidInvoices} onRowClick={setSelectedInvoice} />
+                    <InvoiceTable invoices={fullPaidInvoices} onRowClick={setSelectedInvoice} onDeleteClick={setInvoiceToDelete} />
                 </TabsContent>
                 <TabsContent value="credit">
-                    <InvoiceTable invoices={creditInvoices} onRowClick={setSelectedInvoice}/>
+                    <InvoiceTable invoices={creditInvoices} onRowClick={setSelectedInvoice} onDeleteClick={setInvoiceToDelete} />
                 </TabsContent>
             </Tabs>
 
@@ -249,6 +277,22 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
                 </SheetContent>
             </Sheet>
             
+            <AlertDialog open={!!invoiceToDelete} onOpenChange={(open) => !open && setInvoiceToDelete(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        This action cannot be undone. This will permanently delete invoice <strong>{invoiceToDelete?.id.replace('ORD', 'INV')}</strong> and all its associated payments.
+                        This will also restore the item quantities to the inventory stock.
+                    </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => setInvoiceToDelete(null)}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteInvoice}>Delete</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
             {receiptToPrint && customerForReceipt && (
                 <div style={{ position: 'fixed', left: '-200vw', top: 0, zIndex: -1 }}>
                     <ReceiptTemplate 

@@ -6,16 +6,17 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import type { Order, Customer, Product, PaymentTerm, PaymentMode, OrderStatus } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, FileText, Receipt, Loader2, PlusCircle, Trash2, Download } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { MoreHorizontal, FileText, Receipt, Loader2, PlusCircle, Trash2, Download, Edit } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { addOrder, addCustomer } from '@/lib/data';
+import { addOrder, addCustomer, deleteOrder as deleteOrderFromDB } from '@/lib/data';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
@@ -38,13 +39,14 @@ const formatCurrencyForPdf = (value: number | undefined): string => {
     if (value === undefined || isNaN(value)) return 'INR 0.00';
     const sign = value < 0 ? '-' : '';
     const absValue = Math.abs(value);
-    const formattedValue = new Intl.NumberFormat('en-IN', {
+    
+    // The replace is a simple way to handle the negative sign placement for discounts
+    const formattedValue = `INR ${new Intl.NumberFormat('en-IN', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    }).format(absValue);
+    }).format(absValue)}`;
     
-    // Handle the negative sign placement for discounts
-    return sign ? ` ${sign} INR ${formattedValue.trim()}` : `INR ${formattedValue.trim()}`;
+    return sign ? formattedValue.replace('INR', '- INR') : formattedValue;
 }
 
 
@@ -55,6 +57,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     const [isLoading, setIsLoading] = useState(false);
     const [isAddOrderOpen, setIsAddOrderOpen] = useState(false);
     const [orderToPrint, setOrderToPrint] = useState<Order | null>(null);
+    const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
     const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
     const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState('');
@@ -263,22 +266,21 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             // --- Grand Total (Center Aligned, Colored Box) ---
             finalY += 10;
             const grandTotalText = `Grand Total: ${formatCurrencyForPdf(orderToPrint.grandTotal)}`;
-            doc.setFontSize(14);
-            doc.setFont('helvetica', 'bold');
             
             const textWidth = doc.getTextWidth(grandTotalText);
             const boxWidth = textWidth + 20;
             const boxHeight = 12;
             const boxX = (pageWidth - boxWidth) / 2;
 
-            // Blue for paid, Red for credit
-            const isCredit = orderToPrint.paymentTerm === 'Credit' && (orderToPrint.balanceDue ?? 0) > 0;
+            const isCredit = (orderToPrint.balanceDue ?? 0) > 0;
             const boxBgColor = isCredit ? [254, 226, 226] : [224, 242, 254]; // Light Red or Light Blue
             const boxTextColor = isCredit ? [153, 27, 27] : [23, 78, 166];   // Dark Red or Dark Blue
             
             doc.setFillColor.apply(doc, boxBgColor);
             doc.roundedRect(boxX, finalY, boxWidth, boxHeight, 3, 3, 'F');
             
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
             doc.setTextColor.apply(doc, boxTextColor);
             doc.text(grandTotalText, pageWidth / 2, finalY + boxHeight/2 + 1, { align: 'center', baseline: 'middle' });
 
@@ -326,6 +328,26 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
           throw e; // re-throw to be caught in the dialog
        }
     };
+
+    const handleDeleteOrder = async () => {
+        if (!orderToDelete) return;
+        try {
+            await deleteOrderFromDB(orderToDelete);
+            setOrders(prev => prev.filter(o => o.id !== orderToDelete.id));
+            toast({
+                title: "Order Deleted",
+                description: `Order ${orderToDelete.id} has been successfully deleted.`
+            });
+        } catch (error: any) {
+             toast({
+                title: "Error Deleting Order",
+                description: error.message || "Could not delete the order.",
+                variant: "destructive"
+            });
+        } finally {
+            setOrderToDelete(null);
+        }
+    }
 
     const handleAddCustomer = async (newCustomerData: Omit<Customer, 'id' | 'transactionHistory' | 'orders'>) => {
         try {
@@ -425,15 +447,24 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                                 <TableCell>
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
-                                            <Button variant="ghost" className="h-8 w-8 p-0" disabled={order.status === 'Canceled'}>
+                                            <Button variant="ghost" className="h-8 w-8 p-0">
                                                 <span className="sr-only">Open menu</span>
                                                 <MoreHorizontal className="h-4 w-4" />
                                             </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end">
-                                            <DropdownMenuItem onClick={() => handleGenerateInvoice(order)} disabled={isLoading}>
+                                            <DropdownMenuItem onClick={() => alert('Edit functionality to be implemented!')} disabled={order.status === 'Canceled'}>
+                                                <Edit className="mr-2 h-4 w-4" />
+                                                Edit
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => handleGenerateInvoice(order)} disabled={isLoading || order.status === 'Canceled'}>
                                                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> :<FileText className="mr-2 h-4 w-4" />}
                                                 Generate Invoice
+                                            </DropdownMenuItem>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem onClick={() => setOrderToDelete(order)} className="text-red-600">
+                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                Delete
                                             </DropdownMenuItem>
                                         </DropdownMenuContent>
                                     </DropdownMenu>
@@ -452,6 +483,22 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 onOrderAdded={handleAddOrder}
                 onCustomerAdded={handleAddCustomer}
             />
+
+            <AlertDialog open={!!orderToDelete} onOpenChange={(open) => !open && setOrderToDelete(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        This action cannot be undone. This will permanently delete order <strong>{orderToDelete?.id}</strong>. 
+                        This will also restore the item quantities to the inventory stock.
+                    </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => setOrderToDelete(null)}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteOrder}>Delete</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }
@@ -613,7 +660,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         let baseOrderData: Omit<Order, 'id' | 'customerName'> = {
             customerId,
             orderDate: new Date().toISOString().split('T')[0],
-            status: 'Fulfilled', // All orders are fulfilled
+            status: 'Pending', // Default status
             items: items.map(item => {
                 const product = products.find(p => p.id === item.productId);
                 return {
@@ -636,6 +683,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                 paymentMode, 
                 paymentRemarks,
                 balanceDue: 0,
+                status: 'Fulfilled',
                 payments: [{
                     paymentDate: new Date().toISOString().split('T')[0],
                     amount: grandTotal,
@@ -872,5 +920,6 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     
 
     
+
 
 
