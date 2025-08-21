@@ -62,14 +62,6 @@ const mockProducts: Omit<Product, 'id'>[] = [
         { date: '2023-04-30', quantity: 110 },
         { date: '2023-05-30', quantity: 130 },
     ]
-  },
-    {
-    name: 'Opening Balance',
-    sku: 'OB-001',
-    stock: 9999,
-    price: 1,
-    gst: 0,
-    historicalData: []
   }
 ];
 
@@ -243,7 +235,7 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
                     where('customerId', '==', orderData.customerId), 
                     where('balanceDue', '>', 0)
                 );
-                const outstandingDocs = await transaction.get(outstandingOrdersQuery);
+                const outstandingDocs = await getDocs(outstandingOrdersQuery);
                 
                 // Set the previous balance on the new order from the provided data
                 newOrderWithId.previousBalance = orderData.previousBalance;
