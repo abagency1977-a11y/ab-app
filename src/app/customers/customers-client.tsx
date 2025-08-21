@@ -13,7 +13,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getOrders, addCustomer, deleteCustomer as deleteCustomerFromDB, updateOrder } from '@/lib/data';
+import { getOrders, getCustomers, addCustomer, deleteCustomer as deleteCustomerFromDB, updateOrder } from '@/lib/data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { allocateBulkPayment, AllocateBulkPaymentOutput } from '@/ai/flows/allocate-bulk-payment';
 
