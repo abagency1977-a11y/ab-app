@@ -44,7 +44,7 @@ const formatCurrencyForPdf = (value: number | undefined): string => {
     }).format(absValue);
     
     // Handle the negative sign placement for discounts
-    return sign ? `${sign} INR ${formattedValue}` : `INR ${formattedValue}`;
+    return sign ? ` ${sign} INR ${formattedValue.trim()}` : `INR ${formattedValue.trim()}`;
 }
 
 
@@ -119,7 +119,6 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         setIsLoading(true);
         try {
             const doc = new jsPDF();
-            doc.setFont('helvetica', 'normal');
 
             const pageWidth = doc.internal.pageSize.getWidth();
             const margin = 15;
@@ -242,14 +241,14 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             ];
             
             autoTable(doc, {
-                startY: finalY + 8,
+                startY: finalY + 2,
                 body: totalsData,
                 theme: 'plain',
                 tableWidth: 80, 
                 margin: { left: pageWidth - margin - 80 },
                 styles: {
                     font: 'helvetica',
-                    fontStyle: 'bold',
+                    fontStyle: 'normal',
                     overflow: 'linebreak',
                     cellPadding: 1.5,
                     fontSize: 10,
@@ -261,7 +260,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             });
             finalY = (doc as any).lastAutoTable.finalY;
 
-            // --- Grand Total (Center Aligned, Blue Box) ---
+            // --- Grand Total (Center Aligned, Colored Box) ---
             finalY += 10;
             const grandTotalText = `Grand Total: ${formatCurrencyForPdf(orderToPrint.grandTotal)}`;
             doc.setFontSize(14);
@@ -272,12 +271,15 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             const boxHeight = 12;
             const boxX = (pageWidth - boxWidth) / 2;
 
-            // Blue background box
-            doc.setFillColor(224, 242, 254); // Light blue color
+            // Blue for paid, Red for credit
+            const isCredit = orderToPrint.paymentTerm === 'Credit' && (orderToPrint.balanceDue ?? 0) > 0;
+            const boxBgColor = isCredit ? [254, 226, 226] : [224, 242, 254]; // Light Red or Light Blue
+            const boxTextColor = isCredit ? [153, 27, 27] : [23, 78, 166];   // Dark Red or Dark Blue
+            
+            doc.setFillColor.apply(doc, boxBgColor);
             doc.roundedRect(boxX, finalY, boxWidth, boxHeight, 3, 3, 'F');
-
-            // White text
-            doc.setTextColor(23, 78, 166); // Darker blue for text
+            
+            doc.setTextColor.apply(doc, boxTextColor);
             doc.text(grandTotalText, pageWidth / 2, finalY + boxHeight/2 + 1, { align: 'center', baseline: 'middle' });
 
 
@@ -870,4 +872,5 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     
 
     
+
 
