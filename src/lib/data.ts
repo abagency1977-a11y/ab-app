@@ -193,11 +193,6 @@ async function getNextId(counterName: string, prefix: string): Promise<string> {
     return `${prefix}-${String(nextNumber).padStart(4, '0')}`;
 }
 
-const isOpeningBalanceOrder = (order: Order | Omit<Order, 'id' | 'customerName'>) => {
-    return order.items.some(item => item.productName === 'Opening Balance');
-}
-
-
 export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): Promise<Order> => {
     const customerRef = doc(db, "customers", orderData.customerId);
     
@@ -216,6 +211,10 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
 
             const orderId = await getNextId('orderCounter', 'ORD');
             newOrderWithId = { ...orderData, customerName, id: orderId };
+            
+            // Explicitly set the isOpeningBalance flag
+            newOrderWithId.isOpeningBalance = orderData.items.some(item => item.productName === 'Opening Balance');
+
 
             if (newOrderWithId.payments) {
                 let paymentCounter = 0;
@@ -229,15 +228,14 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
             // 1. Create the new order document
             transaction.set(doc(db, "orders", orderId), newOrderWithId);
 
-            // 2. Update the customer's transaction history, unless it's an opening balance order.
-            if (!isOpeningBalanceOrder(newOrderWithId)) {
+            // 2. Update the customer's transaction history, only if it's not an opening balance order.
+            if (!newOrderWithId.isOpeningBalance) {
                 const netOrderValue = newOrderWithId.total - newOrderWithId.discount + newOrderWithId.deliveryFees;
                 transaction.update(customerRef, {
                     'transactionHistory.totalSpent': increment(netOrderValue),
                     'transactionHistory.lastPurchaseDate': newOrderWithId.orderDate
                 });
             }
-
 
             // 3. Decrement stock for each item in the order
             for (const item of newOrderWithId.items) {
@@ -268,6 +266,9 @@ export const updateOrder = async (orderData: Order): Promise<void> => {
                 throw new Error("Order to update does not exist.");
             }
             const originalOrder = originalOrderSnap.data() as Order;
+            
+            // Explicitly set the isOpeningBalance flag for the updated order
+            orderData.isOpeningBalance = orderData.items.some(item => item.productName === 'Opening Balance');
 
             // 1. Restore original stock
             for (const item of originalOrder.items) {
@@ -284,20 +285,17 @@ export const updateOrder = async (orderData: Order): Promise<void> => {
             // 3. Update customer totalSpent
             const customerRef = doc(db, "customers", orderData.customerId);
             let netValueDifference = 0;
-
-            const wasOriginalOB = isOpeningBalanceOrder(originalOrder);
-            const isNewOB = isOpeningBalanceOrder(orderData);
             
             const originalNetValue = originalOrder.total - originalOrder.discount + originalOrder.deliveryFees;
             const newNetValue = orderData.total - orderData.discount + orderData.deliveryFees;
 
-            if (wasOriginalOB && !isNewOB) {
+            if (originalOrder.isOpeningBalance && !orderData.isOpeningBalance) {
                 // Was OB, now is not. Add new value.
                 netValueDifference = newNetValue;
-            } else if (!wasOriginalOB && isNewOB) {
+            } else if (!originalOrder.isOpeningBalance && orderData.isOpeningBalance) {
                 // Was not OB, now is. Remove old value.
                 netValueDifference = -originalNetValue;
-            } else if (!wasOriginalOB && !isNewOB) {
+            } else if (!originalOrder.isOpeningBalance && !orderData.isOpeningBalance) {
                 // Neither are OB. Calculate difference.
                 netValueDifference = newNetValue - originalNetValue;
             }
@@ -306,7 +304,6 @@ export const updateOrder = async (orderData: Order): Promise<void> => {
             if (netValueDifference !== 0) {
                  transaction.update(customerRef, { 'transactionHistory.totalSpent': increment(netValueDifference) });
             }
-
 
             // 4. Update the order document itself
             transaction.set(orderRef, orderData);
@@ -332,7 +329,7 @@ export const deleteOrder = async (order: Order): Promise<void> => {
             transaction.delete(orderRef);
 
             // Only update the customer if they exist and it was not an Opening Balance order.
-            if (customerSnap.exists() && !isOpeningBalanceOrder(order)) {
+            if (customerSnap.exists() && !order.isOpeningBalance) {
                 const netOrderValue = order.total - order.discount + order.deliveryFees;
                 transaction.update(customerRef, {
                     'transactionHistory.totalSpent': increment(-netOrderValue)
@@ -399,12 +396,12 @@ export const getDashboardData = async () => {
     const customers = await getCustomers();
     const products = await getProducts();
 
-    const totalRevenue = orders.filter(o => o.status === 'Fulfilled').reduce((sum, order) => sum + order.grandTotal, 0);
+    const totalRevenue = orders.filter(o => o.status === 'Fulfilled' && !o.isOpeningBalance).reduce((sum, order) => sum + order.grandTotal, 0);
     const totalCustomers = customers.length;
     const itemsInStock = products.reduce((sum, product) => sum + product.stock, 0);
     const ordersPlaced = orders.filter(o => o.status !== 'Canceled').length;
 
-    const monthlyRevenue = orders.filter(o => o.status === 'Fulfilled').reduce((acc, order) => {
+    const monthlyRevenue = orders.filter(o => o.status === 'Fulfilled' && !o.isOpeningBalance).reduce((acc, order) => {
         const month = new Date(order.orderDate).toLocaleString('default', { month: 'short' });
         acc[month] = (acc[month] || 0) + order.grandTotal;
         return acc;

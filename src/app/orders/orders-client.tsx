@@ -835,6 +835,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
             paymentTerm,
             deliveryAddress: deliveryAddress || customer.address,
             isGstInvoice,
+            isOpeningBalance: false, // This will be set in the backend function
             ...(deliveryDate && { deliveryDate }),
             ...(paymentTerm === 'Full Payment' && { 
                 paymentMode, 

@@ -63,6 +63,7 @@ export interface Order {
   deliveryDate?: string;
   deliveryAddress?: string;
   isGstInvoice: boolean;
+  isOpeningBalance: boolean;
   payments?: Payment[];
   balanceDue?: number;
 }
