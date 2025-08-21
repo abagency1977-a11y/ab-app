@@ -626,7 +626,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     }, [onOpenChange]);
     
     useEffect(() => {
-        if (existingOrder) {
+        if (isOpen && existingOrder) {
             setCustomerId(existingOrder.customerId);
             setItems(existingOrder.items.map(item => {
                 const product = products.find(p => p.id === item.productId);
@@ -635,7 +635,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                     quantity: String(item.quantity),
                     price: String(item.price),
                     gst: String(item.gst),
-                    stock: (product?.stock ?? 0) + item.quantity // Add back current item quantity to stock for validation
+                    stock: (product?.stock ?? 0) + (isEditMode ? item.quantity : 0) // Add back current item quantity to stock for validation
                 }
             }));
             setPaymentTerm(existingOrder.paymentTerm);
@@ -653,12 +653,12 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
             setDeliveryFees(existingOrder.deliveryFees);
             setPreviousBalance(existingOrder.previousBalance);
         }
-    }, [existingOrder, products]);
+    }, [isOpen, existingOrder, products, isEditMode]);
 
 
     useEffect(() => {
         const fetchBalance = async () => {
-            if (customerId && !isEditMode) { // Don't refetch for existing orders
+            if (customerId && !isEditMode) {
                 const balance = await getCustomerBalance(customerId);
                 setPreviousBalance(balance);
                 const customer = customers.find(c => c.id === customerId);
@@ -670,8 +670,10 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                 setDeliveryAddress('');
             }
         };
-        fetchBalance();
-    }, [customerId, customers, isEditMode]);
+        if (isOpen && !isEditMode) {
+          fetchBalance();
+        }
+    }, [customerId, customers, isEditMode, isOpen]);
 
     const handleProductSelect = (productId: string) => {
         const product = products.find(p => p.id === productId);
@@ -728,7 +730,16 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         setEditingItemIndex(index);
         const itemToEdit = items[index];
         const product = products.find(p => p.id === itemToEdit.productId);
-        setCurrentItem({ ...itemToEdit, stock: product?.stock || 0 });
+        
+        let stock = product?.stock || 0;
+        if (isEditMode) {
+            const originalItem = existingOrder.items.find(i => i.productId === itemToEdit.productId);
+            if (originalItem) {
+                stock += originalItem.quantity;
+            }
+        }
+
+        setCurrentItem({ ...itemToEdit, stock: stock });
     };
     
     const handleRemoveItem = (index: number) => {
