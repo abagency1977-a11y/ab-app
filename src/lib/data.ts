@@ -36,6 +36,14 @@ const mockProducts: Omit<Product, 'id'>[] = [
         { date: '2023-05-28', quantity: 65 },
     ]
   },
+   {
+    name: 'Opening Balance',
+    sku: 'OB-001',
+    stock: 1000000,
+    price: 1.00,
+    gst: 0,
+     historicalData: []
+  },
   {
     name: 'Advanced Gizmo',
     sku: 'AG-3000',
@@ -224,9 +232,10 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
             // 1. Create the new order document
             transaction.set(doc(db, "orders", orderId), newOrderWithId);
 
-            // 2. Update the customer's transaction history
+            // 2. Update the customer's transaction history with the net value of the new order
+            const netOrderValue = newOrderWithId.total - newOrderWithId.discount + newOrderWithId.deliveryFees;
             transaction.update(customerRef, {
-                'transactionHistory.totalSpent': increment(newOrderWithId.grandTotal),
+                'transactionHistory.totalSpent': increment(netOrderValue),
                 'transactionHistory.lastPurchaseDate': newOrderWithId.orderDate
             });
 
@@ -272,10 +281,13 @@ export const updateOrder = async (orderData: Order): Promise<void> => {
                 transaction.update(productRef, { stock: increment(-item.quantity) });
             }
 
-            // 3. Update customer totalSpent (revert old, apply new)
+            // 3. Update customer totalSpent (revert old net value, apply new net value)
+            const originalNetValue = originalOrder.total - originalOrder.discount + originalOrder.deliveryFees;
+            const newNetValue = orderData.total - orderData.discount + orderData.deliveryFees;
+            const netValueDifference = newNetValue - originalNetValue;
+            
             const customerRef = doc(db, "customers", orderData.customerId);
-            const totalDifference = orderData.grandTotal - originalOrder.grandTotal;
-            transaction.update(customerRef, { 'transactionHistory.totalSpent': increment(totalDifference) });
+            transaction.update(customerRef, { 'transactionHistory.totalSpent': increment(netValueDifference) });
 
 
             // 4. Update the order document itself
@@ -306,8 +318,9 @@ export const deleteOrder = async (order: Order): Promise<void> => {
 
             // Only update the customer if they exist and the order wasn't canceled
             if (customerSnap.exists() && order.status !== 'Canceled') {
+                const netOrderValue = order.total - order.discount + order.deliveryFees;
                 transaction.update(customerRef, {
-                    'transactionHistory.totalSpent': increment(-order.grandTotal)
+                    'transactionHistory.totalSpent': increment(-netOrderValue)
                 });
             }
 
@@ -398,25 +411,33 @@ export const getDashboardData = async () => {
 
 // This function will be called from a server-side context to reset the DB
 export const resetDatabaseForFreshStart = async () => {
+    const collectionsToDelete = ['customers', 'orders', 'counters'];
+    
     try {
-        const collectionsToDelete = ['customers', 'orders', 'products'];
-        
         for (const collectionName of collectionsToDelete) {
-            const snapshot = await getDocs(collection(db, collectionName));
+            const q = query(collection(db, collectionName));
+            const snapshot = await getDocs(q);
+            if (snapshot.empty) {
+                console.log(`No documents to delete in ${collectionName}.`);
+                continue;
+            }
             const batch = writeBatch(db);
-            snapshot.docs.forEach(doc => batch.delete(doc.ref));
+            snapshot.docs.forEach(doc => {
+                console.log(`Scheduling deletion for doc ${doc.id} in ${collectionName}`);
+                batch.delete(doc.ref);
+            });
             await batch.commit();
             console.log(`All documents in ${collectionName} deleted.`);
         }
 
-        const counterRef = doc(db, 'counters', 'orderCounter');
-        await setDoc(counterRef, { currentNumber: 0 });
-        console.log("Order counter has been reset.");
+        console.log("Database collections (customers, orders, counters) have been cleared.");
 
-        await seedDatabase();
+        // Re-seed only the products, as customers and orders should be empty.
+        await seedCollection('products', mockProducts, 'PROD');
 
     } catch (error) {
         console.error("Error during database reset:", error);
         throw new Error("Failed to reset the database.");
     }
 };
+
