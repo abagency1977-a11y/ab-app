@@ -428,12 +428,14 @@ export const deleteOrder = async (order: Order): Promise<void> => {
 
     try {
         await runTransaction(db, async (transaction) => {
+            // Check if customer exists before trying to update
+            const customerSnap = await transaction.get(customerRef);
+
             // 1. Delete the order document
             transaction.delete(orderRef);
 
-            // 2. Update customer's transaction history
-            // We only adjust total spent if the order was fulfilled/paid
-             if (order.status !== 'Canceled') {
+            // 2. Update customer's transaction history, if the customer exists
+            if (customerSnap.exists() && order.status !== 'Canceled') {
                 transaction.update(customerRef, {
                     'transactionHistory.totalSpent': increment(-order.grandTotal)
                 });
