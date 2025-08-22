@@ -20,7 +20,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 
-const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value);
+const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol' }).format(value);
 
 type SortKey = keyof Customer | 'transactionHistory.totalSpent';
 
@@ -544,5 +544,7 @@ function BulkPaymentDialog({ isOpen, onOpenChange, customer, allOrders, onPaymen
         </Dialog>
     );
 }
+
+    
 
     

@@ -31,7 +31,7 @@ const StatCard = ({ title, value, icon: Icon, description }: { title: string, va
 
 export function DashboardClient({ data }: { data: any }) {
 
-    const formatNumber = (value: number) => new Intl.NumberFormat('en-IN').format(value);
+    const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol' }).format(value);
 
     return (
         <div className="flex flex-col gap-6">
@@ -39,7 +39,7 @@ export function DashboardClient({ data }: { data: any }) {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <StatCard 
                     title="Total Revenue" 
-                    value={<>₹{formatNumber(data.totalRevenue)}</>}
+                    value={<>{formatNumber(data.totalRevenue)}</>}
                     icon={DollarSign} 
                     description="Total revenue from fulfilled orders" 
                 />
@@ -64,11 +64,11 @@ export function DashboardClient({ data }: { data: any }) {
                                     axisLine={false}
                                     tickFormatter={(value) => value.slice(0, 3)}
                                 />
-                                <YAxis tickFormatter={(value) => `₹${value / 1000}k`}/>
+                                <YAxis tickFormatter={(value) => `${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol', notation: 'compact' }).format(value as number)}`}/>
                                 <Tooltip
                                     cursor={false}
                                     content={<ChartTooltipContent
-                                        formatter={(value) => `₹${formatNumber(value as number)}`}
+                                        formatter={(value) => `${formatNumber(value as number)}`}
                                         indicator="dot"
                                     />}
                                 />
@@ -102,7 +102,7 @@ export function DashboardClient({ data }: { data: any }) {
                                                 <Badge variant={order.status === 'Fulfilled' ? 'default' : order.status === 'Pending' ? 'secondary' : 'destructive'} className="capitalize">{order.status}</Badge>
                                         </TableCell>
                                         <TableCell className="text-right">
-                                            ₹{formatNumber(order.total)}
+                                            {formatNumber(order.total)}
                                         </TableCell>
                                     </TableRow>
                                 ))}
@@ -114,3 +114,5 @@ export function DashboardClient({ data }: { data: any }) {
         </div>
     );
 }
+
+    

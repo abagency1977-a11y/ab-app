@@ -19,7 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { addProduct, deleteProduct as deleteProductFromDB, getProducts, updateProduct } from '@/lib/data';
 import { Skeleton } from '@/components/ui/skeleton';
 
-const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value);
+const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol' }).format(value);
 
 function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
     isOpen: boolean;
@@ -430,3 +430,5 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
         </div>
     );
 }
+
+    

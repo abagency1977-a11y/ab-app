@@ -24,8 +24,8 @@ import { getCustomers, getOrders, addPaymentToOrder, deleteOrder } from '@/lib/d
 import { Skeleton } from '@/components/ui/skeleton';
 
 const formatNumber = (value: number | undefined) => {
-    if (value === undefined || isNaN(value)) return '₹0.00';
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value);
+    if (value === undefined || isNaN(value)) return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(0);
+    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol' }).format(value);
 };
 
 const InvoiceTable = ({ invoices, onRowClick, onDeleteClick }: { invoices: Order[], onRowClick?: (invoice: Order) => void, onDeleteClick?: (invoice: Order) => void }) => (
@@ -405,5 +405,7 @@ function PaymentForm({ balanceDue, onAddPayment }: { balanceDue: number; onAddPa
         </Card>
     );
 }
+
+    
 
     

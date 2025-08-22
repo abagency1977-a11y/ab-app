@@ -31,21 +31,18 @@ import { Combobox } from '@/components/ui/combobox';
 
 
 const formatNumber = (value: number | undefined) => {
-    if (value === undefined || isNaN(value)) return '₹0.00';
-    return `₹${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
+    if (value === undefined || isNaN(value)) return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(0);
+    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 };
 
 const formatCurrencyForPdf = (value: number | undefined): string => {
     if (value === undefined || isNaN(value)) return 'INR 0.00';
-    const sign = value < 0 ? '-' : '';
-    const absValue = Math.abs(value);
-    
-    const formattedValue = `INR ${new Intl.NumberFormat('en-IN', {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    }).format(absValue)}`;
-    
-    return sign ? formattedValue.replace('INR ', 'INR -') : formattedValue;
+    }).format(value);
 }
 
 
@@ -1120,3 +1117,6 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     
 
 
+
+
+    

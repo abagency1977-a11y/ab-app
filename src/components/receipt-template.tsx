@@ -4,8 +4,8 @@ import React from 'react';
 import type { Order, Customer, Payment } from '@/lib/types';
 
 const formatNumber = (value: number | undefined) => {
-    if (value === undefined || isNaN(value)) return '0.00';
-    return new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+    if (value === undefined || isNaN(value)) return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol' }).format(0);
+    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 };
 
 interface ReceiptTemplateProps {
@@ -59,7 +59,7 @@ export const ReceiptTemplate = React.forwardRef<HTMLDivElement, ReceiptTemplateP
                 
                 <div className="text-center my-8">
                     <p className="text-sm text-gray-600">Amount Paid this Transaction</p>
-                    <p className="text-3xl font-bold tracking-tight">₹{formatNumber(payment.amount)}</p>
+                    <p className="text-3xl font-bold tracking-tight">{formatNumber(payment.amount)}</p>
                 </div>
 
 
@@ -67,11 +67,11 @@ export const ReceiptTemplate = React.forwardRef<HTMLDivElement, ReceiptTemplateP
                     <tbody>
                         <tr className="border-t">
                             <td className="p-2">Original Invoice Total</td>
-                            <td className="p-2 text-right">₹{formatNumber(order.grandTotal)}</td>
+                            <td className="p-2 text-right">{formatNumber(order.grandTotal)}</td>
                         </tr>
                         <tr className="border-t font-bold bg-gray-100">
                             <td className="p-2">Balance Due</td>
-                            <td className="p-2 text-right text-red-600">₹{formatNumber(balanceDueAfterThisPayment)}</td>
+                            <td className="p-2 text-right text-red-600">{formatNumber(balanceDueAfterThisPayment)}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -90,14 +90,14 @@ export const ReceiptTemplate = React.forwardRef<HTMLDivElement, ReceiptTemplateP
                             {historicalPayments.map(p => (
                                 <tr key={p.id} className="border-b">
                                     <td className="p-2">{new Date(p.paymentDate).toLocaleDateString('en-IN')}</td>
-                                    <td className="p-2 text-right">₹{formatNumber(p.amount)}</td>
+                                    <td className="p-2 text-right">{formatNumber(p.amount)}</td>
                                 </tr>
                             ))}
                         </tbody>
                         <tfoot className="font-bold">
                                 <tr>
                                     <td className="p-2 text-right">Total Paid:</td>
-                                    <td className="p-2 text-right">₹{formatNumber(totalPaidInHistory)}</td>
+                                    <td className="p-2 text-right">{formatNumber(totalPaidInHistory)}</td>
                                 </tr>
                         </tfoot>
                     </table>
@@ -115,3 +115,5 @@ export const ReceiptTemplate = React.forwardRef<HTMLDivElement, ReceiptTemplateP
 });
 
 ReceiptTemplate.displayName = 'ReceiptTemplate';
+
+    

@@ -10,7 +10,7 @@ import { ChartConfig, ChartContainer, ChartTooltipContent } from '@/components/u
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { generateReportNarrative } from '@/ai/flows/generate-report-narrative';
 
-const formatNumber = (value: number) => new Intl.NumberFormat('en-IN').format(value);
+const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol' }).format(value);
 
 const revenueChartConfig = {
   revenue: { label: 'Revenue', color: 'hsl(var(--primary))' },
@@ -25,7 +25,7 @@ export function ReportsClient({ reportData }: { reportData: any }) {
         setIsLoading(true);
         setNarrative('');
         const dataSummary = `
-            Total Revenue: ₹${formatNumber(reportData.totalRevenue)}
+            Total Revenue: ${formatNumber(reportData.totalRevenue)}
             Total Customers: ${reportData.totalCustomers}
             Orders Placed: ${reportData.ordersPlaced}
             Monthly Revenue: ${JSON.stringify(reportData.revenueChartData)}
@@ -66,7 +66,7 @@ export function ReportsClient({ reportData }: { reportData: any }) {
                     <CardHeader><CardTitle>Total Revenue</CardTitle></CardHeader>
                     <CardContent>
                         <p className="text-3xl font-bold">
-                            ₹{formatNumber(reportData.totalRevenue)}
+                            {formatNumber(reportData.totalRevenue)}
                         </p>
                     </CardContent>
                 </Card>
@@ -97,9 +97,9 @@ export function ReportsClient({ reportData }: { reportData: any }) {
                                 <XAxis dataKey="month" />
                                 <YAxis tickFormatter={(value) => {
                                     const num = value as number;
-                                    return `₹${formatNumber(num)}`;
+                                    return `${formatNumber(num)}`;
                                 }} />
-                                <Tooltip content={<ChartTooltipContent formatter={(value) => `₹${formatNumber(value as number)}`}/>} />
+                                <Tooltip content={<ChartTooltipContent formatter={(value) => `${formatNumber(value as number)}`}/>} />
                                 <Line type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={2} dot={{r: 5, fill: "hsl(var(--primary))"}} activeDot={{ r: 8 }} />
                             </LineChart>
                         </ResponsiveContainer>
@@ -110,3 +110,5 @@ export function ReportsClient({ reportData }: { reportData: any }) {
         </div>
     );
 }
+
+    
