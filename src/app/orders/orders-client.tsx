@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
@@ -30,8 +29,8 @@ import { Combobox } from '@/components/ui/combobox';
 
 
 const formatNumber = (value: number | undefined) => {
-    if (value === undefined || isNaN(value)) return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(0);
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+    if (value === undefined || isNaN(value)) return `INR 0.00`;
+    return `INR ${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
 };
 
 export function OrdersClient({ orders: initialOrders, customers: initialCustomers, products: initialProducts }: { orders: Order[], customers: Customer[], products: Product[] }) {
@@ -137,79 +136,161 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
 
     const handlePrint = async () => {
         if (!orderToPrint) return;
-        
+
         const customer = customers.find(c => c.id === orderToPrint.customerId);
         if(!customer) return;
 
         setIsLoading(true);
         try {
-            const pdf = new jsPDF();
-            
-            // Header
+            const doc = new jsPDF();
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const margin = 14;
+
+            // --- Header ---
             if (logoUrl) {
-                pdf.addImage(logoUrl, 'PNG', 14, 12, 30, 15);
+                // The logo needs to be converted to a format jsPDF can use, like Base64
+                // We assume logoUrl is a data URI (e.g., from localStorage)
+                doc.addImage(logoUrl, 'PNG', pageWidth / 2 - 15, 10, 30, 15);
             }
-            pdf.setFontSize(20);
-            pdf.text('AB Agency', logoUrl ? 48 : 14, 20);
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
+            doc.text('AB Agency', pageWidth / 2, 32, { align: 'center' });
             
-            pdf.setFontSize(12);
-            pdf.text('No.1, Ayyanchery main road, Urapakkam', 14, 28);
-            pdf.text('abagency1977@gmail.com | 95511 95505', 14, 33);
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'normal');
+            doc.text('No.1, Ayyanchery main road, Urapakkam, Chennai - 603210', pageWidth / 2, 38, { align: 'center' });
+            doc.text('Email: abagency1977@gmail.com | MOB: 95511 95505 / 95001 82975', pageWidth / 2, 42, { align: 'center' });
             
-            pdf.setFontSize(16);
-            pdf.text(`Invoice #${orderToPrint.id.replace('ORD','INV')}`, 200, 20, { align: 'right'});
-            pdf.setFontSize(12);
-            pdf.text(`Date: ${new Date(orderToPrint.orderDate).toLocaleDateString('en-GB')}`, 200, 27, { align: 'right'});
-            if(orderToPrint.dueDate) {
-                 pdf.text(`Due Date: ${new Date(orderToPrint.dueDate).toLocaleDateString('en-GB')}`, 200, 34, { align: 'right'});
+            doc.setDrawColor(200, 200, 200);
+            doc.line(margin, 48, pageWidth - margin, 48);
+
+            // --- Billed To & Invoice Details ---
+            let y = 55;
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Billed To:', margin, y);
+            
+            doc.setFont('helvetica', 'normal');
+            y += 5;
+            doc.text(customer.name, margin, y);
+            y += 5;
+            if (customer.address) { // Assuming address might have multiple lines
+                 const addressLines = doc.splitTextToSize(customer.address, 80);
+                 doc.text(addressLines, margin, y);
+                 y += (addressLines.length * 4);
+            }
+            y+= 2;
+            doc.text(`${customer.email} | ${customer.phone}`, margin, y);
+            
+            // Right column
+            const rightX = pageWidth - margin;
+            y = 55;
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.text('GSTIN: 33DMLPA8598D1ZU', rightX, y, { align: 'right' });
+            y += 7;
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Credit Invoice', rightX, y, { align: 'right' });
+            y += 7;
+            
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            const invId = `# ${orderToPrint.id.replace('ORD','INV')}`;
+            doc.text(invId, rightX, y, { align: 'right' });
+            y += 5;
+            doc.text(`Date: ${new Date(orderToPrint.orderDate).toLocaleDateString('en-GB')}`, rightX, y, { align: 'right'});
+            y += 5;
+             if(orderToPrint.dueDate) {
+                doc.setFont('helvetica', 'bold');
+                doc.text(`Due Date: ${new Date(orderToPrint.dueDate).toLocaleDateString('en-GB')}`, rightX, y, { align: 'right'});
+                doc.setFont('helvetica', 'normal');
+                y += 5;
+             }
+             if(orderToPrint.deliveryDate) {
+                doc.text(`Delivery Date: ${new Date(orderToPrint.deliveryDate).toLocaleDateString('en-GB')}`, rightX, y, { align: 'right'});
+             }
+
+
+            // --- Table ---
+            const tableBody = orderToPrint.items.map((item, index) => [
+                index + 1,
+                item.productName,
+                item.quantity,
+                new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(item.price),
+                formatNumber(item.price * item.quantity)
+            ]);
+
+            (doc as any).autoTable({
+                startY: 95,
+                head: [['#', 'Item Description', 'Qty', 'Rate', 'Amount']],
+                body: tableBody,
+                theme: 'grid',
+                headStyles: { 
+                    fillColor: [41, 41, 41], 
+                    textColor: 255,
+                    fontStyle: 'bold'
+                },
+                styles: {
+                    fontSize: 10,
+                    cellPadding: 2.5,
+                },
+                columnStyles: {
+                    0: { cellWidth: 10, halign: 'center' },
+                    2: { halign: 'center' },
+                    3: { halign: 'right' },
+                    4: { halign: 'right' },
+                }
+            });
+
+            // --- Totals ---
+            const finalY = (doc as any).previousAutoTable.finalY + 10;
+            const totalsRightX = rightX - 20;
+            const totalsLeftX = rightX - 50;
+
+            const printTotalLine = (label: string, value: string, yPos: number, isBold=false) => {
+                 doc.setFont('helvetica', isBold ? 'bold' : 'normal');
+                 doc.text(label, totalsLeftX, yPos, { align: 'right' });
+                 doc.text(value, totalsRightX + 18, yPos, { align: 'right' });
+            };
+
+            let totalsY = finalY;
+            printTotalLine('Current Invoice Total:', formatNumber(orderToPrint.total), totalsY);
+            totalsY += 7;
+            if (orderToPrint.deliveryFees > 0) {
+                 printTotalLine('Delivery Fees:', formatNumber(orderToPrint.deliveryFees), totalsY);
+                 totalsY += 7;
+            }
+            if (orderToPrint.discount > 0) {
+                printTotalLine('Discount:', `-${formatNumber(orderToPrint.discount)}`, totalsY);
+                totalsY += 7;
+            }
+            if (orderToPrint.previousBalance > 0) {
+                printTotalLine('Previous Balance:', formatNumber(orderToPrint.previousBalance), totalsY);
+                totalsY += 7;
             }
 
-            // Billed To
-            pdf.setFontSize(14);
-            pdf.text('Billed To:', 14, 50);
-            pdf.setFontSize(12);
-            pdf.text(customer.name, 14, 57);
-            if(customer.address) pdf.text(customer.address, 14, 62);
-            pdf.text(`${customer.email} | ${customer.phone}`, 14, 67);
+            totalsY += 5;
+
+            doc.setFillColor(255, 235, 238); // Light red
+            doc.setDrawColor(255, 235, 238);
+            doc.roundedRect(totalsLeftX - 25, totalsY - 5, 85, 10, 3, 3, 'FD');
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(200, 30, 30);
+            doc.text(`Grand Total: ${formatNumber(orderToPrint.grandTotal)}`, rightX, totalsY, { align: 'right' });
             
-            // Table
-            (pdf as any).autoTable({
-                startY: 80,
-                head: [['#', 'Item', 'Qty', 'Rate', 'GST', 'Amount']],
-                body: orderToPrint.items.map((item, index) => [
-                    index + 1,
-                    item.productName,
-                    item.quantity,
-                    formatNumber(item.price),
-                    `${item.gst}%`,
-                    formatNumber(item.price * item.quantity * (1 + item.gst / 100))
-                ]),
-                theme: 'striped',
-                headStyles: { fillColor: [38, 128, 62] }
-            });
             
-            // Totals
-            const finalY = (pdf as any).previousAutoTable.finalY;
-            pdf.setFontSize(12);
-            pdf.text('Current Invoice Total:', 140, finalY + 10, { align: 'right' });
-            pdf.text(formatNumber(orderToPrint.total), 200, finalY + 10, { align: 'right' });
-            pdf.text('Delivery Fees:', 140, finalY + 17, { align: 'right' });
-            pdf.text(formatNumber(orderToPrint.deliveryFees), 200, finalY + 17, { align: 'right' });
-            if(orderToPrint.discount > 0) {
-                 pdf.text('Discount:', 140, finalY + 24, { align: 'right' });
-                 pdf.text(`-${formatNumber(orderToPrint.discount)}`, 200, finalY + 24, { align: 'right' });
-            }
-            if(orderToPrint.previousBalance > 0) {
-                pdf.text('Previous Balance:', 140, finalY + 31, { align: 'right' });
-                pdf.text(formatNumber(orderToPrint.previousBalance), 200, finalY + 31, { align: 'right' });
-            }
-            
-            pdf.setFontSize(14);
-            pdf.setFont('helvetica', 'bold');
-            pdf.text('Grand Total:', 140, finalY + 40, { align: 'right' });
-            pdf.text(formatNumber(orderToPrint.grandTotal), 200, finalY + 40, { align: 'right' });
-            
-            pdf.save(`invoice-${orderToPrint.id}.pdf`);
+            // --- Footer ---
+            const pageHeight = doc.internal.pageSize.getHeight();
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(100, 100, 100);
+            doc.text('Thank you for your business!', pageWidth / 2, pageHeight - 15, { align: 'center' });
+            doc.text('This is a computer-generated invoice and does not require a signature.', pageWidth / 2, pageHeight - 10, { align: 'center' });
+
+
+            doc.save(`invoice-${orderToPrint.id.replace('ORD','INV')}.pdf`);
             toast({ title: 'Success', description: 'Invoice PDF has been downloaded.' });
             
         } catch (error) {
