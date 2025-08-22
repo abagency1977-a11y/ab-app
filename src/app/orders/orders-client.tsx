@@ -677,13 +677,8 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     useEffect(() => {
         const fetchBalance = async () => {
             if (customerId) {
-                // When editing, we want to show the balance *at the time of the order*
-                 if (isEditMode && existingOrder) {
-                     setPreviousBalance(existingOrder.previousBalance);
-                 } else if (!isEditMode) {
-                    const balance = await getCustomerBalance(customerId);
-                    setPreviousBalance(balance);
-                }
+                const balance = await getCustomerBalance(customerId);
+                setPreviousBalance(balance);
                 const customer = customers.find(c => c.id === customerId);
                 if (customer) {
                     setDeliveryAddress(customer.address);
@@ -693,10 +688,10 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                 setDeliveryAddress('');
             }
         };
-        if (isOpen) {
+        if (isOpen && !isEditMode) {
           fetchBalance();
         }
-    }, [customerId, customers, isEditMode, existingOrder, isOpen]);
+    }, [customerId, customers, isOpen, isEditMode]);
 
     const handleProductSelect = (productId: string) => {
         const product = products.find(p => p.id === productId);
@@ -1123,4 +1118,5 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     
 
     
+
 

@@ -105,8 +105,7 @@ export const getCustomerBalance = async (customerId: string): Promise<number> =>
     try {
         const ordersQuery = query(
             collection(db, 'orders'), 
-            where('customerId', '==', customerId),
-            where('isOpeningBalance', '==', false) // Ignore opening balance orders for new balances
+            where('customerId', '==', customerId)
         );
         const snapshot = await getDocs(ordersQuery);
         const totalBalance = snapshot.docs.reduce((acc, doc) => {
@@ -461,4 +460,5 @@ export const resetDatabaseForFreshStart = async () => {
         throw new Error("Failed to reset the database.");
     }
 };
+
 
