@@ -145,37 +145,37 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
 
         setIsLoading(true);
         try {
-            const doc = new jsPDF();
+            const pdf = new jsPDF();
             
             // Header
             if (logoUrl) {
-                doc.addImage(logoUrl, 'PNG', 14, 12, 30, 15);
+                pdf.addImage(logoUrl, 'PNG', 14, 12, 30, 15);
             }
-            doc.setFontSize(20);
-            doc.text('AB Agency', logoUrl ? 48 : 14, 20);
+            pdf.setFontSize(20);
+            pdf.text('AB Agency', logoUrl ? 48 : 14, 20);
             
-            doc.setFontSize(12);
-            doc.text('No.1, Ayyanchery main road, Urapakkam', 14, 28);
-            doc.text('abagency1977@gmail.com | 95511 95505', 14, 33);
+            pdf.setFontSize(12);
+            pdf.text('No.1, Ayyanchery main road, Urapakkam', 14, 28);
+            pdf.text('abagency1977@gmail.com | 95511 95505', 14, 33);
             
-            doc.setFontSize(16);
-            doc.text(`Invoice #${orderToPrint.id.replace('ORD','INV')}`, 200, 20, { align: 'right'});
-            doc.setFontSize(12);
-            doc.text(`Date: ${new Date(orderToPrint.orderDate).toLocaleDateString('en-GB')}`, 200, 27, { align: 'right'});
+            pdf.setFontSize(16);
+            pdf.text(`Invoice #${orderToPrint.id.replace('ORD','INV')}`, 200, 20, { align: 'right'});
+            pdf.setFontSize(12);
+            pdf.text(`Date: ${new Date(orderToPrint.orderDate).toLocaleDateString('en-GB')}`, 200, 27, { align: 'right'});
             if(orderToPrint.dueDate) {
-                 doc.text(`Due Date: ${new Date(orderToPrint.dueDate).toLocaleDateString('en-GB')}`, 200, 34, { align: 'right'});
+                 pdf.text(`Due Date: ${new Date(orderToPrint.dueDate).toLocaleDateString('en-GB')}`, 200, 34, { align: 'right'});
             }
 
             // Billed To
-            doc.setFontSize(14);
-            doc.text('Billed To:', 14, 50);
-            doc.setFontSize(12);
-            doc.text(customer.name, 14, 57);
-            doc.text(customer.address, 14, 62);
-            doc.text(`${customer.email} | ${customer.phone}`, 14, 67);
+            pdf.setFontSize(14);
+            pdf.text('Billed To:', 14, 50);
+            pdf.setFontSize(12);
+            pdf.text(customer.name, 14, 57);
+            pdf.text(customer.address, 14, 62);
+            pdf.text(`${customer.email} | ${customer.phone}`, 14, 67);
             
             // Table
-            (doc as any).autoTable({
+            (pdf as any).autoTable({
                 startY: 80,
                 head: [['#', 'Item', 'Qty', 'Rate', 'GST', 'Amount']],
                 body: orderToPrint.items.map((item, index) => [
@@ -191,26 +191,26 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             });
             
             // Totals
-            const finalY = (doc as any).previousAutoTable.finalY;
-            doc.setFontSize(12);
-            doc.text('Current Invoice Total:', 140, finalY + 10, { align: 'right' });
-            doc.text(formatNumber(orderToPrint.total), 200, finalY + 10, { align: 'right' });
-            doc.text('Delivery Fees:', 140, finalY + 17, { align: 'right' });
-            doc.text(formatNumber(orderToPrint.deliveryFees), 200, finalY + 17, { align: 'right' });
+            const finalY = (pdf as any).previousAutoTable.finalY;
+            pdf.setFontSize(12);
+            pdf.text('Current Invoice Total:', 140, finalY + 10, { align: 'right' });
+            pdf.text(formatNumber(orderToPrint.total), 200, finalY + 10, { align: 'right' });
+            pdf.text('Delivery Fees:', 140, finalY + 17, { align: 'right' });
+            pdf.text(formatNumber(orderToPrint.deliveryFees), 200, finalY + 17, { align: 'right' });
             if(orderToPrint.discount > 0) {
-                 doc.text('Discount:', 140, finalY + 24, { align: 'right' });
-                 doc.text(`-${formatNumber(orderToPrint.discount)}`, 200, finalY + 24, { align: 'right' });
+                 pdf.text('Discount:', 140, finalY + 24, { align: 'right' });
+                 pdf.text(`-${formatNumber(orderToPrint.discount)}`, 200, finalY + 24, { align: 'right' });
             }
-            doc.text('Previous Balance:', 140, finalY + 31, { align: 'right' });
-            doc.text(formatNumber(orderToPrint.previousBalance), 200, finalY + 31, { align: 'right' });
+            pdf.text('Previous Balance:', 140, finalY + 31, { align: 'right' });
+            pdf.text(formatNumber(orderToPrint.previousBalance), 200, finalY + 31, { align: 'right' });
             
-            doc.setFontSize(14);
-            doc.setFont('helvetica', 'bold');
-            doc.text('Grand Total:', 140, finalY + 40, { align: 'right' });
-            doc.text(formatNumber(orderToPrint.grandTotal), 200, finalY + 40, { align: 'right' });
+            pdf.setFontSize(14);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text('Grand Total:', 140, finalY + 40, { align: 'right' });
+            pdf.text(formatNumber(orderToPrint.grandTotal), 200, finalY + 40, { align: 'right' });
             
 
-            doc.save(`invoice-${orderToPrint.id}.pdf`);
+            pdf.save(`invoice-${orderToPrint.id}.pdf`);
             toast({ title: 'Success', description: 'Invoice PDF has been downloaded.' });
             
         } catch (error) {
@@ -994,6 +994,8 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
 
 
 
+
+    
 
     
 
