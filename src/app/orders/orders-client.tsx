@@ -148,7 +148,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
 
             // --- Header ---
             if (logoUrl) {
-                const logoWidth = 25;
+                const logoWidth = 25; 
                 const logoHeight = 20;
                 doc.addImage(logoUrl, 'PNG', pageWidth / 2 - (logoWidth/2), 15, logoWidth, logoHeight);
             }
@@ -162,47 +162,58 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             doc.line(margin, 48, pageWidth - margin, 48); // Separator line
             // --- End Header ---
 
-             // --- Customer and Invoice Details ---
+            // --- Customer and Invoice Details ---
             let yPos = 58;
             const rightColX = pageWidth - margin;
 
-            // Left Column
+            // --- Left Column ---
             doc.setFontSize(10);
             doc.setFont('helvetica', 'bold');
             doc.text('Billed To:', margin, yPos);
             doc.setFont('helvetica', 'normal');
-            doc.text(customer.name, margin, yPos + 5);
+            yPos += 5;
+            doc.text(customer.name, margin, yPos);
+            yPos += 5;
             
-            const addressLines = doc.splitTextToSize(customer.address, 80);
-            doc.text(addressLines, margin, yPos + 10);
-            let addressHeight = addressLines.length * 5;
-
-            yPos += addressHeight + 5;
+            const addressLines = doc.splitTextToSize(customer.address || 'No address provided', 80);
+            doc.text(addressLines, margin, yPos);
+            yPos += (addressLines.length * 5) + 5; // Add extra space after address
+            
             doc.text(customer.email, margin, yPos);
-            doc.text(customer.phone, margin, yPos + 5);
+            yPos += 5;
+            doc.text(customer.phone, margin, yPos);
             
-            // Right Column
-            yPos = 58;
+            // --- Right Column ---
+            yPos = 58; // Reset yPos for the right column
             doc.setFontSize(10);
             doc.setFont('helvetica', 'bold');
             doc.text('GSTIN: 33DMLPA8598D1ZU', rightColX, yPos, { align: 'right' });
+            yPos += 5;
             
             doc.setFontSize(11);
-            const invoiceType = orderToPrint.paymentTerm === 'Credit' ? 'CREDIT INVOICE' : 'INVOICE';
-            doc.text(invoiceType, rightColX, yPos + 5, { align: 'right' });
-            
-            yPos += 10;
+            if (orderToPrint.paymentTerm === 'Credit') {
+                doc.setTextColor(255, 0, 0); // Red for credit
+                doc.text('CREDIT INVOICE', rightColX, yPos, { align: 'right' });
+            } else {
+                doc.setTextColor(0, 128, 0); // Green for full payment
+                doc.text('INVOICE', rightColX, yPos, { align: 'right' });
+            }
+            doc.setTextColor(0, 0, 0); // Reset text color to black
+            yPos += 10; // Extra space after title
             
             doc.setFontSize(10);
             doc.setFont('helvetica', 'normal');
             doc.text(`Invoice No: ${orderToPrint.id.replace('ORD', 'INV')}`, rightColX, yPos, { align: 'right' });
-            doc.text(`Date: ${new Date(orderToPrint.orderDate).toLocaleDateString('en-IN')}`, rightColX, yPos + 5, { align: 'right' });
+            yPos += 5;
+            doc.text(`Date: ${new Date(orderToPrint.orderDate).toLocaleDateString('en-IN')}`, rightColX, yPos, { align: 'right' });
+            yPos += 5;
 
             if (orderToPrint.dueDate) {
-                doc.text(`Due Date: ${new Date(orderToPrint.dueDate).toLocaleDateString('en-IN')}`, rightColX, yPos + 10, { align: 'right' });
+                doc.text(`Due Date: ${new Date(orderToPrint.dueDate).toLocaleDateString('en-IN')}`, rightColX, yPos, { align: 'right' });
+                yPos += 5;
             }
              if (orderToPrint.deliveryDate) {
-                doc.text(`Delivery Date: ${new Date(orderToPrint.deliveryDate).toLocaleDateString('en-IN')}`, rightColX, yPos + 15, { align: 'right' });
+                doc.text(`Delivery Date: ${new Date(orderToPrint.deliveryDate).toLocaleDateString('en-IN')}`, rightColX, yPos, { align: 'right' });
             }
             // --- End Customer and Invoice Details ---
 
@@ -977,4 +988,5 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     
 
     
+
 
