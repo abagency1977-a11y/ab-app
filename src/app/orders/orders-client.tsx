@@ -150,16 +150,61 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             if (logoUrl) {
                 const logoWidth = 25;
                 const logoHeight = 20;
-                doc.addImage(logoUrl, 'PNG', pageWidth / 2 - (logoWidth/2), 10, logoWidth, logoHeight);
+                doc.addImage(logoUrl, 'PNG', pageWidth / 2 - (logoWidth/2), 15, logoWidth, logoHeight);
             }
             
             doc.setFontSize(9);
             doc.setFont('helvetica', 'normal');
-            doc.text('No.1, Ayyanchery main road, Urapakkam, Chennai - 603210', pageWidth / 2, 35, { align: 'center' });
-            doc.text('Email: abagency1977@gmail.com | MOB: 95511 95505 / 95001 82975', pageWidth / 2, 40, { align: 'center' });
+            doc.text('No.1, Ayyanchery main road, Urapakkam, Chennai - 603210', pageWidth / 2, 38, { align: 'center' });
+            doc.text('Email: abagency1977@gmail.com | MOB: 95511 95505 / 95001 82975', pageWidth / 2, 42, { align: 'center' });
             
             doc.setDrawColor(200, 200, 200);
-            doc.line(margin, 45, pageWidth - margin, 45);
+            doc.line(margin, 48, pageWidth - margin, 48); // Separator line
+            // --- End Header ---
+
+             // --- Customer and Invoice Details ---
+            let yPos = 58;
+            const rightColX = pageWidth - margin;
+
+            // Left Column
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Billed To:', margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(customer.name, margin, yPos + 5);
+            
+            const addressLines = doc.splitTextToSize(customer.address, 80);
+            doc.text(addressLines, margin, yPos + 10);
+            let addressHeight = addressLines.length * 5;
+
+            yPos += addressHeight + 5;
+            doc.text(customer.email, margin, yPos);
+            doc.text(customer.phone, margin, yPos + 5);
+            
+            // Right Column
+            yPos = 58;
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'bold');
+            doc.text('GSTIN: 33DMLPA8598D1ZU', rightColX, yPos, { align: 'right' });
+            
+            doc.setFontSize(11);
+            const invoiceType = orderToPrint.paymentTerm === 'Credit' ? 'CREDIT INVOICE' : 'INVOICE';
+            doc.text(invoiceType, rightColX, yPos + 5, { align: 'right' });
+            
+            yPos += 10;
+            
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`Invoice No: ${orderToPrint.id.replace('ORD', 'INV')}`, rightColX, yPos, { align: 'right' });
+            doc.text(`Date: ${new Date(orderToPrint.orderDate).toLocaleDateString('en-IN')}`, rightColX, yPos + 5, { align: 'right' });
+
+            if (orderToPrint.dueDate) {
+                doc.text(`Due Date: ${new Date(orderToPrint.dueDate).toLocaleDateString('en-IN')}`, rightColX, yPos + 10, { align: 'right' });
+            }
+             if (orderToPrint.deliveryDate) {
+                doc.text(`Delivery Date: ${new Date(orderToPrint.deliveryDate).toLocaleDateString('en-IN')}`, rightColX, yPos + 15, { align: 'right' });
+            }
+            // --- End Customer and Invoice Details ---
 
 
             doc.save(`invoice-${orderToPrint.id.replace('ORD','INV')}.pdf`);
@@ -932,3 +977,4 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     
 
     
+
