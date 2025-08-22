@@ -1,8 +1,7 @@
 
-
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { Product } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -126,11 +125,19 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
     const [productToEdit, setProductToEdit] = useState<Product | null>(null);
     const [productToDelete, setProductToDelete] = useState<Product | null>(null);
     const [isMounted, setIsMounted] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
     const { toast } = useToast();
 
     useEffect(() => {
         setIsMounted(true);
     }, []);
+
+    const filteredProducts = useMemo(() => {
+        return products.filter(product => 
+            product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            product.sku.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+    }, [products, searchQuery]);
 
     const handlePredictDemand = async () => {
         if (!selectedProduct) {
@@ -270,6 +277,14 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                     <PlusCircle className="mr-2 h-4 w-4" /> Add Product
                 </Button>
             </div>
+            <div className="flex items-center">
+                <Input
+                    placeholder="Search by product name or SKU..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="max-w-sm"
+                />
+            </div>
             <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-3">
                 <div className="lg:col-span-2 space-y-4">
                     <div className="rounded-lg border shadow-sm">
@@ -285,7 +300,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {products.map((product) => (
+                                {filteredProducts.map((product) => (
                                     <TableRow key={product.id}>
                                         <TableCell className="font-medium">{product.name}</TableCell>
                                         <TableCell>{product.sku}</TableCell>
