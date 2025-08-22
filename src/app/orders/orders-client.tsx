@@ -5,7 +5,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import type { Order, Customer, Product, PaymentTerm, PaymentMode, OrderStatus } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { MoreHorizontal, FileText, Receipt, Loader2, PlusCircle, Trash2, Download, Edit, Share2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { addOrder, addCustomer, deleteOrder as deleteOrderFromDB, getCustomerBalance, getProducts, updateOrder } from '@/lib/data';
+import { addOrder, addCustomer, deleteOrder as deleteOrderFromDB, getCustomerBalance, getProducts, updateOrder, getOrders } from '@/lib/data';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
@@ -148,13 +148,15 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
 
             // --- Header ---
             if (logoUrl) {
-                doc.addImage(logoUrl, 'PNG', pageWidth / 2 - 12.5, 10, 25, 20);
+                const logoWidth = 25;
+                const logoHeight = 20;
+                doc.addImage(logoUrl, 'PNG', pageWidth / 2 - (logoWidth/2), 10, logoWidth, logoHeight);
             }
             
             doc.setFontSize(9);
             doc.setFont('helvetica', 'normal');
-            doc.text('No.1, Ayyanchery main road, Urapakkam, Chennai - 603210', pageWidth / 2, 32, { align: 'center' });
-            doc.text('Email: abagency1977@gmail.com | MOB: 95511 95505 / 95001 82975', pageWidth / 2, 38, { align: 'center' });
+            doc.text('No.1, Ayyanchery main road, Urapakkam, Chennai - 603210', pageWidth / 2, 35, { align: 'center' });
+            doc.text('Email: abagency1977@gmail.com | MOB: 95511 95505 / 95001 82975', pageWidth / 2, 40, { align: 'center' });
             
             doc.setDrawColor(200, 200, 200);
             doc.line(margin, 45, pageWidth - margin, 45);
