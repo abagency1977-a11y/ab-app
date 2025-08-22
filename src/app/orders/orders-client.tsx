@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
@@ -28,7 +29,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Combobox } from '@/components/ui/combobox';
 
 
-const formatNumber = (value: number | undefined) => {
+const formatNumberForDisplay = (value: number | undefined) => {
     if (value === undefined || isNaN(value)) return `INR 0.00`;
     return `INR ${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
 };
@@ -127,7 +128,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             return;
         }
 
-        const message = `Hello ${customer.name}, here is your invoice ${order.id.replace('ORD', 'INV')}. Total amount: ${formatNumber(order.grandTotal)}. Thank you for your business!`;
+        const message = `Hello ${customer.name}, here is your invoice ${order.id.replace('ORD', 'INV')}. Total amount: ${formatNumberForDisplay(order.grandTotal)}. Thank you for your business!`;
         const whatsappUrl = `https://wa.me/${customer.phone}?text=${encodeURIComponent(message)}`;
         
         window.open(whatsappUrl, '_blank');
@@ -145,6 +146,12 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             const doc = new jsPDF();
             const pageWidth = doc.internal.pageSize.getWidth();
             const margin = 14;
+
+            // --- Utility for currency formatting ---
+            const formatNumber = (value: number | undefined) => {
+                if (value === undefined || isNaN(value)) return `INR 0.00`;
+                return `INR ${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
+            };
 
             // --- Header ---
             if (logoUrl) {
@@ -166,7 +173,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             let yPos = 58;
             const rightColX = pageWidth - margin;
 
-            // --- Left Column ---
+            // --- Left Column (Billed To) ---
             doc.setFontSize(10);
             doc.setFont('helvetica', 'bold');
             doc.text('Billed To:', margin, yPos);
@@ -174,48 +181,126 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             yPos += 5;
             doc.text(customer.name, margin, yPos);
             yPos += 5;
-            
             const addressLines = doc.splitTextToSize(customer.address || 'No address provided', 80);
             doc.text(addressLines, margin, yPos);
             yPos += (addressLines.length * 5) + 5; // Add extra space after address
-            
             doc.text(customer.email, margin, yPos);
             yPos += 5;
             doc.text(customer.phone, margin, yPos);
             
-            // --- Right Column ---
-            yPos = 58; // Reset yPos for the right column
+            // --- Right Column (Invoice Details) ---
+            let rightYPos = 58;
             doc.setFontSize(10);
             doc.setFont('helvetica', 'bold');
-            doc.text('GSTIN: 33DMLPA8598D1ZU', rightColX, yPos, { align: 'right' });
-            yPos += 5;
+            doc.text('GSTIN: 33DMLPA8598D1ZU', rightColX, rightYPos, { align: 'right' });
+            rightYPos += 8; // Extra space
             
             doc.setFontSize(11);
             if (orderToPrint.paymentTerm === 'Credit') {
                 doc.setTextColor(255, 0, 0); // Red for credit
-                doc.text('CREDIT INVOICE', rightColX, yPos, { align: 'right' });
+                doc.text('CREDIT INVOICE', rightColX, rightYPos, { align: 'right' });
             } else {
                 doc.setTextColor(0, 128, 0); // Green for full payment
-                doc.text('INVOICE', rightColX, yPos, { align: 'right' });
+                doc.text('INVOICE', rightColX, rightYPos, { align: 'right' });
             }
             doc.setTextColor(0, 0, 0); // Reset text color to black
-            yPos += 10; // Extra space after title
+            rightYPos += 10; // Extra space after title
             
             doc.setFontSize(10);
             doc.setFont('helvetica', 'normal');
-            doc.text(`Invoice No: ${orderToPrint.id.replace('ORD', 'INV')}`, rightColX, yPos, { align: 'right' });
-            yPos += 5;
-            doc.text(`Date: ${new Date(orderToPrint.orderDate).toLocaleDateString('en-IN')}`, rightColX, yPos, { align: 'right' });
-            yPos += 5;
+            doc.text(`Invoice No: ${orderToPrint.id.replace('ORD', 'INV')}`, rightColX, rightYPos, { align: 'right' });
+            rightYPos += 5;
+            doc.text(`Date: ${new Date(orderToPrint.orderDate).toLocaleDateString('en-IN')}`, rightColX, rightYPos, { align: 'right' });
+            rightYPos += 5;
 
             if (orderToPrint.dueDate) {
-                doc.text(`Due Date: ${new Date(orderToPrint.dueDate).toLocaleDateString('en-IN')}`, rightColX, yPos, { align: 'right' });
-                yPos += 5;
+                doc.text(`Due Date: ${new Date(orderToPrint.dueDate).toLocaleDateString('en-IN')}`, rightColX, rightYPos, { align: 'right' });
+                rightYPos += 5;
             }
              if (orderToPrint.deliveryDate) {
-                doc.text(`Delivery Date: ${new Date(orderToPrint.deliveryDate).toLocaleDateString('en-IN')}`, rightColX, yPos, { align: 'right' });
+                doc.text(`Delivery Date: ${new Date(orderToPrint.deliveryDate).toLocaleDateString('en-IN')}`, rightColX, rightYPos, { align: 'right' });
             }
             // --- End Customer and Invoice Details ---
+
+            // --- Items Table ---
+            const tableStartY = Math.max(yPos, rightYPos) + 10;
+            const tableBody = orderToPrint.items.map(item => {
+                 const totalValue = orderToPrint.isGstInvoice
+                    ? item.price * item.quantity * (1 + item.gst / 100)
+                    : item.price * item.quantity;
+                return [
+                    item.productName,
+                    item.quantity,
+                    formatNumber(item.price),
+                    orderToPrint.isGstInvoice ? `${item.gst}%` : 'N/A',
+                    formatNumber(totalValue)
+                ];
+            });
+
+            (doc as any).autoTable({
+                startY: tableStartY,
+                head: [['Item Description', 'Qty', 'Rate', 'GST', 'Total']],
+                body: tableBody,
+                theme: 'grid',
+                headStyles: {
+                    fillColor: [222, 247, 236], // Light Green
+                    textColor: [3, 7, 6], // Dark text
+                    fontStyle: 'bold',
+                },
+                styles: {
+                    cellPadding: 2,
+                    fontSize: 9,
+                },
+                columnStyles: {
+                    0: { cellWidth: 70 }, // Description
+                    1: { halign: 'center' }, // Qty
+                    2: { halign: 'right' }, // Rate
+                    3: { halign: 'center' }, // GST
+                    4: { halign: 'right' }, // Total
+                }
+            });
+            // --- End Items Table ---
+
+            // --- Totals Section ---
+            let finalY = (doc as any).previousAutoTable.finalY + 10;
+            const totalsRightColX = pageWidth - margin;
+            const totalsLeftColX = totalsRightColX - 50; 
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+
+            const addTotalRow = (label: string, value: number, isBold = false) => {
+                if (isBold) {
+                     doc.setFont('helvetica', 'bold');
+                }
+                doc.text(label, totalsLeftColX, finalY, { align: 'right' });
+                doc.text(formatNumber(value), totalsRightColX, finalY, { align: 'right' });
+                if (isBold) {
+                     doc.setFont('helvetica', 'normal');
+                }
+                finalY += 6;
+            };
+
+            addTotalRow("Current Invoice Total:", orderToPrint.total);
+            if(orderToPrint.deliveryFees > 0) addTotalRow("Delivery Fees:", orderToPrint.deliveryFees);
+            if(orderToPrint.discount > 0) addTotalRow("Discount:", -orderToPrint.discount);
+            if(orderToPrint.previousBalance > 0) addTotalRow("Previous Balance:", orderToPrint.previousBalance);
+
+            // Grand Total with colored background
+            finalY += 2;
+            const grandTotalText = formatNumber(orderToPrint.grandTotal);
+            const grandTotalLabel = "Grand Total:";
+            const labelWidth = doc.getTextWidth(grandTotalLabel);
+            const valueWidth = doc.getTextWidth(grandTotalText);
+
+            doc.setFillColor(224, 233, 255); // Light blue background
+            doc.setDrawColor(224, 233, 255);
+            doc.setLineWidth(0.5);
+            doc.roundedRect(totalsLeftColX - labelWidth - 5, finalY - 5, (totalsRightColX - (totalsLeftColX - labelWidth - 5)), 8, 2, 2, 'FD');
+
+            doc.setFont('helvetica', 'bold');
+            doc.text(grandTotalLabel, totalsLeftColX, finalY, { align: 'right' });
+            doc.text(grandTotalText, totalsRightColX, finalY, { align: 'right' });
+            // --- End Totals Section ---
 
 
             doc.save(`invoice-${orderToPrint.id.replace('ORD','INV')}.pdf`);
@@ -380,7 +465,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                                 <TableCell>{order.customerName}</TableCell>
                                 <TableCell>{new Date(order.orderDate).toLocaleDateString('en-IN')}</TableCell>
                                 <TableCell className="text-right">
-                                    {formatNumber(order.grandTotal)}
+                                    {formatNumberForDisplay(order.grandTotal)}
                                 </TableCell>
                                 <TableCell className="text-center">
                                     <DropdownMenu>
@@ -805,7 +890,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                                 <div className="flex items-center justify-end">
                                                     <div className="text-right p-2 bg-amber-100 border border-amber-200 rounded-md">
                                                         <div className="text-sm font-medium text-amber-800">Previous Balance</div>
-                                                        <div className="text-lg font-bold text-amber-900">{formatNumber(previousBalance)}</div>
+                                                        <div className="text-lg font-bold text-amber-900">{formatNumberForDisplay(previousBalance)}</div>
                                                     </div>
                                                 </div>
                                             )}
@@ -867,9 +952,9 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                                         <TableRow key={index}>
                                                             <TableCell>{item.productId === 'OPENING_BALANCE' ? 'Opening Balance' : product?.name}</TableCell>
                                                             <TableCell>{item.quantity}</TableCell>
-                                                            <TableCell>{formatNumber(price)}</TableCell>
+                                                            <TableCell>{formatNumberForDisplay(price)}</TableCell>
                                                             <TableCell>{isGstInvoice ? `${item.gst}%` : 'N/A'}</TableCell>
-                                                            <TableCell>{formatNumber(itemTotal)}</TableCell>
+                                                            <TableCell>{formatNumberForDisplay(itemTotal)}</TableCell>
                                                             <TableCell className="space-x-2">
                                                                 <Button type="button" size="sm" variant="outline" onClick={() => handleEditItemClick(index)}>Edit</Button>
                                                                 <Button type="button" size="sm" variant="destructive" onClick={() => handleRemoveItem(index)}>Delete</Button>
@@ -924,8 +1009,8 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                     <div className="space-y-4">
                                         <Card><CardContent className="p-4 space-y-2">
                                             <DialogTitle className="text-lg">Order Summary</DialogTitle>
-                                            <div className="flex justify-between"><span>Current Invoice Total:</span> <span className="font-semibold">{formatNumber(currentInvoiceTotal)}</span></div>
-                                            {previousBalance > 0 && <div className="flex justify-between text-destructive"><span>Previous Balance:</span> <span className="font-semibold">{formatNumber(previousBalance)}</span></div>}
+                                            <div className="flex justify-between"><span>Current Invoice Total:</span> <span className="font-semibold">{formatNumberForDisplay(currentInvoiceTotal)}</span></div>
+                                            {previousBalance > 0 && <div className="flex justify-between text-destructive"><span>Previous Balance:</span> <span className="font-semibold">{formatNumberForDisplay(previousBalance)}</span></div>}
                                              <div className="flex justify-between items-center">
                                                 <Label htmlFor="delivery_fees" className="flex-1">Delivery Fees</Label>
                                                 <Input type="number" placeholder="0.00" className="w-24 h-8" value={String(deliveryFees)} onChange={e => setDeliveryFees(parseFloat(e.target.value) || 0)} />
@@ -940,7 +1025,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                             <Separator />
                                             <div className="flex justify-between text-lg">
                                                 <span className="font-bold">Grand Total Value:</span>
-                                                <span className="font-bold text-primary">{formatNumber(grandTotal)}</span>
+                                                <span className="font-bold text-primary">{formatNumberForDisplay(grandTotal)}</span>
                                             </div>
                                             
                                              <div className="flex items-center space-x-2 pt-2">
@@ -988,5 +1073,6 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     
 
     
+
 
 
