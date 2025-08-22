@@ -1,10 +1,11 @@
 
+
 'use client';
 import React from 'react';
 import type { Order, Customer, OrderItem } from '@/lib/types';
 
 const formatNumber = (value: number | undefined) => {
-    if (value === undefined || isNaN(value)) return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol' }).format(0);
+    if (value === undefined || isNaN(value)) return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(0);
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 };
 
@@ -24,8 +25,8 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
     <div ref={ref} className="bg-white text-black p-8 font-sans" style={{ position: 'fixed', left: '-200vw', top: 0, zIndex: -1, width: '210mm' }}>
         <style>
             {`
-                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
-                .font-sans { font-family: 'Inter', sans-serif; }
+                @import url('https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&display=swap');
+                .font-sans { font-family: 'PT Sans', sans-serif; }
             `}
         </style>
         <header className="flex justify-between items-start pb-4 border-b-2 border-gray-200">
@@ -133,4 +134,5 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
 
 InvoiceTemplate.displayName = 'InvoiceTemplate';
 
+    
     

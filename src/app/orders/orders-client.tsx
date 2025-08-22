@@ -171,7 +171,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             
             pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, finalPdfHeight);
             
-            doc.save(`invoice-${orderToPrint.id}.pdf`);
+            pdf.save(`invoice-${orderToPrint.id}.pdf`);
             toast({ title: 'Success', description: 'Invoice PDF has been downloaded.' });
 
         } catch (error) {
@@ -945,6 +945,8 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
 
 
 
+
+    
 
     
 
