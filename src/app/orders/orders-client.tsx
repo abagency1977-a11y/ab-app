@@ -169,7 +169,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             pdf.text('Billed To:', 14, 50);
             pdf.setFontSize(12);
             pdf.text(customer.name, 14, 57);
-            pdf.text(customer.address, 14, 62);
+            if(customer.address) pdf.text(customer.address, 14, 62);
             pdf.text(`${customer.email} | ${customer.phone}`, 14, 67);
             
             // Table
@@ -199,8 +199,10 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                  pdf.text('Discount:', 140, finalY + 24, { align: 'right' });
                  pdf.text(`-${formatNumber(orderToPrint.discount)}`, 200, finalY + 24, { align: 'right' });
             }
-            pdf.text('Previous Balance:', 140, finalY + 31, { align: 'right' });
-            pdf.text(formatNumber(orderToPrint.previousBalance), 200, finalY + 31, { align: 'right' });
+            if(orderToPrint.previousBalance > 0) {
+                pdf.text('Previous Balance:', 140, finalY + 31, { align: 'right' });
+                pdf.text(formatNumber(orderToPrint.previousBalance), 200, finalY + 31, { align: 'right' });
+            }
             
             pdf.setFontSize(14);
             pdf.setFont('helvetica', 'bold');
@@ -998,4 +1000,5 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     
 
     
+
 
