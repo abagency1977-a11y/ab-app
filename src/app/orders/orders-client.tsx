@@ -24,7 +24,6 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import { InvoiceTemplate } from '@/components/invoice-template';
 import { startOfWeek, startOfMonth, subMonths, isWithinInterval } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Combobox } from '@/components/ui/combobox';
@@ -49,7 +48,6 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     const [searchQuery, setSearchQuery] = useState('');
     const [dateFilter, setDateFilter] = useState('All');
     const [isMounted, setIsMounted] = useState(false);
-    const invoiceTemplateRef = useRef<HTMLDivElement>(null);
     
     useEffect(() => {
         setIsMounted(true);
@@ -440,14 +438,6 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
-            {orderToPrint && (
-                <InvoiceTemplate
-                    ref={invoiceTemplateRef}
-                    order={orderToPrint}
-                    customer={customers.find(c => c.id === orderToPrint.customerId)!}
-                    logoUrl={logoUrl}
-                />
-            )}
         </div>
     );
 }
@@ -1008,3 +998,4 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     
 
     
+
