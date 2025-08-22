@@ -5,7 +5,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import type { Order, Customer, Product, PaymentTerm, PaymentMode, OrderStatus } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { MoreHorizontal, FileText, Receipt, Loader2, PlusCircle, Trash2, Download, Edit, Share2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -148,8 +148,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
 
             // --- Header ---
             if (logoUrl) {
-                // Using fixed width and height to prevent stretching
-                doc.addImage(logoUrl, 'PNG', pageWidth / 2 - 15, 10, 30, 15);
+                doc.addImage(logoUrl, 'PNG', pageWidth / 2 - 12.5, 10, 25, 20);
             }
             
             doc.setFontSize(9);
@@ -928,9 +927,6 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         </>
     );
 }
-
-    
-
     
 
     
