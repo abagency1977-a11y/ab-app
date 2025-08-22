@@ -407,5 +407,3 @@ function PaymentForm({ balanceDue, onAddPayment }: { balanceDue: number; onAddPa
 }
 
     
-
-    

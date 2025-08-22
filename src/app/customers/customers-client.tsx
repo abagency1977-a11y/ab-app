@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
@@ -544,6 +545,8 @@ function BulkPaymentDialog({ isOpen, onOpenChange, customer, allOrders, onPaymen
         </Dialog>
     );
 }
+
+    
 
     
 
