@@ -209,7 +209,6 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             pdf.text('Grand Total:', 140, finalY + 40, { align: 'right' });
             pdf.text(formatNumber(orderToPrint.grandTotal), 200, finalY + 40, { align: 'right' });
             
-
             pdf.save(`invoice-${orderToPrint.id}.pdf`);
             toast({ title: 'Success', description: 'Invoice PDF has been downloaded.' });
             
@@ -1000,5 +999,6 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     
 
     
+
 
 
