@@ -140,34 +140,78 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     const handlePrint = async () => {
         if (!orderToPrint) return;
         
-        // The InvoiceTemplate component must be rendered to be used, but we can hide it.
-        // It's already in the DOM but off-screen via the `invoice-template.tsx` styling.
-        const invoiceElement = invoiceTemplateRef.current;
-        if (!invoiceElement) {
-             toast({ title: 'Error', description: 'Could not find invoice template to print.', variant: 'destructive'});
-             setOrderToPrint(null);
-             return;
-        }
+        const customer = customers.find(c => c.id === orderToPrint.customerId);
+        if(!customer) return;
 
         setIsLoading(true);
         try {
-            const pdf = new jsPDF({
-                orientation: 'p',
-                unit: 'mm',
-                format: 'a4'
+            const doc = new jsPDF();
+            
+            // Header
+            if (logoUrl) {
+                doc.addImage(logoUrl, 'PNG', 14, 12, 30, 15);
+            }
+            doc.setFontSize(20);
+            doc.text('AB Agency', logoUrl ? 48 : 14, 20);
+            
+            doc.setFontSize(12);
+            doc.text('No.1, Ayyanchery main road, Urapakkam', 14, 28);
+            doc.text('abagency1977@gmail.com | 95511 95505', 14, 33);
+            
+            doc.setFontSize(16);
+            doc.text(`Invoice #${orderToPrint.id.replace('ORD','INV')}`, 200, 20, { align: 'right'});
+            doc.setFontSize(12);
+            doc.text(`Date: ${new Date(orderToPrint.orderDate).toLocaleDateString('en-GB')}`, 200, 27, { align: 'right'});
+            if(orderToPrint.dueDate) {
+                 doc.text(`Due Date: ${new Date(orderToPrint.dueDate).toLocaleDateString('en-GB')}`, 200, 34, { align: 'right'});
+            }
+
+            // Billed To
+            doc.setFontSize(14);
+            doc.text('Billed To:', 14, 50);
+            doc.setFontSize(12);
+            doc.text(customer.name, 14, 57);
+            doc.text(customer.address, 14, 62);
+            doc.text(`${customer.email} | ${customer.phone}`, 14, 67);
+            
+            // Table
+            (doc as any).autoTable({
+                startY: 80,
+                head: [['#', 'Item', 'Qty', 'Rate', 'GST', 'Amount']],
+                body: orderToPrint.items.map((item, index) => [
+                    index + 1,
+                    item.productName,
+                    item.quantity,
+                    formatNumber(item.price),
+                    `${item.gst}%`,
+                    formatNumber(item.price * item.quantity * (1 + item.gst / 100))
+                ]),
+                theme: 'striped',
+                headStyles: { fillColor: [38, 128, 62] }
             });
             
-            // @ts-ignore
-            await pdf.html(invoiceElement, {
-                callback: function (pdf) {
-                    pdf.save(`invoice-${orderToPrint.id}.pdf`);
-                    toast({ title: 'Success', description: 'Invoice PDF has been downloaded.' });
-                },
-                x: 0,
-                y: 0,
-                width: 210, // A4 width in mm
-                windowWidth: invoiceElement.offsetWidth
-            });
+            // Totals
+            const finalY = (doc as any).previousAutoTable.finalY;
+            doc.setFontSize(12);
+            doc.text('Current Invoice Total:', 140, finalY + 10, { align: 'right' });
+            doc.text(formatNumber(orderToPrint.total), 200, finalY + 10, { align: 'right' });
+            doc.text('Delivery Fees:', 140, finalY + 17, { align: 'right' });
+            doc.text(formatNumber(orderToPrint.deliveryFees), 200, finalY + 17, { align: 'right' });
+            if(orderToPrint.discount > 0) {
+                 doc.text('Discount:', 140, finalY + 24, { align: 'right' });
+                 doc.text(`-${formatNumber(orderToPrint.discount)}`, 200, finalY + 24, { align: 'right' });
+            }
+            doc.text('Previous Balance:', 140, finalY + 31, { align: 'right' });
+            doc.text(formatNumber(orderToPrint.previousBalance), 200, finalY + 31, { align: 'right' });
+            
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Grand Total:', 140, finalY + 40, { align: 'right' });
+            doc.text(formatNumber(orderToPrint.grandTotal), 200, finalY + 40, { align: 'right' });
+            
+
+            doc.save(`invoice-${orderToPrint.id}.pdf`);
+            toast({ title: 'Success', description: 'Invoice PDF has been downloaded.' });
             
         } catch (error) {
             console.error('Failed to generate invoice:', error);
@@ -950,6 +994,8 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
 
 
 
+
+    
 
     
 

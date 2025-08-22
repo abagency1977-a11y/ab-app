@@ -24,7 +24,7 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
     const previousBalance = order.previousBalance ?? 0;
 
   return (
-    <div ref={ref} className="bg-white text-black p-8 font-sans" style={{ position: 'fixed', left: '-200vw', top: 0, zIndex: -1, width: '210mm' }}>
+    <div ref={ref} id="invoice-to-print" className="bg-white text-black p-8 font-sans" style={{ position: 'fixed', left: '-200vw', top: 0, zIndex: -1, width: '210mm' }}>
         {/* The font is inherited from layout.tsx, ensuring consistency */}
         <header className="flex justify-between items-start pb-4 border-b-2 border-gray-200">
             <div className="flex-1">
@@ -57,7 +57,7 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
         </section>
 
         <section>
-            <table className="w-full text-left text-sm">
+            <table id="invoice-items-table" className="w-full text-left text-sm">
                 <thead className="bg-gray-100 text-gray-600 uppercase">
                     <tr>
                         <th className="p-3 w-10 text-center">#</th>
@@ -130,5 +130,7 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
 });
 
 InvoiceTemplate.displayName = 'InvoiceTemplate';
+
+    
 
     
