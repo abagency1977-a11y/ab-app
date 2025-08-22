@@ -23,7 +23,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import 'jspdf-autotable';
 import { InvoiceTemplate } from '@/components/invoice-template';
 import { startOfWeek, startOfMonth, subMonths, isWithinInterval } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -138,42 +138,37 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     };
 
     const handlePrint = async () => {
-        if (!orderToPrint || !invoiceTemplateRef.current) return;
+        if (!orderToPrint) return;
+        
+        // The InvoiceTemplate component must be rendered to be used, but we can hide it.
+        // It's already in the DOM but off-screen via the `invoice-template.tsx` styling.
+        const invoiceElement = invoiceTemplateRef.current;
+        if (!invoiceElement) {
+             toast({ title: 'Error', description: 'Could not find invoice template to print.', variant: 'destructive'});
+             setOrderToPrint(null);
+             return;
+        }
 
         setIsLoading(true);
         try {
-            const canvas = await html2canvas(invoiceTemplateRef.current, {
-                scale: 3, // Higher scale for better quality
-                useCORS: true,
-                backgroundColor: '#ffffff'
-            });
-            const imgData = canvas.toDataURL('image/png');
-            
             const pdf = new jsPDF({
-                orientation: 'portrait',
+                orientation: 'p',
                 unit: 'mm',
                 format: 'a4'
             });
-
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-            const canvasWidth = canvas.width;
-            const canvasHeight = canvas.height;
-            const canvasAspectRatio = canvasWidth / canvasHeight;
             
-            let finalPdfHeight = pdfWidth / canvasAspectRatio;
+            // @ts-ignore
+            await pdf.html(invoiceElement, {
+                callback: function (pdf) {
+                    pdf.save(`invoice-${orderToPrint.id}.pdf`);
+                    toast({ title: 'Success', description: 'Invoice PDF has been downloaded.' });
+                },
+                x: 0,
+                y: 0,
+                width: 210, // A4 width in mm
+                windowWidth: invoiceElement.offsetWidth
+            });
             
-            // If the content is longer than one page, we might need to split it
-            // For simplicity, we'll fit it to one page, but this can be extended.
-            if (finalPdfHeight > pdfHeight) {
-                finalPdfHeight = pdfHeight; // Fit to page
-            }
-            
-            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, finalPdfHeight);
-            
-            pdf.save(`invoice-${orderToPrint.id}.pdf`);
-            toast({ title: 'Success', description: 'Invoice PDF has been downloaded.' });
-
         } catch (error) {
             console.error('Failed to generate invoice:', error);
             toast({ title: 'Error', description: 'Failed to generate invoice PDF.', variant: 'destructive'});
@@ -705,7 +700,17 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
             }
         } else {
              try {
-               await onOrderAdded(orderData as Omit<Order, 'id' | 'customerName'>);
+               const newOrder = await onOrderAdded(orderData as Omit<Order, 'id' | 'customerName'>);
+               if (previousBalance > 0) {
+                   // Mark all previous 'Opening Balance' orders for this customer as fulfilled.
+                    const allCustomerOrders = await getOrders(); // A bit inefficient, but ensures we have all data. Could be optimized.
+                    const openingBalanceOrders = allCustomerOrders.filter(o => o.customerId === customerId && o.isOpeningBalance && o.status !== 'Fulfilled');
+
+                    for(const obOrder of openingBalanceOrders) {
+                        const updatedObOrder = { ...obOrder, status: 'Fulfilled', balanceDue: 0 };
+                        await updateOrder(updatedObOrder);
+                    }
+               }
                resetForm();
            } catch (e) {
                 // Error is already toasted in the parent component
@@ -945,6 +950,8 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
 
 
 
+
+    
 
     
 

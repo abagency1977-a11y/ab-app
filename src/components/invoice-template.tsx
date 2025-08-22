@@ -6,6 +6,8 @@ import type { Order, Customer, OrderItem } from '@/lib/types';
 
 const formatNumber = (value: number | undefined) => {
     if (value === undefined || isNaN(value)) return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(0);
+    // Use 'en-IN' for Indian Rupee symbol, but rely on the browser to handle it.
+    // The 'Inter' font should have better support.
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 };
 
@@ -23,12 +25,7 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
 
   return (
     <div ref={ref} className="bg-white text-black p-8 font-sans" style={{ position: 'fixed', left: '-200vw', top: 0, zIndex: -1, width: '210mm' }}>
-        <style>
-            {`
-                @import url('https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&display=swap');
-                .font-sans { font-family: 'PT Sans', sans-serif; }
-            `}
-        </style>
+        {/* The font is inherited from layout.tsx, ensuring consistency */}
         <header className="flex justify-between items-start pb-4 border-b-2 border-gray-200">
             <div className="flex-1">
                 {logoUrl ? <img src={logoUrl} alt="Company Logo" style={{ maxHeight: '70px' }}/> : <h1 className="text-3xl font-bold text-gray-800">AB Agency</h1>}
@@ -134,5 +131,4 @@ export const InvoiceTemplate = React.forwardRef<HTMLDivElement, InvoiceTemplateP
 
 InvoiceTemplate.displayName = 'InvoiceTemplate';
 
-    
     
