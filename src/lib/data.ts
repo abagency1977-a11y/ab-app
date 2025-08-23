@@ -456,6 +456,10 @@ export const getDashboardData = async () => {
         return sum + orderPayments;
     }, 0);
 
+    const totalBalanceDue = orders.reduce((sum, order) => {
+        return sum + (order.balanceDue ?? 0);
+    }, 0);
+
     const totalCustomers = customers.length;
     const itemsInStock = products.reduce((sum, product) => sum + product.stock, 0);
     const ordersPlaced = orders.filter(o => o.status !== 'Canceled').length;
@@ -472,6 +476,7 @@ export const getDashboardData = async () => {
 
     return {
         totalRevenue,
+        totalBalanceDue,
         totalCustomers,
         itemsInStock,
         ordersPlaced,
@@ -510,5 +515,3 @@ export const resetDatabaseForFreshStart = async () => {
         throw new Error("Failed to reset the database.");
     }
 };
-
-    

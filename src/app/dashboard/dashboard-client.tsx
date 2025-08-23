@@ -2,12 +2,13 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, Boxes, ShoppingCart, DollarSign } from 'lucide-react';
+import { Users, Boxes, CreditCard, DollarSign } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ChartConfig, ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import type { Order } from '@/lib/types';
+import { cn } from '@/lib/utils';
 
 const chartConfig = {
   revenue: {
@@ -16,14 +17,14 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-const StatCard = ({ title, value, icon: Icon, description }: { title: string, value: string | React.ReactNode, icon: React.ElementType, description: string }) => (
+const StatCard = ({ title, value, icon: Icon, description, valueClassName }: { title: string, value: string | React.ReactNode, icon: React.ElementType, description: string, valueClassName?: string }) => (
     <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{title}</CardTitle>
             <Icon className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-            <div className="text-2xl font-bold">{value}</div>
+            <div className={cn("text-2xl font-bold", valueClassName)}>{value}</div>
             <p className="text-xs text-muted-foreground">{description}</p>
         </CardContent>
     </Card>
@@ -41,11 +42,18 @@ export function DashboardClient({ data }: { data: any }) {
                     title="Total Revenue" 
                     value={<>{formatNumber(data.totalRevenue)}</>}
                     icon={DollarSign} 
-                    description="Total cash received from all payments" 
+                    description="Total cash received from all payments"
+                    valueClassName="text-green-600"
+                />
+                 <StatCard 
+                    title="Total Due" 
+                    value={<>{formatNumber(data.totalBalanceDue)}</>}
+                    icon={CreditCard} 
+                    description="Total outstanding balance from customers"
+                    valueClassName="text-red-600"
                 />
                 <StatCard title="Customers" value={`${data.totalCustomers}`} icon={Users} description="Total number of customers" />
                 <StatCard title="Items in Stock" value={data.itemsInStock.toLocaleString()} icon={Boxes} description="Total items across all products" />
-                <StatCard title="Orders Placed" value={`${data.ordersPlaced}`} icon={ShoppingCart} description="Total orders placed (non-canceled)" />
             </div>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
                 <Card className="lg:col-span-4">
@@ -114,5 +122,3 @@ export function DashboardClient({ data }: { data: any }) {
         </div>
     );
 }
-
-    
