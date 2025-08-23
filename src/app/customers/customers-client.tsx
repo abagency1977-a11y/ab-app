@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
@@ -8,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { PlusCircle, MoreHorizontal, ArrowUpDown, CreditCard, Loader2 } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, ArrowUpDown, CreditCard, Loader2, Mail, Phone } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
@@ -21,6 +20,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol' }).format(value);
 
@@ -315,7 +315,7 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <h1 className="text-3xl font-bold">Customers</h1>
                 <Button onClick={() => setIsAddDialogOpen(true)}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Add Customer
@@ -329,7 +329,9 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                     className="max-w-sm"
                 />
             </div>
-            <div className="rounded-lg border shadow-sm">
+            
+            {/* Desktop Table View */}
+            <div className="hidden md:block rounded-lg border shadow-sm">
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -386,6 +388,59 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                     </TableBody>
                 </Table>
             </div>
+            
+            {/* Mobile Card View */}
+            <div className="grid gap-4 md:hidden">
+                {filteredCustomers.map((customer) => (
+                    <Card key={customer.id}>
+                        <CardHeader>
+                            <div className="flex justify-between items-start">
+                                <CardTitle>{customer.name}</CardTitle>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" className="h-8 w-8 p-0">
+                                            <span className="sr-only">Open menu</span>
+                                            <MoreHorizontal className="h-4 w-4" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                         <DropdownMenuItem onClick={() => { setCustomerToEdit(customer); setIsEditDialogOpen(true); }}>Edit</DropdownMenuItem>
+                                        <DropdownMenuItem asChild>
+                                            <Link href={`/customers/${customer.id}`}>View Details</Link>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => openBulkPaymentDialog(customer)}>
+                                            <CreditCard className="mr-2 h-4 w-4" />
+                                            Record Bulk Payment
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => setCustomerToDelete(customer)} className="text-red-600">Delete</DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Mail className="h-4 w-4" />
+                                <span>{customer.email}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Phone className="h-4 w-4" />
+                                <span>{customer.phone || 'N/A'}</span>
+                            </div>
+                            <div className="flex justify-between items-center pt-2">
+                                <div className="text-sm">
+                                    <p className="font-medium">Total Ordered</p>
+                                    <p className="font-bold">{formatNumber(customer.transactionHistory.totalSpent)}</p>
+                                </div>
+                                <div className="text-sm text-right">
+                                    <p className="font-medium">Last Purchase</p>
+                                    <p>{new Date(customer.transactionHistory.lastPurchaseDate).toLocaleDateString('en-IN')}</p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                ))}
+            </div>
+
 
             <AddCustomerDialog 
                 isOpen={isAddDialogOpen} 
@@ -561,7 +616,7 @@ function BulkPaymentDialog({ isOpen, onOpenChange, customer, allOrders, onPaymen
                 </DialogHeader>
                 <form onSubmit={handleSubmit}>
                     <div className="grid gap-4 py-4">
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <Label htmlFor="bulk-amount">Amount Received</Label>
                                 <Input id="bulk-amount" type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" required />
@@ -571,7 +626,7 @@ function BulkPaymentDialog({ isOpen, onOpenChange, customer, allOrders, onPaymen
                                 <Input id="bulk-paymentDate" type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} required />
                             </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <Label htmlFor="bulk-paymentMethod">Payment Method</Label>
                                 <Select value={paymentMethod} onValueChange={setPaymentMethod}>
@@ -641,9 +696,3 @@ function BulkPaymentDialog({ isOpen, onOpenChange, customer, allOrders, onPaymen
         </Dialog>
     );
 }
-
-    
-
-    
-
-    

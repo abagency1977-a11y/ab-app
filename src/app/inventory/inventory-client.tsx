@@ -271,23 +271,25 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <h1 className="text-3xl font-bold">Inventory</h1>
                  <Button onClick={() => setIsAddDialogOpen(true)}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Add Product
                 </Button>
             </div>
-            <div className="flex items-center">
-                <Input
-                    placeholder="Search by product name or SKU..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="max-w-sm"
-                />
-            </div>
+            
             <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-3">
                 <div className="lg:col-span-2 space-y-4">
-                    <div className="rounded-lg border shadow-sm">
+                    <div className="flex items-center">
+                        <Input
+                            placeholder="Search by product name or SKU..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="max-w-sm"
+                        />
+                    </div>
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block rounded-lg border shadow-sm">
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -328,6 +330,47 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                             </TableBody>
                         </Table>
                     </div>
+
+                    {/* Mobile Card View */}
+                    <div className="grid md:hidden gap-4">
+                        {filteredProducts.map((product) => (
+                            <Card key={product.id}>
+                                <CardHeader>
+                                     <div className="flex justify-between items-start">
+                                        <CardTitle>{product.name}</CardTitle>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" className="h-8 w-8 p-0 -mt-2 -mr-2">
+                                                    <span className="sr-only">Open menu</span>
+                                                    <MoreHorizontal className="h-4 w-4" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem onClick={() => { setProductToEdit(product); setIsEditDialogOpen(true); }}>Edit</DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => setProductToDelete(product)} className="text-red-600">Delete</DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </div>
+                                    <CardDescription>SKU: {product.sku}</CardDescription>
+                                </CardHeader>
+                                <CardContent className="grid grid-cols-3 gap-4 text-center">
+                                    <div>
+                                        <p className="text-xs text-muted-foreground">Stock</p>
+                                        <p className="font-bold">{product.stock}</p>
+                                    </div>
+                                     <div>
+                                        <p className="text-xs text-muted-foreground">Price</p>
+                                        <p className="font-bold">{formatNumber(product.price)}</p>
+                                    </div>
+                                     <div>
+                                        <p className="text-xs text-muted-foreground">GST</p>
+                                        <p className="font-bold">{product.gst}%</p>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+
                 </div>
                 <div className="lg:col-span-1">
                      <Card className="sticky top-20">
@@ -430,5 +473,3 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
         </div>
     );
 }
-
-    
