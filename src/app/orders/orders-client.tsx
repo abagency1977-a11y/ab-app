@@ -162,18 +162,17 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             
             doc.setFontSize(9);
             doc.setFont('helvetica', 'normal');
-            doc.text('No.1, Ayyanchery main road, Urapakkam, Chennai - 603210', pageWidth / 2, 38, { align: 'center' });
-            doc.text('Email: abagency1977@gmail.com | MOB: 95511 95505 / 95001 82975', pageWidth / 2, 42, { align: 'center' });
+            doc.text('No.1, Ayyanchery main road, Urapakkam, Chennai - 603210', pageWidth / 2, 40, { align: 'center' });
+            doc.text('Email: abagency1977@gmail.com | MOB: 95511 95505 / 95001 82975', pageWidth / 2, 44, { align: 'center' });
             
             doc.setDrawColor(200, 200, 200);
-            doc.line(margin, 48, pageWidth - margin, 48); // Separator line
+            doc.line(margin, 48, pageWidth - margin, 48);
             // --- End Header ---
 
             // --- Customer and Invoice Details ---
             let yPos = 58;
             const rightColX = pageWidth - margin;
 
-            // --- Left Column (Billed To) ---
             doc.setFontSize(10);
             doc.setFont('helvetica', 'bold');
             doc.text('Billed To:', margin, yPos);
@@ -183,17 +182,16 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             yPos += 5;
             const addressLines = doc.splitTextToSize(customer.address || 'No address provided', 80);
             doc.text(addressLines, margin, yPos);
-            yPos += (addressLines.length * 5) + 5; // Add extra space after address
+            yPos += (addressLines.length * 5) + 5; 
             doc.text(customer.email, margin, yPos);
             yPos += 5;
             doc.text(customer.phone, margin, yPos);
             
-            // --- Right Column (Invoice Details) ---
             let rightYPos = 58;
             doc.setFontSize(10);
             doc.setFont('helvetica', 'bold');
             doc.text('GSTIN: 33DMLPA8598D1ZU', rightColX, rightYPos, { align: 'right' });
-            rightYPos += 8; // Extra space
+            rightYPos += 8;
             
             doc.setFontSize(11);
             if (orderToPrint.paymentTerm === 'Credit') {
@@ -203,8 +201,8 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 doc.setTextColor(0, 128, 0); // Green for full payment
                 doc.text('INVOICE', rightColX, rightYPos, { align: 'right' });
             }
-            doc.setTextColor(0, 0, 0); // Reset text color to black
-            rightYPos += 10; // Extra space after title
+            doc.setTextColor(0, 0, 0);
+            rightYPos += 10;
             
             doc.setFontSize(10);
             doc.setFont('helvetica', 'normal');
@@ -268,15 +266,9 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             doc.setFontSize(10);
             doc.setFont('helvetica', 'normal');
 
-            const addTotalRow = (label: string, value: number, isBold = false) => {
-                if (isBold) {
-                     doc.setFont('helvetica', 'bold');
-                }
+            const addTotalRow = (label: string, value: number) => {
                 doc.text(label, totalsLeftColX, finalY, { align: 'right' });
                 doc.text(formatNumber(value), totalsRightColX, finalY, { align: 'right' });
-                if (isBold) {
-                     doc.setFont('helvetica', 'normal');
-                }
                 finalY += 6;
             };
 
@@ -286,21 +278,30 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             if(orderToPrint.previousBalance > 0) addTotalRow("Previous Balance:", orderToPrint.previousBalance);
 
             // Grand Total with colored background
-            finalY += 2;
-            const grandTotalText = formatNumber(orderToPrint.grandTotal);
-            const grandTotalLabel = "Grand Total:";
-            const labelWidth = doc.getTextWidth(grandTotalLabel);
-            const valueWidth = doc.getTextWidth(grandTotalText);
-
-            doc.setFillColor(224, 233, 255); // Light blue background
-            doc.setDrawColor(224, 233, 255);
-            doc.setLineWidth(0.5);
-            doc.roundedRect(totalsLeftColX - labelWidth - 5, finalY - 5, (totalsRightColX - (totalsLeftColX - labelWidth - 5)), 8, 2, 2, 'FD');
-
+            finalY += 12; // 2 lines lower
+            
+            const grandTotalText = `Grand Total: ${formatNumber(orderToPrint.grandTotal)}`;
             doc.setFont('helvetica', 'bold');
-            doc.text(grandTotalLabel, totalsLeftColX, finalY, { align: 'right' });
-            doc.text(grandTotalText, totalsRightColX, finalY, { align: 'right' });
+            
+            const isCredit = orderToPrint.paymentTerm === 'Credit';
+            const boxColor = isCredit ? [255, 235, 238] : [222, 247, 236]; // Light Red or Light Green
+            const textColor = isCredit ? [220, 38, 38] : [22, 101, 52]; // Red-600 or Green-800
+            
+            doc.setFillColor(...boxColor);
+            doc.setDrawColor(...boxColor);
+            doc.roundedRect(margin, finalY - 5, pageWidth - (margin * 2), 10, 3, 3, 'FD');
+            
+            doc.setTextColor(...textColor);
+            doc.text(grandTotalText, pageWidth/2, finalY, { align: 'center' });
+            
             // --- End Totals Section ---
+            doc.setTextColor(0,0,0);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            
+            const footerY = doc.internal.pageSize.getHeight() - 15;
+            doc.text('Thank you for your business!', pageWidth/2, footerY, { align: 'center'});
+            doc.text('This is a computer-generated invoice and does not require a signature.', pageWidth/2, footerY + 4, { align: 'center'});
 
 
             doc.save(`invoice-${orderToPrint.id.replace('ORD','INV')}.pdf`);
@@ -1073,6 +1074,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     
 
     
+
 
 
 
