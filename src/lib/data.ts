@@ -261,15 +261,14 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
 
             // 4. Mark previous "Opening Balance" orders as Fulfilled
             if(orderData.previousBalance > 0){
-                const openBalanceQuery = query(
-                    collection(db, "orders"),
-                    where("customerId", "==", orderData.customerId),
-                    where("isOpeningBalance", "==", true),
-                    where("status", "!=", "Fulfilled")
-                );
-                const openBalanceSnaps = await getDocs(openBalanceQuery);
-                openBalanceSnaps.forEach(docSnap => {
-                    transaction.update(docSnap.ref, { status: "Fulfilled", balanceDue: 0 });
+                const allOrdersQuery = query(collection(db, "orders"), where("customerId", "==", orderData.customerId));
+                const allOrdersSnap = await getDocs(allOrdersQuery);
+                
+                allOrdersSnap.docs.forEach(docSnap => {
+                    const order = docSnap.data() as Order;
+                    if(order.isOpeningBalance && order.status !== 'Fulfilled'){
+                        transaction.update(docSnap.ref, { status: "Fulfilled", balanceDue: 0 });
+                    }
                 });
             }
 
