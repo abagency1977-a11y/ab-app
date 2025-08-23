@@ -391,7 +391,7 @@ export const deleteOrder = async (order: Order): Promise<void> => {
 
             // Always restore stock.
             for (const item of order.items) {
-                if(item.productId !== 'OPENING_BALANCE') {
+                if(item.productId !== 'OPENING_BALANCE' && item.productName !== 'Outstanding Balance') {
                     const productRef = doc(db, "products", item.productId);
                     transaction.update(productRef, { stock: increment(item.quantity) });
                 }
@@ -521,7 +521,3 @@ export const resetDatabaseForFreshStart = async () => {
         throw new Error("Failed to reset the database.");
     }
 };
-
-
-
-    

@@ -444,7 +444,14 @@ export const getDashboardData = async () => {
     }
 
     const totalCustomers = customers.length;
-    const itemsInStock = products.filter(p => p.sku !== 'OPENING_BALANCE').reduce((sum, product) => sum + product.stock, 0);
+    
+    const itemsInStock = products.reduce((sum, product) => {
+        if (product.name === 'Outstanding Balance') {
+            return sum;
+        }
+        return sum + product.stock;
+    }, 0);
+        
     const ordersPlaced = orders.filter(o => o.status !== 'Canceled').length;
 
     const monthlyRevenue = orders.reduce((acc, order) => {
