@@ -36,31 +36,33 @@ const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 
 
 
 const RecentOrdersList = ({ orders }: { orders: Order[] }) => (
-    <Table>
-        <TableHeader>
-            <TableRow>
-                <TableHead>Customer</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-            </TableRow>
-        </TableHeader>
-        <TableBody>
-            {orders.map((order: Order) => (
-                <TableRow key={order.id}>
-                    <TableCell>
-                        <div className="font-medium">{order.customerName}</div>
-                        <div className="text-sm text-muted-foreground">{order.id}</div>
-                    </TableCell>
-                    <TableCell>
-                            <Badge variant={order.status === 'Fulfilled' ? 'default' : order.status === 'Pending' ? 'secondary' : 'destructive'} className="capitalize">{order.status}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                        {formatNumber(order.total)}
-                    </TableCell>
+    <div className="rounded-lg border shadow-sm">
+        <Table>
+            <TableHeader>
+                <TableRow>
+                    <TableHead>Customer</TableHead>
+                    <TableHead className="text-center">Status</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
                 </TableRow>
-            ))}
-        </TableBody>
-    </Table>
+            </TableHeader>
+            <TableBody>
+                {orders.map((order: Order) => (
+                    <TableRow key={order.id}>
+                        <TableCell>
+                            <div className="font-medium">{order.customerName}</div>
+                            <div className="text-sm text-muted-foreground">{order.id}</div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                                <Badge variant={order.status === 'Fulfilled' ? 'default' : order.status === 'Pending' ? 'secondary' : 'destructive'} className="capitalize">{order.status}</Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                            {formatNumber(order.grandTotal)}
+                        </TableCell>
+                    </TableRow>
+                ))}
+            </TableBody>
+        </Table>
+    </div>
 );
 
 
