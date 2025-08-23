@@ -105,7 +105,8 @@ export const getCustomerBalance = async (customerId: string): Promise<number> =>
     try {
         const ordersQuery = query(
             collection(db, 'orders'), 
-            where('customerId', '==', customerId)
+            where('customerId', '==', customerId),
+            where('status', '==', 'Pending') // We only care about unpaid balances on pending orders
         );
         const snapshot = await getDocs(ordersQuery);
         const totalBalance = snapshot.docs.reduce((acc, doc) => {
@@ -247,6 +248,21 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
                     transaction.update(productRef, { stock: increment(-item.quantity) });
                 }
             }
+
+            // 4. Mark previous "Opening Balance" orders as Fulfilled
+            if(orderData.previousBalance > 0){
+                const openBalanceQuery = query(
+                    collection(db, "orders"),
+                    where("customerId", "==", orderData.customerId),
+                    where("isOpeningBalance", "==", true),
+                    where("status", "!=", "Fulfilled")
+                );
+                const openBalanceSnaps = await getDocs(openBalanceQuery);
+                openBalanceSnaps.forEach(docSnap => {
+                    transaction.update(docSnap.ref, { status: "Fulfilled", balanceDue: 0 });
+                });
+            }
+
         });
 
         // After successful transaction, return the new order data
