@@ -6,10 +6,18 @@ import type { Customer, Order } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowLeft, Mail, Phone, Home, DollarSign, Calendar, CheckCircle, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Home, DollarSign, Calendar, CheckCircle, AlertCircle, Download } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import type { jsPDF as jsPDFType } from 'jspdf';
+
+interface jsPDFWithAutoTable extends jsPDFType {
+    autoTable: (options: any) => jsPDFWithAutoTable;
+}
+
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol' }).format(value);
 const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('en-IN');
@@ -36,6 +44,51 @@ export function CustomerDetailsClient({ customer, orders }: { customer: Customer
     }, 0);
     
     const totalDue = customer.transactionHistory.totalSpent - totalPaid;
+
+    const handleDownloadPdf = () => {
+        const doc = new jsPDF() as jsPDFWithAutoTable;
+        
+        doc.setFontSize(18);
+        doc.text(`Customer History: ${customer.name}`, 14, 22);
+
+        doc.setFontSize(11);
+        doc.setTextColor(100);
+
+        const tableColumn = ["Order ID", "Date", "Status", "Paid Amount", "Balance Due", "Grand Total"];
+        const tableRows: (string | number)[][] = [];
+
+        orders.forEach(order => {
+            const orderPaid = order.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
+            const orderRow = [
+                order.id,
+                formatDate(order.orderDate),
+                order.status,
+                formatNumber(orderPaid),
+                formatNumber(order.balanceDue ?? 0),
+                formatNumber(order.grandTotal)
+            ];
+            tableRows.push(orderRow);
+        });
+        
+        const summaryRows = [
+            ["", "", "", "", "Total Ordered:", formatNumber(customer.transactionHistory.totalSpent)],
+            ["", "", "", "", "Total Paid:", formatNumber(totalPaid)],
+            ["", "", "", "", "Total Due:", formatNumber(totalDue)],
+        ];
+        
+        const finalTableRows = [...tableRows, [], ...summaryRows];
+
+        doc.autoTable({
+            head: [tableColumn],
+            body: finalTableRows,
+            startY: 30,
+            theme: 'grid',
+            headStyles: { fillColor: [22, 163, 74] }, // Primary color
+            footStyles: { fillColor: [241, 245, 249] }, // Muted color
+        });
+
+        doc.save(`customer-history-${customer.id}.pdf`);
+    };
 
     return (
         <div className="space-y-6">
@@ -74,8 +127,16 @@ export function CustomerDetailsClient({ customer, orders }: { customer: Customer
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Customer History</CardTitle>
-                    <CardDescription>A complete list of all orders placed by {customer.name}.</CardDescription>
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <CardTitle>Customer History</CardTitle>
+                            <CardDescription>A complete list of all orders placed by {customer.name}.</CardDescription>
+                        </div>
+                        <Button onClick={handleDownloadPdf}>
+                            <Download className="mr-2 h-4 w-4" />
+                            Download as PDF
+                        </Button>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     <div className="rounded-lg border shadow-sm">
