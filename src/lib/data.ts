@@ -103,20 +103,21 @@ export const getCustomers = async (): Promise<Customer[]> => {
 export const getCustomerBalance = async (customerId: string): Promise<number> => {
     if (!customerId) return 0;
     try {
-        const ordersQuery = query(
-            collection(db, 'orders'), 
-            where('customerId', '==', customerId),
-            orderBy('orderDate', 'desc'),
-            limit(1)
-        );
+        // Fetch all orders for the customer
+        const ordersQuery = query(collection(db, 'orders'), where('customerId', '==', customerId));
         const snapshot = await getDocs(ordersQuery);
+        
         if (snapshot.empty) {
             return 0;
         }
+
+        // Manually sort by date in the code to find the most recent order
+        const customerOrders = snapshot.docs.map(doc => doc.data() as Order);
+        customerOrders.sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
         
-        const mostRecentOrder = snapshot.docs[0].data() as Order;
+        const mostRecentOrder = customerOrders[0];
         
-        // Only return a balance if the most recent order is not fulfilled or canceled.
+        // Only return a balance if the most recent order is pending
         if (mostRecentOrder.status === 'Pending' && mostRecentOrder.balanceDue && mostRecentOrder.balanceDue > 0) {
             return mostRecentOrder.balanceDue;
         }
