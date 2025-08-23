@@ -2,7 +2,7 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, Boxes, CreditCard, IndianRupee, AlertTriangle, Clock } from 'lucide-react';
+import { Users, Boxes, CreditCard, IndianRupee, AlertTriangle, Clock, ShoppingCart, CheckCircle, CalendarCheck2 } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ChartConfig, ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -31,6 +31,38 @@ const StatCard = ({ title, value, icon: Icon, description, valueClassName }: { t
         </CardContent>
     </Card>
 );
+
+const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol' }).format(value);
+
+
+const RecentOrdersList = ({ orders }: { orders: Order[] }) => (
+    <Table>
+        <TableHeader>
+            <TableRow>
+                <TableHead>Customer</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+            </TableRow>
+        </TableHeader>
+        <TableBody>
+            {orders.map((order: Order) => (
+                <TableRow key={order.id}>
+                    <TableCell>
+                        <div className="font-medium">{order.customerName}</div>
+                        <div className="text-sm text-muted-foreground">{order.id}</div>
+                    </TableCell>
+                    <TableCell>
+                            <Badge variant={order.status === 'Fulfilled' ? 'default' : order.status === 'Pending' ? 'secondary' : 'destructive'} className="capitalize">{order.status}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                        {formatNumber(order.total)}
+                    </TableCell>
+                </TableRow>
+            ))}
+        </TableBody>
+    </Table>
+);
+
 
 const AlertList = ({ alerts, isOverdue }: { alerts: PaymentAlert[], isOverdue: boolean }) => {
     if (alerts.length === 0) {
@@ -73,8 +105,6 @@ const AlertList = ({ alerts, isOverdue }: { alerts: PaymentAlert[], isOverdue: b
 };
 
 
-const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol' }).format(value);
-
 export function DashboardClient({ data }: { data: any }) {
     const overdueAlerts = data.paymentAlerts.filter((a: PaymentAlert) => a.isOverdue);
     const upcomingAlerts = data.paymentAlerts.filter((a: PaymentAlert) => !a.isOverdue);
@@ -100,8 +130,9 @@ export function DashboardClient({ data }: { data: any }) {
                 <StatCard title="Customers" value={`${data.totalCustomers}`} icon={Users} description="Total number of customers" />
                 <StatCard title="Items in Stock" value={data.itemsInStock.toLocaleString()} icon={Boxes} description="Total items across all products" />
             </div>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                <Card className="lg:col-span-4">
+            
+            <div className="grid grid-cols-1 gap-6">
+                <Card>
                     <CardHeader>
                         <CardTitle>Revenue Overview</CardTitle>
                     </CardHeader>
@@ -131,83 +162,54 @@ export function DashboardClient({ data }: { data: any }) {
                         </ChartContainer>
                     </CardContent>
                 </Card>
-                <Card className="lg:col-span-3">
-                        <CardHeader>
-                        <CardTitle>Recent Orders</CardTitle>
+
+                 <Card>
+                    <CardHeader>
+                        <CardTitle>Activity Feed</CardTitle>
+                        <CardDescription>A summary of recent orders and payment alerts.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Customer</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead className="text-right">Total</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {data.recentOrders.map((order: Order) => (
-                                    <TableRow key={order.id}>
-                                        <TableCell>
-                                            <div className="font-medium">{order.customerName}</div>
-                                            <div className="text-sm text-muted-foreground">{order.id}</div>
-                                        </TableCell>
-                                        <TableCell>
-                                                <Badge variant={order.status === 'Fulfilled' ? 'default' : order.status === 'Pending' ? 'secondary' : 'destructive'} className="capitalize">{order.status}</Badge>
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            {formatNumber(order.total)}
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
+                        <Tabs defaultValue="recent_orders">
+                            <TabsList className="grid w-full grid-cols-3">
+                                <TabsTrigger value="recent_orders">
+                                    <ShoppingCart className="mr-2 h-4 w-4" />
+                                    Recent Orders ({data.recentOrders.length})
+                                </TabsTrigger>
+                                <TabsTrigger value="overdue">
+                                    <AlertTriangle className="mr-2 h-4 w-4" />
+                                    Overdue ({overdueAlerts.length})
+                                </TabsTrigger>
+                                <TabsTrigger value="upcoming">
+                                    <Clock className="mr-2 h-4 w-4" />
+                                    Upcoming ({upcomingAlerts.length})
+                                </TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="recent_orders" className="pt-4">
+                               <RecentOrdersList orders={data.recentOrders} />
+                            </TabsContent>
+                            <TabsContent value="overdue" className="pt-4">
+                               <AlertList alerts={overdueAlerts} isOverdue={true} />
+                            </TabsContent>
+                            <TabsContent value="upcoming" className="pt-4">
+                                <AlertList alerts={upcomingAlerts} isOverdue={false} />
+                            </TabsContent>
+                        </Tabs>
                     </CardContent>
                 </Card>
             </div>
-             <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <AlertTriangle className="h-5 w-5 text-destructive" />
-                        Payment Alerts
-                    </CardTitle>
-                    <CardDescription>
-                        A summary of overdue and upcoming payments from customers.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Tabs defaultValue="overdue">
-                        <TabsList className="grid w-full grid-cols-2">
-                            <TabsTrigger value="overdue">
-                                <AlertTriangle className="mr-2 h-4 w-4" />
-                                Overdue ({overdueAlerts.length})
-                            </TabsTrigger>
-                            <TabsTrigger value="upcoming">
-                                <Clock className="mr-2 h-4 w-4" />
-                                Upcoming ({upcomingAlerts.length})
-                            </TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="overdue" className="pt-4">
-                           <AlertList alerts={overdueAlerts} isOverdue={true} />
-                        </TabsContent>
-                        <TabsContent value="upcoming" className="pt-4">
-                            <AlertList alerts={upcomingAlerts} isOverdue={false} />
-                        </TabsContent>
-                    </Tabs>
-                </CardContent>
-            </Card>
         </div>
     );
 }
 
 // These icons are not in lucide, so defining a basic version here
-const CheckCircle = (props: React.SVGProps<SVGSVGElement>) => (
+const SvgCheckCircle = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
         <polyline points="22 4 12 14.01 9 11.01" />
     </svg>
 );
 
-const CalendarCheck2 = (props: React.SVGProps<SVGSVGElement>) => (
+const SvgCalendarCheck2 = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 14V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8" />
         <line x1="16" y1="2" x2="16" y2="6" />
@@ -216,4 +218,3 @@ const CalendarCheck2 = (props: React.SVGProps<SVGSVGElement>) => (
         <path d="m16 20 2 2 4-4" />
     </svg>
 );
-
