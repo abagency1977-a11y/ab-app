@@ -30,8 +30,8 @@ import { Combobox } from '@/components/ui/combobox';
 
 
 const formatNumberForDisplay = (value: number | undefined) => {
-    if (value === undefined || isNaN(value)) return `INR 0.00`;
-    return `INR ${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
+    if (value === undefined || isNaN(value)) return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(0);
+    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol' }).format(value);
 };
 
 export function OrdersClient({ orders: initialOrders, customers: initialCustomers, products: initialProducts }: { orders: Order[], customers: Customer[], products: Product[] }) {
@@ -1086,6 +1086,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     
 
     
+
 
 
 
