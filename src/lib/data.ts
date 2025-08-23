@@ -1,5 +1,4 @@
 
-
 import { db } from './firebase';
 import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference, updateDoc, increment, where, orderBy } from 'firebase/firestore';
 import type { Customer, Product, Order, Payment, OrderItem } from './types';
@@ -99,6 +98,20 @@ export const getCustomers = async (): Promise<Customer[]> => {
         return [];
     }
 };
+
+export const getCustomerById = async (id: string): Promise<Customer | null> => {
+    try {
+        const docRef = doc(db, 'customers', id);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            return { id: docSnap.id, ...docSnap.data() } as Customer;
+        }
+        return null;
+    } catch (error) {
+        console.error("Error fetching customer by ID: ", error);
+        return null;
+    }
+}
 
 export const getCustomerBalance = async (customerId: string): Promise<number> => {
     if (!customerId) return 0;
@@ -491,8 +504,3 @@ export const resetDatabaseForFreshStart = async () => {
         throw new Error("Failed to reset the database.");
     }
 };
-
-
-
-    
-    
