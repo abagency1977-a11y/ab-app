@@ -2,7 +2,7 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, Boxes, CreditCard, DollarSign } from 'lucide-react';
+import { Users, Boxes, CreditCard, IndianRupee } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ChartConfig, ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -41,7 +41,7 @@ export function DashboardClient({ data }: { data: any }) {
                 <StatCard 
                     title="Total Revenue" 
                     value={<>{formatNumber(data.totalRevenue)}</>}
-                    icon={DollarSign} 
+                    icon={IndianRupee} 
                     description="Total cash received from all payments"
                     valueClassName="text-green-600"
                 />
