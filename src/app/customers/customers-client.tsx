@@ -14,12 +14,13 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getOrders, getCustomers, addCustomer, deleteCustomer as deleteCustomerFromDB, updateOrder } from '@/lib/data';
+import { getOrders, getCustomers, addCustomer, deleteCustomer as deleteCustomerFromDB, updateCustomer, updateOrder } from '@/lib/data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { allocateBulkPayment, AllocateBulkPaymentOutput } from '@/ai/flows/allocate-bulk-payment';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import Link from 'next/link';
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol' }).format(value);
 
@@ -107,12 +108,94 @@ function AddCustomerDialog({ isOpen, onOpenChange, onCustomerAdded }: {
     );
 }
 
+function EditCustomerDialog({ isOpen, onOpenChange, onCustomerUpdated, customer }: {
+    isOpen: boolean;
+    onOpenChange: (open: boolean) => void;
+    onCustomerUpdated: (customer: Customer) => void;
+    customer: Customer | null;
+}) {
+    const { toast } = useToast();
+    const [formData, setFormData] = useState<Partial<Customer>>({});
+
+    useEffect(() => {
+        if (customer) {
+            setFormData(customer);
+        }
+    }, [customer]);
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleUpdateCustomer = async () => {
+        if (!customer) return;
+        
+        try {
+            const updatedCustomerData = { ...customer, ...formData };
+            await updateCustomer(updatedCustomerData);
+            onCustomerUpdated(updatedCustomerData);
+            onOpenChange(false);
+            toast({
+                title: "Customer Updated",
+                description: `${updatedCustomerData.name} has been successfully updated.`,
+            });
+        } catch (error) {
+            console.error("Failed to update customer:", error);
+            toast({
+                title: "Error",
+                description: "Failed to update customer. Please try again.",
+                variant: 'destructive',
+            });
+        }
+    };
+
+    if (!customer) return null;
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Edit Customer: {customer.name}</DialogTitle>
+                    <DialogDescription>
+                        Update the customer details below.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="name" className="text-right">Name</Label>
+                        <Input id="name" name="name" value={formData.name || ''} onChange={handleChange} className="col-span-3" required />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="email" className="text-right">Email</Label>
+                        <Input id="email" name="email" value={formData.email || ''} onChange={handleChange} type="email" className="col-span-3" required />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="phone" className="text-right">Phone</Label>
+                        <Input id="phone" name="phone" value={formData.phone || ''} onChange={handleChange} className="col-span-3" />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="address" className="text-right">Address</Label>
+                        <Input id="address" name="address" value={formData.address || ''} onChange={handleChange} className="col-span-3" />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                    <Button type="button" onClick={handleUpdateCustomer}>Save Changes</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 export function CustomersClient({ customers: initialCustomers }: { customers: Customer[] }) {
     const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
     const [orders, setOrders] = useState<Order[]>([]);
     const [search, setSearch] = useState('');
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'ascending' | 'descending' } | null>(null);
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+    const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+    const [customerToEdit, setCustomerToEdit] = useState<Customer | null>(null);
     const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
     const [isBulkPaymentOpen, setIsBulkPaymentOpen] = useState(false);
     const [customerForBulkPayment, setCustomerForBulkPayment] = useState<Customer | null>(null);
@@ -175,6 +258,10 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
     
     const handleCustomerAdded = (newCustomer: Customer) => {
         setCustomers(prevCustomers => [...prevCustomers, newCustomer]);
+    };
+    
+    const handleCustomerUpdated = (updatedCustomer: Customer) => {
+        setCustomers(prevCustomers => prevCustomers.map(c => c.id === updatedCustomer.id ? updatedCustomer : c));
     };
 
     const handleDeleteCustomer = async () => {
@@ -282,8 +369,10 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                                             </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end">
-                                            <DropdownMenuItem>Edit</DropdownMenuItem>
-                                            <DropdownMenuItem>View Details</DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => { setCustomerToEdit(customer); setIsEditDialogOpen(true); }}>Edit</DropdownMenuItem>
+                                            <DropdownMenuItem asChild>
+                                                <Link href={`/customers/${customer.id}`}>View Details</Link>
+                                            </DropdownMenuItem>
                                             <DropdownMenuItem onClick={() => openBulkPaymentDialog(customer)}>
                                                 <CreditCard className="mr-2 h-4 w-4" />
                                                 Record Bulk Payment
@@ -302,6 +391,13 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                 isOpen={isAddDialogOpen} 
                 onOpenChange={setIsAddDialogOpen} 
                 onCustomerAdded={handleCustomerAdded} 
+            />
+            
+            <EditCustomerDialog 
+                isOpen={isEditDialogOpen} 
+                onOpenChange={setIsEditDialogOpen}
+                onCustomerUpdated={handleCustomerUpdated}
+                customer={customerToEdit}
             />
 
             <AlertDialog open={!!customerToDelete} onOpenChange={(open) => !open && setCustomerToDelete(null)}>

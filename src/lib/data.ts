@@ -140,6 +140,12 @@ export const addCustomer = async (customerData: Omit<Customer, 'id' | 'transacti
     return { id: docRef.id, ...newCustomer, orders: [] };
 };
 
+export const updateCustomer = async (customerData: Customer): Promise<void> => {
+    const { id, ...dataToUpdate } = customerData;
+    if (!id) throw new Error("Customer ID is required to update.");
+    await setDoc(doc(db, 'customers', id), dataToUpdate, { merge: true });
+};
+
 export const deleteCustomer = async (id: string) => {
     await deleteDoc(doc(db, 'customers', id));
 };
