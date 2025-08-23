@@ -463,7 +463,11 @@ export const getDashboardData = async () => {
     }
 
     const totalCustomers = customers.length;
-    const itemsInStock = products.reduce((sum, product) => sum + product.stock, 0);
+    
+    const itemsInStock = products
+        .filter(p => p.sku !== 'OPENING_BALANCE' && p.name !== 'Opening Balance')
+        .reduce((sum, product) => sum + product.stock, 0);
+        
     const ordersPlaced = orders.filter(o => o.status !== 'Canceled').length;
 
     const monthlyRevenue = orders.reduce((acc, order) => {
@@ -517,3 +521,4 @@ export const resetDatabaseForFreshStart = async () => {
         throw new Error("Failed to reset the database.");
     }
 };
+
