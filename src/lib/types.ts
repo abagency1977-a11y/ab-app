@@ -67,3 +67,12 @@ export interface Order {
   payments?: Payment[];
   balanceDue?: number;
 }
+
+export interface PaymentAlert {
+  orderId: string;
+  customerName: string;
+  dueDate: string;
+  balanceDue: number;
+  isOverdue: boolean;
+  days: number; // Positive for upcoming, negative for overdue
+}

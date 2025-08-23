@@ -1,7 +1,8 @@
 
 import { db } from './firebase';
 import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference, updateDoc, increment, where, orderBy } from 'firebase/firestore';
-import type { Customer, Product, Order, Payment, OrderItem } from './types';
+import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert } from './types';
+import { differenceInDays, addDays, startOfToday } from 'date-fns';
 
 // MOCK DATA - This will be used to seed the database for the first time.
 const mockCustomers: Omit<Customer, 'id'>[] = [];
@@ -48,7 +49,15 @@ const mockProducts: Omit<Product, 'id'>[] = [
         { date: '2023-04-14', quantity: 11 },
         { date: '2023-05-19', quantity: 18 },
     ]
-  }
+  },
+    {
+    name: 'Outstanding Balance',
+    sku: 'OB-0001',
+    stock: 0,
+    price: 1.00,
+    gst: 0,
+    historicalData: []
+    }
 ];
 
 const mockOrders: Omit<Order, 'id'>[] = [];
@@ -479,6 +488,33 @@ export const getDashboardData = async () => {
     }, {} as Record<string, number>);
 
     const revenueChartData = Object.entries(monthlyRevenue).map(([month, revenue]) => ({ month, revenue: Math.round(revenue)}));
+    
+    const today = startOfToday();
+    const upcomingDateLimit = addDays(today, 7);
+
+    const paymentAlerts = orders
+        .filter(order => 
+            order.status === 'Pending' && 
+            order.dueDate && 
+            (order.balanceDue ?? 0) > 0
+        )
+        .map(order => {
+            const dueDate = new Date(order.dueDate);
+            const days = differenceInDays(dueDate, today);
+            return {
+                orderId: order.id,
+                customerName: order.customerName,
+                dueDate: order.dueDate!,
+                balanceDue: order.balanceDue!,
+                isOverdue: days < 0,
+                days: days
+            };
+        })
+        .filter(alert => 
+            alert.isOverdue || 
+            (alert.dueDate && new Date(alert.dueDate) <= upcomingDateLimit)
+        )
+        .sort((a, b) => a.days - b.days);
 
     return {
         totalRevenue,
@@ -488,6 +524,7 @@ export const getDashboardData = async () => {
         ordersPlaced,
         revenueChartData,
         recentOrders: orders.sort((a,b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()).slice(0, 5).map(o => ({...o, total: o.grandTotal})),
+        paymentAlerts,
     };
 };
 
