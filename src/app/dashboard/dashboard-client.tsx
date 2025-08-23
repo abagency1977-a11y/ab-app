@@ -133,10 +133,12 @@ export function DashboardClient({ data }: { data: any }) {
                 <StatCard title="Items in Stock" value={data.itemsInStock.toLocaleString()} icon={Boxes} description="Total items across all products" />
             </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="lg:col-span-1">
+            {/* Desktop Layout: Side-by-side */}
+            <div className="hidden lg:grid grid-cols-2 gap-6 items-start">
+                 <Card className="col-span-1">
                     <CardHeader>
                         <CardTitle>Revenue Overview</CardTitle>
+                         <CardDescription>Monthly revenue summary.</CardDescription>
                     </CardHeader>
                     <CardContent className="pl-2">
                         <ChartContainer config={chartConfig} className="h-[350px] w-full">
@@ -165,14 +167,14 @@ export function DashboardClient({ data }: { data: any }) {
                     </CardContent>
                 </Card>
 
-                 <Card className="lg:col-span-1 flex flex-col">
+                 <Card className="col-span-1 flex flex-col h-full">
                     <CardHeader>
                         <CardTitle>Activity Feed</CardTitle>
                         <CardDescription>A summary of recent orders and payment alerts.</CardDescription>
                     </CardHeader>
                     <CardContent className="flex-1">
                         <Tabs defaultValue="recent_orders" className="flex flex-col h-full">
-                            <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3">
+                            <TabsList className="grid w-full grid-cols-3">
                                 <TabsTrigger value="recent_orders">
                                     <ShoppingCart className="mr-2 h-4 w-4" />
                                     Recent Orders ({data.recentOrders.length})
@@ -196,6 +198,76 @@ export function DashboardClient({ data }: { data: any }) {
                                 <AlertList alerts={upcomingAlerts} isOverdue={false} />
                             </TabsContent>
                         </Tabs>
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* Mobile Layout: Stacked */}
+            <div className="lg:hidden flex flex-col gap-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Recent Orders</CardTitle>
+                         <CardDescription>Your 5 most recent orders.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                         <RecentOrdersList orders={data.recentOrders} />
+                    </CardContent>
+                </Card>
+                 <Card>
+                    <CardHeader>
+                        <CardTitle>Payment Alerts</CardTitle>
+                        <CardDescription>Manage overdue and upcoming payments.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                         <Tabs defaultValue="overdue" className="flex flex-col h-full">
+                            <TabsList className="grid w-full grid-cols-2">
+                                <TabsTrigger value="overdue">
+                                    <AlertTriangle className="mr-2 h-4 w-4" />
+                                    Overdue ({overdueAlerts.length})
+                                </TabsTrigger>
+                                <TabsTrigger value="upcoming">
+                                    <Clock className="mr-2 h-4 w-4" />
+                                    Upcoming ({upcomingAlerts.length})
+                                </TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="overdue" className="pt-4 flex-1">
+                               <AlertList alerts={overdueAlerts} isOverdue={true} />
+                            </TabsContent>
+                            <TabsContent value="upcoming" className="pt-4 flex-1">
+                                <AlertList alerts={upcomingAlerts} isOverdue={false} />
+                            </TabsContent>
+                        </Tabs>
+                    </CardContent>
+                 </Card>
+                  <Card>
+                    <CardHeader>
+                        <CardTitle>Revenue Overview</CardTitle>
+                         <CardDescription>Monthly revenue summary.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="pl-2">
+                        <ChartContainer config={chartConfig} className="h-[250px] w-full">
+                            <ResponsiveContainer>
+                                <BarChart data={data.revenueChartData}>
+                                <CartesianGrid vertical={false} />
+                                <XAxis
+                                    dataKey="month"
+                                    tickLine={false}
+                                    tickMargin={10}
+                                    axisLine={false}
+                                    tickFormatter={(value) => value.slice(0, 3)}
+                                />
+                                <YAxis tickFormatter={(value) => `${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol', notation: 'compact' }).format(value as number)}`}/>
+                                <Tooltip
+                                    cursor={false}
+                                    content={<ChartTooltipContent
+                                        formatter={(value) => `${formatNumber(value as number)}`}
+                                        indicator="dot"
+                                    />}
+                                />
+                                <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={4} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </ChartContainer>
                     </CardContent>
                 </Card>
             </div>
