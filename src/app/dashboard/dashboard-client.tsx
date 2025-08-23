@@ -131,13 +131,13 @@ export function DashboardClient({ data }: { data: any }) {
                 <StatCard title="Items in Stock" value={data.itemsInStock.toLocaleString()} icon={Boxes} description="Total items across all products" />
             </div>
             
-            <div className="grid grid-cols-1 gap-6">
-                <Card>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card className="lg:col-span-1">
                     <CardHeader>
                         <CardTitle>Revenue Overview</CardTitle>
                     </CardHeader>
                     <CardContent className="pl-2">
-                        <ChartContainer config={chartConfig} className="h-[300px] w-full">
+                        <ChartContainer config={chartConfig} className="h-[350px] w-full">
                             <ResponsiveContainer>
                                 <BarChart data={data.revenueChartData}>
                                 <CartesianGrid vertical={false} />
@@ -163,13 +163,13 @@ export function DashboardClient({ data }: { data: any }) {
                     </CardContent>
                 </Card>
 
-                 <Card>
+                 <Card className="lg:col-span-1 flex flex-col">
                     <CardHeader>
                         <CardTitle>Activity Feed</CardTitle>
                         <CardDescription>A summary of recent orders and payment alerts.</CardDescription>
                     </CardHeader>
-                    <CardContent>
-                        <Tabs defaultValue="recent_orders">
+                    <CardContent className="flex-1">
+                        <Tabs defaultValue="recent_orders" className="flex flex-col h-full">
                             <TabsList className="grid w-full grid-cols-3">
                                 <TabsTrigger value="recent_orders">
                                     <ShoppingCart className="mr-2 h-4 w-4" />
@@ -184,13 +184,13 @@ export function DashboardClient({ data }: { data: any }) {
                                     Upcoming ({upcomingAlerts.length})
                                 </TabsTrigger>
                             </TabsList>
-                            <TabsContent value="recent_orders" className="pt-4">
+                            <TabsContent value="recent_orders" className="pt-4 flex-1">
                                <RecentOrdersList orders={data.recentOrders} />
                             </TabsContent>
-                            <TabsContent value="overdue" className="pt-4">
+                            <TabsContent value="overdue" className="pt-4 flex-1">
                                <AlertList alerts={overdueAlerts} isOverdue={true} />
                             </TabsContent>
-                            <TabsContent value="upcoming" className="pt-4">
+                            <TabsContent value="upcoming" className="pt-4 flex-1">
                                 <AlertList alerts={upcomingAlerts} isOverdue={false} />
                             </TabsContent>
                         </Tabs>
