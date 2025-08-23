@@ -465,7 +465,7 @@ export const getDashboardData = async () => {
     const totalCustomers = customers.length;
     
     const itemsInStock = products
-        .filter(p => p.sku !== 'OPENING_BALANCE' && p.name !== 'Opening Balance')
+        .filter(p => p.name !== 'Outstanding Balance')
         .reduce((sum, product) => sum + product.stock, 0);
         
     const ordersPlaced = orders.filter(o => o.status !== 'Canceled').length;
@@ -522,3 +522,6 @@ export const resetDatabaseForFreshStart = async () => {
     }
 };
 
+
+
+    
