@@ -1,7 +1,7 @@
 
 
 import { db } from './firebase';
-import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference, updateDoc, increment, where } from 'firebase/firestore';
+import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference, updateDoc, increment, where, orderBy } from 'firebase/firestore';
 import type { Customer, Product, Order, Payment, OrderItem } from './types';
 
 // MOCK DATA - This will be used to seed the database for the first time.
@@ -106,14 +106,23 @@ export const getCustomerBalance = async (customerId: string): Promise<number> =>
         const ordersQuery = query(
             collection(db, 'orders'), 
             where('customerId', '==', customerId),
-            where('status', '==', 'Pending') // We only care about unpaid balances on pending orders
+            orderBy('orderDate', 'desc'),
+            limit(1)
         );
         const snapshot = await getDocs(ordersQuery);
-        const totalBalance = snapshot.docs.reduce((acc, doc) => {
-            const order = doc.data() as Order;
-            return acc + (order.balanceDue ?? 0);
-        }, 0);
-        return totalBalance;
+        if (snapshot.empty) {
+            return 0;
+        }
+        
+        const mostRecentOrder = snapshot.docs[0].data() as Order;
+        
+        // Only return a balance if the most recent order is not fulfilled or canceled.
+        if (mostRecentOrder.status === 'Pending' && mostRecentOrder.balanceDue && mostRecentOrder.balanceDue > 0) {
+            return mostRecentOrder.balanceDue;
+        }
+
+        return 0;
+
     } catch (error) {
         console.error(`Error fetching balance for customer ${customerId}:`, error);
         return 0;
@@ -479,4 +488,5 @@ export const resetDatabaseForFreshStart = async () => {
 
 
 
+    
     
