@@ -456,9 +456,11 @@ export const getDashboardData = async () => {
         return sum + orderPayments;
     }, 0);
 
-    const totalBalanceDue = orders.reduce((sum, order) => {
-        return sum + (order.balanceDue ?? 0);
-    }, 0);
+    let totalBalanceDue = 0;
+    for (const customer of customers) {
+        const balance = await getCustomerBalance(customer.id);
+        totalBalanceDue += balance;
+    }
 
     const totalCustomers = customers.length;
     const itemsInStock = products.reduce((sum, product) => sum + product.stock, 0);
