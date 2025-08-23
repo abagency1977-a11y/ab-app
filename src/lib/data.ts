@@ -451,14 +451,20 @@ export const getDashboardData = async () => {
     const customers = await getCustomers();
     const products = await getProducts();
 
-    const totalRevenue = orders.filter(o => o.status === 'Fulfilled' && !o.isOpeningBalance).reduce((sum, order) => sum + order.grandTotal, 0);
+    const totalRevenue = orders.reduce((sum, order) => {
+        const orderPayments = order.payments?.reduce((paymentSum, payment) => paymentSum + payment.amount, 0) ?? 0;
+        return sum + orderPayments;
+    }, 0);
+
     const totalCustomers = customers.length;
     const itemsInStock = products.reduce((sum, product) => sum + product.stock, 0);
     const ordersPlaced = orders.filter(o => o.status !== 'Canceled').length;
 
-    const monthlyRevenue = orders.filter(o => o.status === 'Fulfilled' && !o.isOpeningBalance).reduce((acc, order) => {
-        const month = new Date(order.orderDate).toLocaleString('default', { month: 'short' });
-        acc[month] = (acc[month] || 0) + order.grandTotal;
+    const monthlyRevenue = orders.reduce((acc, order) => {
+        order.payments?.forEach(payment => {
+            const month = new Date(payment.paymentDate).toLocaleString('default', { month: 'short' });
+            acc[month] = (acc[month] || 0) + payment.amount;
+        });
         return acc;
     }, {} as Record<string, number>);
 
@@ -504,3 +510,5 @@ export const resetDatabaseForFreshStart = async () => {
         throw new Error("Failed to reset the database.");
     }
 };
+
+    

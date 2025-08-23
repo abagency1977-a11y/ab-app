@@ -41,7 +41,7 @@ export function DashboardClient({ data }: { data: any }) {
                     title="Total Revenue" 
                     value={<>{formatNumber(data.totalRevenue)}</>}
                     icon={DollarSign} 
-                    description="Total revenue from fulfilled orders" 
+                    description="Total cash received from all payments" 
                 />
                 <StatCard title="Customers" value={`${data.totalCustomers}`} icon={Users} description="Total number of customers" />
                 <StatCard title="Items in Stock" value={data.itemsInStock.toLocaleString()} icon={Boxes} description="Total items across all products" />
