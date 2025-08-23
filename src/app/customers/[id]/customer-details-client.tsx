@@ -6,7 +6,7 @@ import type { Customer, Order } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowLeft, Mail, Phone, Home, DollarSign, Calendar, CheckCircle, AlertCircle, Download } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Home, IndianRupee, Calendar, CheckCircle, AlertCircle, Download } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -160,7 +160,7 @@ export function CustomerDetailsClient({ customer, orders }: { customer: Customer
                 </CardHeader>
                 <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        <InfoCard icon={DollarSign} label="Total Ordered" value={formatNumber(customer.transactionHistory.totalSpent)} />
+                        <InfoCard icon={IndianRupee} label="Total Ordered" value={formatNumber(customer.transactionHistory.totalSpent)} />
                         <InfoCard icon={CheckCircle} label="Total Paid" value={formatNumber(totalPaid)} className="text-green-700" />
                         <InfoCard icon={AlertCircle} label="Total Due" value={formatNumber(totalDue)} className={totalDue > 0 ? "text-red-700" : ""} />
                     </div>
