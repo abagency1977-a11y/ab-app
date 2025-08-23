@@ -1,7 +1,7 @@
 
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Customer, Order } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -37,6 +37,15 @@ function InfoCard({ icon: Icon, label, value, className }: { icon: React.Element
 }
 
 export function CustomerDetailsClient({ customer, orders }: { customer: Customer, orders: Order[] }) {
+    const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+    useEffect(() => {
+        const savedLogo = localStorage.getItem('companyLogo');
+        if (savedLogo) {
+            setLogoUrl(savedLogo);
+        }
+    }, []);
+
 
     const totalPaid = orders.reduce((sum, order) => {
         const orderPayments = order.payments?.reduce((paymentSum, payment) => paymentSum + payment.amount, 0) ?? 0;
@@ -47,13 +56,49 @@ export function CustomerDetailsClient({ customer, orders }: { customer: Customer
 
     const handleDownloadPdf = () => {
         const doc = new jsPDF() as jsPDFWithAutoTable;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const margin = 14;
+
+        // --- Custom INR Formatter ---
+        const formatInr = (value: number) => `INR ${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
+
+        // --- Header ---
+        let yPos = 15;
+        if (logoUrl) {
+            const logoWidth = 25; 
+            const logoHeight = 20;
+            doc.addImage(logoUrl, 'PNG', pageWidth / 2 - (logoWidth/2), yPos, logoWidth, logoHeight);
+            yPos += logoHeight + 5;
+        }
         
-        doc.setFontSize(18);
-        doc.text(`Customer History: ${customer.name}`, 14, 22);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.text('No.1, Ayyanchery main road, Urapakkam, Chennai - 603210', pageWidth / 2, yPos, { align: 'center' });
+        yPos += 4;
+        doc.text('Email: abagency1977@gmail.com | MOB: 95511 95505 / 95001 82975', pageWidth / 2, yPos, { align: 'center' });
+        yPos += 10;
+        
+        // --- Title ---
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`CUSTOMER HISTORY: ${customer.name}`, pageWidth / 2, yPos, { align: 'center' });
+        yPos += 12;
 
-        doc.setFontSize(11);
-        doc.setTextColor(100);
+        // --- Customer Info ---
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Customer Information', margin, yPos);
+        yPos += 6;
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Name: ${customer.name}`, margin, yPos);
+        doc.text(`Phone: ${customer.phone}`, pageWidth - margin, yPos, { align: 'right' });
+        yPos += 5;
+        doc.text(`Address: ${customer.address}`, margin, yPos);
+        doc.text(`Email: ${customer.email}`, pageWidth - margin, yPos, { align: 'right' });
+        yPos += 10;
 
+
+        // --- Table ---
         const tableColumn = ["Order ID", "Date", "Status", "Paid Amount", "Balance Due", "Grand Total"];
         const tableRows: (string | number)[][] = [];
 
@@ -63,17 +108,17 @@ export function CustomerDetailsClient({ customer, orders }: { customer: Customer
                 order.id,
                 formatDate(order.orderDate),
                 order.status,
-                formatNumber(orderPaid),
-                formatNumber(order.balanceDue ?? 0),
-                formatNumber(order.grandTotal)
+                formatInr(orderPaid),
+                formatInr(order.balanceDue ?? 0),
+                formatInr(order.grandTotal)
             ];
             tableRows.push(orderRow);
         });
         
         const summaryRows = [
-            ["", "", "", "", "Total Ordered:", formatNumber(customer.transactionHistory.totalSpent)],
-            ["", "", "", "", "Total Paid:", formatNumber(totalPaid)],
-            ["", "", "", "", "Total Due:", formatNumber(totalDue)],
+            ["", "", "", "", "Total Ordered:", formatInr(customer.transactionHistory.totalSpent)],
+            ["", "", "", "", "Total Paid:", formatInr(totalPaid)],
+            ["", "", "", "", "Total Due:", formatInr(totalDue)],
         ];
         
         const finalTableRows = [...tableRows, [], ...summaryRows];
@@ -81,10 +126,17 @@ export function CustomerDetailsClient({ customer, orders }: { customer: Customer
         doc.autoTable({
             head: [tableColumn],
             body: finalTableRows,
-            startY: 30,
+            startY: yPos,
             theme: 'grid',
             headStyles: { fillColor: [22, 163, 74] }, // Primary color
-            footStyles: { fillColor: [241, 245, 249] }, // Muted color
+            styles: {
+                halign: 'right', // Align all cells right by default
+            },
+            columnStyles: {
+                0: { halign: 'left' }, // Order ID
+                1: { halign: 'left' }, // Date
+                2: { halign: 'center' }, // Status
+            },
         });
 
         doc.save(`customer-history-${customer.id}.pdf`);
