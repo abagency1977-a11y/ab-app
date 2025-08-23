@@ -6,7 +6,7 @@ import type { Customer, Order } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowLeft, Mail, Phone, Home, DollarSign, Calendar } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Home, DollarSign, Calendar, CheckCircle } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -30,6 +30,11 @@ function InfoCard({ icon: Icon, label, value }: { icon: React.ElementType, label
 
 export function CustomerDetailsClient({ customer, orders }: { customer: Customer, orders: Order[] }) {
 
+    const totalPaid = orders.reduce((sum, order) => {
+        const orderPayments = order.payments?.reduce((paymentSum, payment) => paymentSum + payment.amount, 0) ?? 0;
+        return sum + orderPayments;
+    }, 0);
+
     return (
         <div className="space-y-6">
             <div className="flex items-center gap-4">
@@ -50,11 +55,12 @@ export function CustomerDetailsClient({ customer, orders }: { customer: Customer
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         <InfoCard icon={Mail} label="Email" value={customer.email} />
                         <InfoCard icon={Phone} label="Phone" value={customer.phone} />
-                        <InfoCard icon={DollarSign} label="Total Spent" value={formatNumber(customer.transactionHistory.totalSpent)} />
-                        <InfoCard icon={Calendar} label="Last Purchase" value={formatDate(customer.transactionHistory.lastPurchaseDate)} />
+                        <InfoCard icon={DollarSign} label="Total Ordered" value={formatNumber(customer.transactionHistory.totalSpent)} />
+                        <InfoCard icon={CheckCircle} label="Total Paid" value={formatNumber(totalPaid)} />
                     </div>
-                     <div className="mt-4">
+                     <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                         <InfoCard icon={Home} label="Address" value={customer.address} />
+                        <InfoCard icon={Calendar} label="Last Purchase" value={formatDate(customer.transactionHistory.lastPurchaseDate)} />
                      </div>
                 </CardContent>
             </Card>
@@ -63,7 +69,7 @@ export function CustomerDetailsClient({ customer, orders }: { customer: Customer
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Order History</CardTitle>
+                    <CardTitle>Customer History</CardTitle>
                     <CardDescription>A complete list of all orders placed by {customer.name}.</CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -74,12 +80,15 @@ export function CustomerDetailsClient({ customer, orders }: { customer: Customer
                                     <TableHead>Order ID</TableHead>
                                     <TableHead>Date</TableHead>
                                     <TableHead>Status</TableHead>
+                                    <TableHead className="text-right">Paid Amount</TableHead>
                                     <TableHead className="text-right">Balance Due</TableHead>
                                     <TableHead className="text-right">Grand Total</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {orders.map((order) => (
+                                {orders.map((order) => {
+                                    const orderPaid = order.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
+                                    return (
                                     <TableRow key={order.id}>
                                         <TableCell className="font-medium">{order.id}</TableCell>
                                         <TableCell>{formatDate(order.orderDate)}</TableCell>
@@ -88,10 +97,11 @@ export function CustomerDetailsClient({ customer, orders }: { customer: Customer
                                                 {order.status}
                                             </Badge>
                                         </TableCell>
+                                        <TableCell className="text-right font-medium text-green-600">{formatNumber(orderPaid)}</TableCell>
                                         <TableCell className="text-right font-medium text-red-600">{formatNumber(order.balanceDue ?? 0)}</TableCell>
                                         <TableCell className="text-right">{formatNumber(order.grandTotal)}</TableCell>
                                     </TableRow>
-                                ))}
+                                )})}
                             </TableBody>
                         </Table>
                     </div>
