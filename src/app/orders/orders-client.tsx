@@ -552,6 +552,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     existingOrder: Order | null,
 }) {
     const [customerId, setCustomerId] = useState<string>('');
+    const [orderDate, setOrderDate] = useState(new Date().toISOString().split('T')[0]);
     const [items, setItems] = useState<OrderItemState[]>([]);
     const [currentItem, setCurrentItem] = useState<OrderItemState>(initialItemState);
     const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
@@ -575,6 +576,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
 
     const resetForm = useCallback(() => {
         setCustomerId('');
+        setOrderDate(new Date().toISOString().split('T')[0]);
         setItems([]);
         setCurrentItem(initialItemState);
         setEditingItemIndex(null);
@@ -595,6 +597,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     useEffect(() => {
         if (isOpen && existingOrder) {
             setCustomerId(existingOrder.customerId);
+            setOrderDate(new Date(existingOrder.orderDate).toISOString().split('T')[0]);
             setItems(existingOrder.items.map(item => {
                 const product = products.find(p => p.id === item.productId);
                 return {
@@ -619,6 +622,9 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
             setEnableDiscount(existingOrder.discount > 0);
             setDeliveryFees(existingOrder.deliveryFees);
             setPreviousBalance(existingOrder.previousBalance);
+        } else if (isOpen && !existingOrder) {
+            // For new orders, always reset the date to today
+            setOrderDate(new Date().toISOString().split('T')[0]);
         }
     }, [isOpen, existingOrder, products, isEditMode]);
 
@@ -759,7 +765,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
 
         let orderData: Omit<Order, 'id' | 'customerName'> | Order = {
             customerId,
-            orderDate: isEditMode && existingOrder ? existingOrder.orderDate : new Date().toISOString().split('T')[0],
+            orderDate: orderDate,
             customerName: customer.name,
             status: 'Pending',
             items: items.map(item => {
@@ -789,7 +795,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                 status: 'Fulfilled',
                 payments: [{
                     id: 'temp-payment-id',
-                    paymentDate: new Date().toISOString().split('T')[0],
+                    paymentDate: orderDate,
                     amount: grandTotal,
                     method: paymentMode,
                     notes: paymentRemarks,
@@ -873,7 +879,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                     <CardContent className="p-4 space-y-4">
                                         <DialogTitle className="text-lg">Order Details</DialogTitle>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div className="space-y-2">
+                                            <div className="space-y-2">
                                                 <Label htmlFor="customer">Customer Name</Label>
                                                 <div className="flex gap-2">
                                                     <Combobox 
@@ -887,15 +893,21 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                                     <Button type="button" variant="outline" onClick={() => setIsAddCustomerOpen(true)}>Add New</Button>
                                                 </div>
                                             </div>
+                                            <div className="space-y-2">
+                                                <Label htmlFor="orderDate">Order Date</Label>
+                                                <Input id="orderDate" type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} />
+                                            </div>
+                                        </div>
+                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                              {previousBalance > 0 && (
-                                                <div className="flex items-center justify-end">
+                                                <div className="flex items-center justify-start">
                                                     <div className="text-right p-2 bg-amber-100 border border-amber-200 rounded-md">
                                                         <div className="text-sm font-medium text-amber-800">Previous Balance</div>
                                                         <div className="text-lg font-bold text-amber-900">{formatNumberForDisplay(previousBalance)}</div>
                                                     </div>
                                                 </div>
                                             )}
-                                        </div>
+                                         </div>
                                         <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
                                             <div className="space-y-2 col-span-2">
                                                 <Label>Item Name</Label>
@@ -1074,6 +1086,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     
 
     
+
 
 
 
