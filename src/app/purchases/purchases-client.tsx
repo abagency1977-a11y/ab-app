@@ -1,0 +1,441 @@
+
+'use client';
+
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import type { Purchase, Supplier, Product, PurchaseItem, PaymentMode } from '@/lib/types';
+import { Button } from '@/components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { PlusCircle, Loader2, Edit, Trash2, MoreHorizontal } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { useToast } from '@/hooks/use-toast';
+import { addPurchase, getProducts } from '@/lib/data';
+import { Card, CardContent } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Combobox } from '@/components/ui/combobox';
+
+const formatNumberForDisplay = (value: number | undefined) => {
+    if (value === undefined || isNaN(value)) return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(0);
+    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol' }).format(value);
+};
+
+export function PurchasesClient({ initialPurchases, initialSuppliers, initialProducts }: {
+    initialPurchases: Purchase[],
+    initialSuppliers: Supplier[],
+    initialProducts: Product[]
+}) {
+    const [purchases, setPurchases] = useState<Purchase[]>(initialPurchases);
+    const [suppliers, setSuppliers] = useState<Supplier[]>(initialSuppliers);
+    const [products, setProducts] = useState<Product[]>(initialProducts);
+    const [isLoading, setIsLoading] = useState(false);
+    const [isAddPurchaseOpen, setIsAddPurchaseOpen] = useState(false);
+    const [purchaseToEdit, setPurchaseToEdit] = useState<Purchase | null>(null);
+    const { toast } = useToast();
+    const [searchQuery, setSearchQuery] = useState('');
+    const [isMounted, setIsMounted] = useState(false);
+    
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
+    const openPurchaseDialog = async () => {
+        setIsLoading(true);
+        try {
+            const freshProducts = await getProducts();
+            setProducts(freshProducts);
+            setIsAddPurchaseOpen(true);
+        } catch(e) {
+            toast({ title: 'Error', description: 'Could not fetch latest product data.', variant: 'destructive'});
+        } finally {
+            setIsLoading(false);
+        }
+    }
+
+    const filteredPurchases = useMemo(() => {
+        return purchases.filter(p =>
+            p.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            p.supplierName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            p.billNumber.toLowerCase().includes(searchQuery.toLowerCase())
+        ).sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime());
+    }, [purchases, searchQuery]);
+
+    const handleAddPurchase = async (newPurchaseData: Omit<Purchase, 'id' | 'supplierName'>) => {
+       try {
+           const newPurchase = await addPurchase(newPurchaseData);
+           setPurchases(prev => [newPurchase, ...prev]);
+           toast({
+               title: "Purchase Recorded",
+               description: `Purchase ${newPurchase.id} has been successfully created.`,
+           });
+       } catch (e: any) {
+           toast({
+              title: "Error Recording Purchase",
+              description: e.message || "Failed to save the new purchase.",
+              variant: "destructive"
+          });
+          throw e;
+       }
+    };
+
+    if (!isMounted) {
+        return (
+            <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                    <Skeleton className="h-10 w-48" />
+                    <Skeleton className="h-10 w-32" />
+                </div>
+                <div className="rounded-lg border shadow-sm p-4">
+                    <Skeleton className="h-8 w-full mb-4" />
+                    <Skeleton className="h-8 w-full mb-2" />
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-4">
+            <div className="flex items-center justify-between">
+                <h1 className="text-3xl font-bold">Purchases</h1>
+                 <Button onClick={openPurchaseDialog} disabled={isLoading}>
+                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
+                     Add Purchase
+                </Button>
+            </div>
+            <Input 
+                placeholder="Search by ID, Supplier, or Bill No..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="max-w-sm"
+            />
+            <div className="rounded-lg border shadow-sm">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Purchase ID</TableHead>
+                            <TableHead>Supplier</TableHead>
+                            <TableHead>Bill No.</TableHead>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Total</TableHead>
+                            <TableHead className="text-center">Actions</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {filteredPurchases.map((purchase) => (
+                            <TableRow key={purchase.id}>
+                                <TableCell className="font-medium">{purchase.id}</TableCell>
+                                <TableCell>{purchase.supplierName}</TableCell>
+                                <TableCell>{purchase.billNumber}</TableCell>
+                                <TableCell>{new Date(purchase.purchaseDate).toLocaleDateString('en-IN')}</TableCell>
+                                <TableCell>
+                                    <Badge variant={purchase.balanceDue <= 0 ? 'default' : 'secondary'}>
+                                        {purchase.balanceDue <= 0 ? 'Paid' : 'Partial'}
+                                    </Badge>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                    {formatNumberForDisplay(purchase.total)}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="ghost" className="h-8 w-8 p-0">
+                                                <span className="sr-only">Open menu</span>
+                                                <MoreHorizontal className="h-4 w-4" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                            {/* <DropdownMenuItem>
+                                                <Edit className="mr-2 h-4 w-4" />
+                                                Edit
+                                            </DropdownMenuItem> */}
+                                            {/* <DropdownMenuItem className="text-red-600">
+                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                Delete
+                                            </DropdownMenuItem> */}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </div>
+            
+            <AddPurchaseDialog
+                isOpen={isAddPurchaseOpen || !!purchaseToEdit}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setIsAddPurchaseOpen(false);
+                        setPurchaseToEdit(null);
+                    }
+                }}
+                suppliers={suppliers}
+                products={products}
+                onPurchaseAdded={handleAddPurchase}
+                existingPurchase={purchaseToEdit}
+            />
+        </div>
+    );
+}
+
+const initialItemState = { productId: '', quantity: '', cost: '', gst: '' };
+type PurchaseItemState = { productId: string, quantity: string, cost: string, gst: string };
+
+function AddPurchaseDialog({ isOpen, onOpenChange, suppliers, products, onPurchaseAdded, existingPurchase }: {
+    isOpen: boolean,
+    onOpenChange: (open: boolean) => void,
+    suppliers: Supplier[],
+    products: Product[],
+    onPurchaseAdded: (purchase: Omit<Purchase, 'id' | 'supplierName'>) => Promise<void>,
+    existingPurchase: Purchase | null,
+}) {
+    const [supplierId, setSupplierId] = useState<string>('');
+    const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
+    const [billNumber, setBillNumber] = useState('');
+    const [items, setItems] = useState<PurchaseItemState[]>([]);
+    const [currentItem, setCurrentItem] = useState<PurchaseItemState>(initialItemState);
+    const [paymentAmount, setPaymentAmount] = useState('');
+    const [paymentMethod, setPaymentMethod] = useState<PaymentMode>('Cash');
+    const [paymentNotes, setPaymentNotes] = useState('');
+    
+    const { toast } = useToast();
+    const isEditMode = !!existingPurchase;
+
+    const resetForm = useCallback(() => {
+        setSupplierId('');
+        setPurchaseDate(new Date().toISOString().split('T')[0]);
+        setBillNumber('');
+        setItems([]);
+        setCurrentItem(initialItemState);
+        setPaymentAmount('');
+        setPaymentMethod('Cash');
+        setPaymentNotes('');
+        onOpenChange(false);
+    }, [onOpenChange]);
+    
+    const handleProductSelect = (productId: string) => {
+        const product = products.find(p => p.id === productId);
+        if (product) {
+            setCurrentItem({
+                productId: product.id,
+                quantity: '',
+                cost: String(product.cost),
+                gst: String(product.gst),
+            });
+        }
+    };
+    
+    const handleAddItem = () => {
+        if (!currentItem.productId || !currentItem.quantity || !currentItem.cost) {
+            toast({ title: 'Error', description: 'Please fill out all item fields.', variant: 'destructive' });
+            return;
+        }
+        setItems([...items, currentItem]);
+        setCurrentItem(initialItemState);
+    };
+    
+    const handleRemoveItem = (index: number) => {
+        setItems(items.filter((_, i) => i !== index));
+    };
+
+    const { subTotal, totalGst, total } = useMemo(() => {
+        const subTotal = items.reduce((sum, item) => sum + (parseFloat(item.cost) || 0) * (parseInt(item.quantity) || 0), 0);
+        const totalGst = items.reduce((sum, item) => sum + ((parseFloat(item.cost) || 0) * (parseInt(item.quantity) || 0) * ((parseFloat(item.gst) || 0) / 100)), 0);
+        return { subTotal, totalGst, total: subTotal + totalGst };
+    }, [items]);
+
+    const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (!supplierId || items.length === 0 || !billNumber) {
+            toast({
+                title: "Validation Error",
+                description: 'Please select a supplier, enter a bill number, and add at least one item.',
+                variant: 'destructive'
+            });
+            return;
+        }
+        
+        const paidAmount = parseFloat(paymentAmount) || 0;
+        if (paidAmount > total) {
+             toast({ title: "Error", description: 'Paid amount cannot be greater than the total purchase amount.', variant: 'destructive' });
+            return;
+        }
+
+        const purchaseData: Omit<Purchase, 'id' | 'supplierName'> = {
+            supplierId,
+            purchaseDate,
+            billNumber,
+            items: items.map(item => {
+                const product = products.find(p => p.id === item.productId)!;
+                return {
+                    productId: item.productId,
+                    productName: product.name,
+                    quantity: parseInt(item.quantity),
+                    cost: parseFloat(item.cost),
+                    gst: parseFloat(item.gst),
+                };
+            }),
+            total,
+            balanceDue: total - paidAmount,
+            payments: paidAmount > 0 ? [{
+                id: 'temp-payment',
+                paymentDate: purchaseDate,
+                amount: paidAmount,
+                method: paymentMethod,
+                notes: paymentNotes
+            }] : [],
+        };
+        
+        try {
+            await onPurchaseAdded(purchaseData);
+            resetForm();
+        } catch (e) {
+            // Error is handled by the parent component
+        }
+    };
+
+    const supplierOptions = useMemo(() => suppliers.map(s => ({ value: s.id, label: s.name })), [suppliers]);
+    const productOptions = useMemo(() => products
+        .filter(p => p.name !== 'Outstanding Balance')
+        .map(p => ({ value: p.id, label: `${p.name} (SKU: ${p.sku})` })), [products]);
+
+    return (
+        <Dialog open={isOpen} onOpenChange={(open) => { if (!open) resetForm(); else onOpenChange(open); }}>
+            <DialogContent className="max-w-4xl">
+                <DialogHeader>
+                    <DialogTitle>{isEditMode ? `Edit Purchase ${existingPurchase.id}` : 'Add New Purchase'}</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmit}>
+                    <ScrollArea className="h-[70vh]">
+                        <div className="space-y-4 p-4">
+                            <Card>
+                                <CardContent className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="space-y-2">
+                                        <Label>Supplier</Label>
+                                        <Combobox options={supplierOptions} value={supplierId} onValueChange={setSupplierId} placeholder="Select a supplier" searchPlaceholder="Search suppliers..." emptyPlaceholder="No supplier found." />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Purchase Date</Label>
+                                        <Input type="date" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)} required />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Supplier Bill No.</Label>
+                                        <Input value={billNumber} onChange={e => setBillNumber(e.target.value)} required />
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+                                <CardContent className="p-4 space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-10 gap-4 items-end">
+                                        <div className="space-y-2 col-span-3">
+                                            <Label>Item Name</Label>
+                                            <Combobox options={productOptions} value={currentItem.productId} onValueChange={handleProductSelect} placeholder="Select an item" searchPlaceholder="Search items..." emptyPlaceholder="No item found." />
+                                        </div>
+                                        <div className="space-y-2 col-span-2">
+                                            <Label>Quantity</Label>
+                                            <Input type="number" placeholder="0" value={currentItem.quantity} onChange={e => setCurrentItem(s => ({ ...s, quantity: e.target.value }))} min="1" />
+                                        </div>
+                                        <div className="space-y-2 col-span-2">
+                                            <Label>Cost Price/Unit</Label>
+                                            <Input type="number" value={currentItem.cost} onChange={e => setCurrentItem(s => ({ ...s, cost: e.target.value }))} />
+                                        </div>
+                                        <div className="space-y-2 col-span-2">
+                                            <Label>GST %</Label>
+                                            <Input type="number" value={currentItem.gst} onChange={e => setCurrentItem(s => ({ ...s, gst: e.target.value }))} />
+                                        </div>
+                                        <div className="col-span-1">
+                                            <Button type="button" onClick={handleAddItem} className="w-full">Add</Button>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+                                <CardContent className="p-4">
+                                    <Table>
+                                        <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Qty</TableHead><TableHead>Cost</TableHead><TableHead>GST</TableHead><TableHead>Total</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+                                        <TableBody>
+                                            {items.map((item, index) => {
+                                                const product = products.find(p => p.id === item.productId);
+                                                const cost = parseFloat(item.cost) || 0;
+                                                const quantity = parseInt(item.quantity) || 0;
+                                                const gst = parseFloat(item.gst) || 0;
+                                                const itemTotal = cost * quantity * (1 + gst / 100);
+                                                return (
+                                                    <TableRow key={index}>
+                                                        <TableCell>{product?.name}</TableCell>
+                                                        <TableCell>{quantity}</TableCell>
+                                                        <TableCell>{formatNumberForDisplay(cost)}</TableCell>
+                                                        <TableCell>{`${gst}%`}</TableCell>
+                                                        <TableCell>{formatNumberForDisplay(itemTotal)}</TableCell>
+                                                        <TableCell><Button type="button" size="sm" variant="destructive" onClick={() => handleRemoveItem(index)}>Delete</Button></TableCell>
+                                                    </TableRow>
+                                                );
+                                            })}
+                                        </TableBody>
+                                    </Table>
+                                </CardContent>
+                            </Card>
+
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <Card>
+                                  <CardContent className="p-4 space-y-4">
+                                      <DialogTitle className="text-lg">Payment Details</DialogTitle>
+                                      <div className="space-y-2">
+                                          <Label>Amount Paid</Label>
+                                          <Input type="number" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} placeholder="0.00" max={total}/>
+                                      </div>
+                                      <div className="space-y-2">
+                                          <Label>Payment Method</Label>
+                                          <Select value={paymentMethod} onValueChange={v => setPaymentMethod(v as PaymentMode)}>
+                                              <SelectTrigger><SelectValue /></SelectTrigger>
+                                              <SelectContent>
+                                                  <SelectItem value="Cash">Cash</SelectItem>
+                                                  <SelectItem value="Card">Card</SelectItem>
+                                                  <SelectItem value="UPI">UPI</SelectItem>
+                                                  <SelectItem value="Cheque">Cheque</SelectItem>
+                                                  <SelectItem value="Online Transfer">Online Transfer</SelectItem>
+                                              </SelectContent>
+                                          </Select>
+                                      </div>
+                                      <div className="space-y-2">
+                                        <Label>Notes</Label>
+                                        <Input value={paymentNotes} onChange={e => setPaymentNotes(e.target.value)} placeholder="e.g. Transaction ID"/>
+                                      </div>
+                                  </CardContent>
+                                </Card>
+
+                                <Card>
+                                    <CardContent className="p-4 space-y-2">
+                                        <DialogTitle className="text-lg">Summary</DialogTitle>
+                                        <div className="flex justify-between"><span>Subtotal:</span> <span className="font-semibold">{formatNumberForDisplay(subTotal)}</span></div>
+                                        <div className="flex justify-between"><span>Total GST:</span> <span className="font-semibold">{formatNumberForDisplay(totalGst)}</span></div>
+                                        <Separator />
+                                        <div className="flex justify-between text-lg">
+                                            <span className="font-bold">Total Bill Value:</span>
+                                            <span className="font-bold text-primary">{formatNumberForDisplay(total)}</span>
+                                        </div>
+                                         <div className="flex justify-between text-destructive">
+                                            <span className="font-bold">Balance Due:</span>
+                                            <span className="font-bold">{formatNumberForDisplay(total - (parseFloat(paymentAmount) || 0))}</span>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </div>
+                        </div>
+                    </ScrollArea>
+                    <DialogFooter className="p-4 border-t">
+                        <Button type="button" variant="outline" onClick={resetForm}>Cancel</Button>
+                        <Button type="submit">Record Purchase</Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}

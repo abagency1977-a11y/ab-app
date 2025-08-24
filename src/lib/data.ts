@@ -2,7 +2,7 @@
 
 import { db } from './firebase';
 import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference, updateDoc, increment, where, orderBy } from 'firebase/firestore';
-import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert, LowStockAlert, Supplier, Purchase } from './types';
+import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert, LowStockAlert, Supplier, Purchase, PurchasePayment } from './types';
 import { differenceInDays, addDays, startOfToday, subMonths } from 'date-fns';
 
 // MOCK DATA - This will be used to seed the database for the first time.
@@ -406,7 +406,7 @@ export const deleteOrder = async (order: Order): Promise<void> => {
             if (customerSnap.exists() && !order.isOpeningBalance) {
                 const netOrderValue = order.total - order.discount + order.deliveryFees;
                 transaction.update(customerRef, {
-                    'transactionHistory.totalSpent': increment(-netOrderValue)
+                    'transactionHistory.totalSpent': increment(-netValueValue)
                 });
             }
 
@@ -491,7 +491,7 @@ export const deleteSupplier = async (id: string): Promise<void> => {
     await deleteDoc(doc(db, 'suppliers', id));
 };
 
-// PURCHASE FUNCTIONS (Simplified for now)
+// PURCHASE FUNCTIONS
 export const getPurchases = async (): Promise<Purchase[]> => {
     try {
         const snapshot = await getDocs(collection(db, 'purchases'));
@@ -502,6 +502,76 @@ export const getPurchases = async (): Promise<Purchase[]> => {
     }
 };
 
+export const addPurchase = async (purchaseData: Omit<Purchase, 'id' | 'supplierName'>): Promise<Purchase> => {
+    const supplierRef = doc(db, "suppliers", purchaseData.supplierId);
+    let newPurchaseWithId: Purchase;
+
+    try {
+        await runTransaction(db, async (transaction) => {
+            const supplierSnap = await transaction.get(supplierRef);
+            if (!supplierSnap.exists()) throw new Error("Supplier not found");
+
+            const supplierName = supplierSnap.data()?.name;
+            const purchaseId = await getNextId('purchaseCounter', 'PUR');
+
+            newPurchaseWithId = { ...purchaseData, supplierName, id: purchaseId };
+            
+            if (newPurchaseWithId.payments) {
+                newPurchaseWithId.payments = newPurchaseWithId.payments.map((p, i) => ({
+                    ...p,
+                    id: `${purchaseId}-PAY-${String(i + 1).padStart(2, '0')}`
+                }));
+            }
+
+            // Create new purchase doc
+            transaction.set(doc(db, "purchases", purchaseId), newPurchaseWithId);
+
+            // Increment stock for each item
+            for (const item of newPurchaseWithId.items) {
+                const productRef = doc(db, "products", item.productId);
+                transaction.update(productRef, { stock: increment(item.quantity) });
+            }
+        });
+        return newPurchaseWithId!;
+    } catch(e) {
+        console.error("Add purchase transaction failed: ", e);
+        if (e instanceof Error) throw e;
+        throw new Error("Failed to save purchase due to an unknown error.");
+    }
+};
+
+export const addPaymentToPurchase = async (purchaseId: string, payment: Omit<PurchasePayment, 'id'>): Promise<Purchase> => {
+    const purchaseRef = doc(db, "purchases", purchaseId);
+    let updatedPurchase: Purchase;
+
+    try {
+        await runTransaction(db, async (transaction) => {
+            const purchaseSnap = await transaction.get(purchaseRef);
+            if (!purchaseSnap.exists()) throw new Error("Purchase not found!");
+
+            const purchase = { id: purchaseSnap.id, ...purchaseSnap.data() } as Purchase;
+            const existingPayments = purchase.payments || [];
+            const paymentId = `${purchase.id}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
+            const newPayment: PurchasePayment = { ...payment, id: paymentId };
+            const newBalance = purchase.balanceDue - newPayment.amount;
+
+            updatedPurchase = {
+                ...purchase,
+                payments: [...existingPayments, newPayment],
+                balanceDue: newBalance,
+            };
+
+            transaction.update(purchaseRef, {
+                payments: updatedPurchase.payments,
+                balanceDue: updatedPurchase.balanceDue,
+            });
+        });
+        return updatedPurchase!;
+    } catch (e) {
+        console.error("Purchase payment transaction failed: ", e);
+        throw e;
+    }
+};
 
 // DASHBOARD & REPORTING DATA
 export const getDashboardData = async () => {
@@ -557,7 +627,7 @@ export const getDashboardData = async () => {
         .sort((a, b) => a.days - b.days);
 
     const lowStockAlerts: LowStockAlert[] = products
-        .filter(p => p.reorderPoint !== undefined && p.stock <= p.reorderPoint && p.name !== 'Outstanding Balance')
+        .filter(p => p.reorderPoint !== undefined && p.reorderPoint > 0 && p.stock <= p.reorderPoint && p.name !== 'Outstanding Balance')
         .map(p => ({
             productId: p.id,
             productName: p.name,
@@ -615,7 +685,7 @@ export const getDashboardData = async () => {
         .flatMap(o => o.items.map(i => i.productId))
     );
     const deadStock = products
-        .filter(p => !soldProductIds.has(p.id) && p.name !== 'Outstanding Balance')
+        .filter(p => !soldProductIds.has(p.id) && p.name !== 'Outstanding Balance' && p.stock > 0)
         .map(p => ({
             productName: p.name,
             sku: p.sku,

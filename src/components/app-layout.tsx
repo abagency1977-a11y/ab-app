@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Icons } from '@/components/icons';
-import { BarChart3, Boxes, LayoutDashboard, LogOut, Settings, ShoppingCart, Users, ShieldCheck, FileText, Landmark } from 'lucide-react';
+import { BarChart3, Boxes, LayoutDashboard, LogOut, Settings, ShoppingCart, Users, ShieldCheck, FileText, Landmark, Truck } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
@@ -32,6 +32,7 @@ const navItems = [
   { href: '/suppliers', icon: Landmark, label: 'Suppliers' },
   { href: '/inventory', icon: Boxes, label: 'Inventory' },
   { href: '/orders', icon: ShoppingCart, label: 'Orders' },
+  { href: '/purchases', icon: Truck, label: 'Purchases' },
   { href: '/invoices', icon: FileText, label: 'Invoices' },
   { href: '/reports', icon: BarChart3, label: 'Reports' },
   { href: '/admin', icon: ShieldCheck, label: 'Admin' },
