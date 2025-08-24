@@ -2,7 +2,7 @@
 
 import { db } from './firebase';
 import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference, updateDoc, increment, where, orderBy } from 'firebase/firestore';
-import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert, LowStockAlert, SalesChannel } from './types';
+import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert, LowStockAlert } from './types';
 import { differenceInDays, addDays, startOfToday } from 'date-fns';
 
 // MOCK DATA - This will be used to seed the database for the first time.
@@ -527,7 +527,6 @@ export const getDashboardData = async () => {
 
     // BI Report Data
     const monthlyData: Record<string, { revenue: number, profit: number }> = {};
-    const channelPerformance: Record<SalesChannel, { revenue: number }> = { 'In-Store': { revenue: 0 }, 'Online': { revenue: 0 }, 'Phone': { revenue: 0 }, 'Other': { revenue: 0 }};
     const productPerformance: Record<string, { productId: string, productName: string, unitsSold: number, totalRevenue: number, estimatedProfit: number }> = {};
 
     orders.forEach(order => {
@@ -558,13 +557,9 @@ export const getDashboardData = async () => {
         monthlyData[month].revenue += orderRevenue;
         monthlyData[month].profit += orderProfit;
 
-        if (channelPerformance[order.channel]) {
-            channelPerformance[order.channel].revenue += orderRevenue;
-        }
     });
 
     const profitabilityChartData = Object.entries(monthlyData).map(([month, data]) => ({ month, revenue: data.revenue, profit: data.profit }));
-    const channelPerformanceChartData = Object.entries(channelPerformance).map(([channel, data]) => ({ channel, revenue: data.revenue }));
 
 
     return {
@@ -579,7 +574,6 @@ export const getDashboardData = async () => {
         lowStockAlerts,
         // Reporting data
         profitabilityChartData,
-        channelPerformance: channelPerformanceChartData,
         productPerformance: Object.values(productPerformance)
     };
 };

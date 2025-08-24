@@ -3,7 +3,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import type { Order, Customer, Product, PaymentTerm, PaymentMode, OrderStatus, SalesChannel } from '@/lib/types';
+import type { Order, Customer, Product, PaymentTerm, PaymentMode, OrderStatus } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -210,9 +210,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             rightYPos += 5;
             doc.text(`Date: ${new Date(orderToPrint.orderDate).toLocaleDateString('en-IN')}`, rightColX, rightYPos, { align: 'right' });
             rightYPos += 5;
-            doc.text(`Channel: ${orderToPrint.channel}`, rightColX, rightYPos, { align: 'right' });
-            rightYPos += 5;
-
+            
             if (orderToPrint.dueDate) {
                 doc.text(`Due Date: ${new Date(orderToPrint.dueDate).toLocaleDateString('en-IN')}`, rightColX, rightYPos, { align: 'right' });
                 rightYPos += 5;
@@ -457,7 +455,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                             <TableHead>Order ID</TableHead>
                             <TableHead>Customer</TableHead>
                             <TableHead>Date</TableHead>
-                            <TableHead>Channel</TableHead>
+                            <TableHead>Status</TableHead>
                             <TableHead className="text-right">Total</TableHead>
                             <TableHead className="text-center">Actions</TableHead>
                         </TableRow>
@@ -469,7 +467,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                                 <TableCell>{order.customerName}</TableCell>
                                 <TableCell>{new Date(order.orderDate).toLocaleDateString('en-IN')}</TableCell>
                                 <TableCell>
-                                    <Badge variant="secondary">{order.channel}</Badge>
+                                    <Badge variant={order.status === 'Fulfilled' ? 'default' : 'secondary'}>{order.status}</Badge>
                                 </TableCell>
                                 <TableCell className="text-right">
                                     {formatNumberForDisplay(order.grandTotal)}
@@ -567,7 +565,6 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     const [paymentTerm, setPaymentTerm] = useState<PaymentTerm>('Full Payment');
     const [paymentMode, setPaymentMode] = useState<PaymentMode>('Cash');
     const [paymentRemarks, setPaymentRemarks] = useState('');
-    const [channel, setChannel] = useState<SalesChannel>('In-Store');
     const [dueDate, setDueDate] = useState('');
     const [deliveryDate, setDeliveryDate] = useState('');
     const [deliveryAddress, setDeliveryAddress] = useState('');
@@ -589,7 +586,6 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         setEditingItemIndex(null);
         setPaymentTerm('Full Payment');
         setPaymentMode('Cash');
-        setChannel('In-Store');
         setPaymentRemarks('');
         setDueDate('');
         setDeliveryDate('');
@@ -618,7 +614,6 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                 }
             }));
             setPaymentTerm(existingOrder.paymentTerm);
-            setChannel(existingOrder.channel || 'In-Store');
             if(existingOrder.paymentTerm === 'Full Payment') {
                 setPaymentMode(existingOrder.paymentMode || 'Cash');
                 setPaymentRemarks(existingOrder.paymentRemarks || '');
@@ -779,7 +774,6 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
             orderDate: orderDate,
             customerName: customer.name,
             status: 'Pending',
-            channel,
             items: items.map(item => {
                 const product = products.find(p => p.id === item.productId);
                 return {
@@ -912,18 +906,6 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                             </div>
                                         </div>
                                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                             <div className="space-y-2">
-                                                <Label>Sales Channel</Label>
-                                                <Select value={channel} onValueChange={(v) => setChannel(v as SalesChannel)}>
-                                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="In-Store">In-Store</SelectItem>
-                                                        <SelectItem value="Online">Online</SelectItem>
-                                                        <SelectItem value="Phone">Phone</SelectItem>
-                                                        <SelectItem value="Other">Other</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
                                              {previousBalance > 0 && (
                                                 <div className="flex items-center justify-start">
                                                     <div className="text-right p-2 bg-amber-100 border border-amber-200 rounded-md">

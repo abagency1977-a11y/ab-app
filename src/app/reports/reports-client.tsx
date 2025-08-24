@@ -63,8 +63,7 @@ export function ReportsClient({ reportData }: { reportData: any }) {
             Total Revenue: ${formatNumber(reportData.totalRevenue)}
             Total Customers: ${reportData.totalCustomers}
             Orders Placed: ${reportData.ordersPlaced}
-            Monthly Revenue: ${JSON.stringify(reportData.revenueChartData)}
-            Channel Performance: ${JSON.stringify(reportData.channelPerformance)}
+            Monthly Profitability: ${JSON.stringify(reportData.profitabilityChartData)}
             Top Products by Revenue: ${JSON.stringify(reportData.productPerformance.sort((a,b) => b.totalRevenue - a.totalRevenue).slice(0,3))}
         `;
         try {
@@ -78,16 +77,6 @@ export function ReportsClient({ reportData }: { reportData: any }) {
         }
     };
     
-    const channelChartConfig = useMemo(() => {
-        const config: ChartConfig = {};
-        reportData.channelPerformance.forEach((channel: any, index: number) => {
-            config[channel.channel] = {
-                label: channel.channel,
-                color: COLORS[index % COLORS.length]
-            }
-        });
-        return config;
-    }, [reportData.channelPerformance]);
 
     return (
         <div className="space-y-6">
@@ -111,34 +100,7 @@ export function ReportsClient({ reportData }: { reportData: any }) {
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
                 <Card>
-                    <CardHeader>
-                        <CardTitle>Sales Channel Performance</CardTitle>
-                        <CardDescription>Breakdown of revenue by sales channel.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <ChartContainer config={channelChartConfig} className="mx-auto aspect-square h-[250px]">
-                        <PieChart>
-                            <Tooltip
-                                cursor={false}
-                                content={<ChartTooltipContent hideLabel formatter={(value, name, item) => `${item.payload.label}: ${formatNumber(item.payload.revenue)}`} />}
-                            />
-                            <Pie
-                                data={reportData.channelPerformance}
-                                dataKey="revenue"
-                                nameKey="channel"
-                                innerRadius={60}
-                                strokeWidth={5}
-                            >
-                                {reportData.channelPerformance.map((entry: any, index: number) => (
-                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                ))}
-                            </Pie>
-                        </PieChart>
-                        </ChartContainer>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader>
+                     <CardHeader>
                         <div className="flex justify-between items-center">
                             <div>
                                 <CardTitle>Top Performing Products</CardTitle>
@@ -183,35 +145,33 @@ export function ReportsClient({ reportData }: { reportData: any }) {
                         </Table>
                     </CardContent>
                 </Card>
+                 <Card>
+                    <CardHeader>
+                        <CardTitle>Profitability Over Time</CardTitle>
+                        <CardDescription>A visual representation of revenue vs estimated profit each month.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                         <ChartContainer config={chartConfig} className="h-[250px] w-full">
+                            <ResponsiveContainer>
+                                <BarChart data={reportData.profitabilityChartData}>
+                                    <CartesianGrid vertical={false} />
+                                    <XAxis dataKey="month" tickLine={false} tickMargin={10} axisLine={false} />
+                                    <YAxis tickFormatter={(value) => formatNumber(value as number)} />
+                                    <Tooltip
+                                        cursor={false}
+                                        content={<ChartTooltipContent
+                                            formatter={(value, name) => `${name === 'revenue' ? 'Revenue' : 'Est. Profit'}: ${formatNumber(value as number)}`}
+                                            indicator="dot"
+                                        />}
+                                    />
+                                    <Bar dataKey="revenue" fill="hsl(var(--chart-2))" radius={4} />
+                                    <Bar dataKey="profit" fill="hsl(var(--chart-1))" radius={4} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </ChartContainer>
+                    </CardContent>
+                </Card>
             </div>
-
-            <Card>
-                <CardHeader>
-                    <CardTitle>Profitability Over Time</CardTitle>
-                    <CardDescription>A visual representation of revenue vs estimated profit each month.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                     <ChartContainer config={chartConfig} className="h-[400px] w-full">
-                        <ResponsiveContainer>
-                            <BarChart data={reportData.profitabilityChartData}>
-                                <CartesianGrid vertical={false} />
-                                <XAxis dataKey="month" tickLine={false} tickMargin={10} axisLine={false} />
-                                <YAxis tickFormatter={(value) => formatNumber(value as number)} />
-                                <Tooltip
-                                    cursor={false}
-                                    content={<ChartTooltipContent
-                                        formatter={(value, name) => `${name === 'revenue' ? 'Revenue' : 'Est. Profit'}: ${formatNumber(value as number)}`}
-                                        indicator="dot"
-                                    />}
-                                />
-                                <Bar dataKey="revenue" fill="hsl(var(--chart-2))" radius={4} />
-                                <Bar dataKey="profit" fill="hsl(var(--chart-1))" radius={4} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </ChartContainer>
-                </CardContent>
-            </Card>
-
         </div>
     );
 }

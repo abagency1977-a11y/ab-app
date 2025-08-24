@@ -28,7 +28,6 @@ export interface Product {
 export type OrderStatus = 'Pending' | 'Fulfilled' | 'Canceled';
 export type PaymentTerm = 'Full Payment' | 'Credit';
 export type PaymentMode = 'Cash' | 'Card' | 'UPI' | 'Cheque' | 'Online Transfer';
-export type SalesChannel = 'In-Store' | 'Online' | 'Phone' | 'Other';
 
 export interface Payment {
   id: string;
@@ -55,7 +54,6 @@ export interface Order {
   orderDate: string;
   status: OrderStatus;
   items: OrderItem[];
-  channel: SalesChannel;
   total: number;
   discount: number;
   deliveryFees: number;
