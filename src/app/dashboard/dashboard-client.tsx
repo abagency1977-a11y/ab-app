@@ -2,7 +2,7 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, Boxes, CreditCard, IndianRupee, AlertTriangle, Clock, ShoppingCart, CheckCircle, CalendarCheck2, PackageWarning } from 'lucide-react';
+import { Users, Boxes, CreditCard, IndianRupee, AlertTriangle, Clock, ShoppingCart, CheckCircle, CalendarCheck2, Package } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ChartConfig, ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -219,7 +219,7 @@ export function DashboardClient({ data }: { data: any }) {
                                     Upcoming ({upcomingAlerts.length})
                                 </TabsTrigger>
                                 <TabsTrigger value="low_stock">
-                                    <PackageWarning className="mr-2 h-4 w-4" />
+                                    <Package className="mr-2 h-4 w-4" />
                                     Low Stock ({lowStockAlerts.length})
                                 </TabsTrigger>
                             </TabsList>
