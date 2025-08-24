@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { predictProductDemand, PredictProductDemandOutput } from '@/ai/flows/predict-product-demand';
-import { Lightbulb, Loader2, PlusCircle, MoreHorizontal } from 'lucide-react';
+import { Lightbulb, Loader2, PlusCircle, MoreHorizontal, AlertTriangle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { addProduct, deleteProduct as deleteProductFromDB, getProducts, updateProduct } from '@/lib/data';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol' }).format(value);
 
@@ -31,6 +32,7 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
     const stockRef = useRef<HTMLInputElement>(null);
     const priceRef = useRef<HTMLInputElement>(null);
     const gstRef = useRef<HTMLInputElement>(null);
+    const reorderPointRef = useRef<HTMLInputElement>(null);
     const { toast } = useToast();
 
     const handleAddProduct = async () => {
@@ -40,6 +42,7 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
             stock: Number(stockRef.current?.value || 0),
             price: Number(priceRef.current?.value || 0),
             gst: Number(gstRef.current?.value || 0),
+            reorderPoint: Number(reorderPointRef.current?.value || 0),
         };
 
         if (!newProductData.name || !newProductData.sku) {
@@ -102,6 +105,10 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="gst" className="text-right">GST %</Label>
                         <Input id="gst" name="gst" ref={gstRef} type="number" step="0.01" className="col-span-3" required />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="reorderPoint" className="text-right">Reorder Point</Label>
+                        <Input id="reorderPoint" name="reorderPoint" ref={reorderPointRef} type="number" className="col-span-3" defaultValue="0" />
                     </div>
                 </div>
                 <DialogFooter>
@@ -191,6 +198,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             stock: Number(formData.get('stock')),
             price: Number(formData.get('price')),
             gst: Number(formData.get('gst')),
+            reorderPoint: Number(formData.get('reorderPoint')),
         };
 
         try {
@@ -296,25 +304,66 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                     <TableHead>Product</TableHead>
                                     <TableHead>SKU</TableHead>
                                     <TableHead>Stock</TableHead>
+                                    <TableHead>Reorder Point</TableHead>
                                     <TableHead className="text-right">Price</TableHead>
                                     <TableHead>GST %</TableHead>
                                     <TableHead>Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {filteredProducts.map((product) => (
-                                    <TableRow key={product.id}>
-                                        <TableCell className="font-medium">{product.name}</TableCell>
-                                        <TableCell>{product.sku}</TableCell>
-                                        <TableCell>{product.stock}</TableCell>
-                                        <TableCell className="text-right">
-                                            {formatNumber(product.price)}
-                                        </TableCell>
-                                        <TableCell>{product.gst}%</TableCell>
-                                        <TableCell>
+                                {filteredProducts.map((product) => {
+                                    const isLowStock = product.stock <= (product.reorderPoint ?? 0);
+                                    return (
+                                        <TableRow key={product.id}>
+                                            <TableCell className="font-medium">{product.name}</TableCell>
+                                            <TableCell>{product.sku}</TableCell>
+                                            <TableCell className={cn(isLowStock && "text-destructive font-bold")}>
+                                                <div className="flex items-center gap-2">
+                                                    {isLowStock && <AlertTriangle className="h-4 w-4 text-destructive" />}
+                                                    {product.stock}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>{product.reorderPoint ?? 'N/A'}</TableCell>
+                                            <TableCell className="text-right">
+                                                {formatNumber(product.price)}
+                                            </TableCell>
+                                            <TableCell>{product.gst}%</TableCell>
+                                            <TableCell>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" className="h-8 w-8 p-0">
+                                                            <span className="sr-only">Open menu</span>
+                                                            <MoreHorizontal className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem onClick={() => { setProductToEdit(product); setIsEditDialogOpen(true); }}>Edit</DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => setProductToDelete(product)} className="text-red-600">Delete</DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })}
+                            </TableBody>
+                        </Table>
+                    </div>
+
+                    {/* Mobile Card View */}
+                    <div className="grid md:hidden gap-4">
+                        {filteredProducts.map((product) => {
+                            const isLowStock = product.stock <= (product.reorderPoint ?? 0);
+                             return (
+                                <Card key={product.id} className={cn(isLowStock && "border-destructive")}>
+                                    <CardHeader>
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <CardTitle>{product.name}</CardTitle>
+                                                <CardDescription>SKU: {product.sku}</CardDescription>
+                                            </div>
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" className="h-8 w-8 p-0">
+                                                    <Button variant="ghost" className="h-8 w-8 p-0 -mt-2 -mr-2">
                                                         <span className="sr-only">Open menu</span>
                                                         <MoreHorizontal className="h-4 w-4" />
                                                     </Button>
@@ -324,51 +373,29 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                                     <DropdownMenuItem onClick={() => setProductToDelete(product)} className="text-red-600">Delete</DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </div>
-
-                    {/* Mobile Card View */}
-                    <div className="grid md:hidden gap-4">
-                        {filteredProducts.map((product) => (
-                            <Card key={product.id}>
-                                <CardHeader>
-                                     <div className="flex justify-between items-start">
-                                        <CardTitle>{product.name}</CardTitle>
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" className="h-8 w-8 p-0 -mt-2 -mr-2">
-                                                    <span className="sr-only">Open menu</span>
-                                                    <MoreHorizontal className="h-4 w-4" />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                                <DropdownMenuItem onClick={() => { setProductToEdit(product); setIsEditDialogOpen(true); }}>Edit</DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => setProductToDelete(product)} className="text-red-600">Delete</DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    </div>
-                                    <CardDescription>SKU: {product.sku}</CardDescription>
-                                </CardHeader>
-                                <CardContent className="grid grid-cols-3 gap-4 text-center">
-                                    <div>
-                                        <p className="text-xs text-muted-foreground">Stock</p>
-                                        <p className="font-bold">{product.stock}</p>
-                                    </div>
-                                     <div>
-                                        <p className="text-xs text-muted-foreground">Price</p>
-                                        <p className="font-bold">{formatNumber(product.price)}</p>
-                                    </div>
-                                     <div>
-                                        <p className="text-xs text-muted-foreground">GST</p>
-                                        <p className="font-bold">{product.gst}%</p>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        ))}
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <p className="text-xs text-muted-foreground">Stock</p>
+                                            <p className={cn("font-bold", isLowStock && "text-destructive")}>{product.stock}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-muted-foreground">Reorder Point</p>
+                                            <p className="font-bold">{product.reorderPoint ?? 'N/A'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-muted-foreground">Price</p>
+                                            <p className="font-bold">{formatNumber(product.price)}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-muted-foreground">GST</p>
+                                            <p className="font-bold">{product.gst}%</p>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )
+                        })}
                     </div>
 
                 </div>
@@ -438,6 +465,10 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                             <div className="grid grid-cols-4 items-center gap-4">
                                 <Label htmlFor="stock" className="text-right">Stock</Label>
                                 <Input id="stock" name="stock" type="number" className="col-span-3" defaultValue={productToEdit?.stock} required />
+                            </div>
+                             <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="reorderPoint" className="text-right">Reorder Point</Label>
+                                <Input id="reorderPoint" name="reorderPoint" type="number" className="col-span-3" defaultValue={productToEdit?.reorderPoint} />
                             </div>
                             <div className="grid grid-cols-4 items-center gap-4">
                                 <Label htmlFor="price" className="text-right">Price</Label>

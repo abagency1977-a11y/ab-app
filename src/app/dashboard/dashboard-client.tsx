@@ -2,12 +2,12 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, Boxes, CreditCard, IndianRupee, AlertTriangle, Clock, ShoppingCart, CheckCircle, CalendarCheck2 } from 'lucide-react';
+import { Users, Boxes, CreditCard, IndianRupee, AlertTriangle, Clock, ShoppingCart, CheckCircle, CalendarCheck2, PackageWarning } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ChartConfig, ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import type { Order, PaymentAlert } from '@/lib/types';
+import type { Order, PaymentAlert, LowStockAlert } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Link from 'next/link';
@@ -65,6 +65,36 @@ const RecentOrdersList = ({ orders }: { orders: Order[] }) => (
     </div>
 );
 
+const LowStockList = ({ alerts }: { alerts: LowStockAlert[] }) => {
+    if (alerts.length === 0) {
+        return (
+            <div className="flex flex-col items-center justify-center text-center text-sm text-muted-foreground h-40">
+                <CheckCircle className="h-8 w-8 text-green-500 mb-2" />
+                <p>No low stock items!</p>
+                <p>All products are well-stocked.</p>
+            </div>
+        );
+    }
+    
+    return (
+        <div className="space-y-4">
+            {alerts.map(alert => (
+                <div key={alert.productId} className="flex items-center">
+                    <div className="ml-4 space-y-1">
+                        <p className="text-sm font-medium leading-none">
+                            <Link href={`/inventory`} className="text-blue-600 hover:underline">{alert.productName}</Link>
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                            Reorder at <span className="font-semibold">{alert.reorderPoint}</span> units.
+                        </p>
+                    </div>
+                    <div className="ml-auto font-medium text-destructive">{alert.stock} units left</div>
+                </div>
+            ))}
+        </div>
+    );
+};
+
 
 const AlertList = ({ alerts, isOverdue }: { alerts: PaymentAlert[], isOverdue: boolean }) => {
     if (alerts.length === 0) {
@@ -110,6 +140,7 @@ const AlertList = ({ alerts, isOverdue }: { alerts: PaymentAlert[], isOverdue: b
 export function DashboardClient({ data }: { data: any }) {
     const overdueAlerts = data.paymentAlerts.filter((a: PaymentAlert) => a.isOverdue);
     const upcomingAlerts = data.paymentAlerts.filter((a: PaymentAlert) => !a.isOverdue);
+    const lowStockAlerts = data.lowStockAlerts;
 
     return (
         <div className="flex flex-col gap-6">
@@ -174,7 +205,7 @@ export function DashboardClient({ data }: { data: any }) {
                     </CardHeader>
                     <CardContent className="flex-1">
                         <Tabs defaultValue="recent_orders" className="flex flex-col h-full">
-                            <TabsList className="grid w-full grid-cols-3">
+                            <TabsList className="grid w-full grid-cols-4">
                                 <TabsTrigger value="recent_orders">
                                     <ShoppingCart className="mr-2 h-4 w-4" />
                                     Recent Orders ({data.recentOrders.length})
@@ -187,6 +218,10 @@ export function DashboardClient({ data }: { data: any }) {
                                     <Clock className="mr-2 h-4 w-4" />
                                     Upcoming ({upcomingAlerts.length})
                                 </TabsTrigger>
+                                <TabsTrigger value="low_stock">
+                                    <PackageWarning className="mr-2 h-4 w-4" />
+                                    Low Stock ({lowStockAlerts.length})
+                                </TabsTrigger>
                             </TabsList>
                             <TabsContent value="recent_orders" className="pt-4 flex-1">
                                <RecentOrdersList orders={data.recentOrders} />
@@ -196,6 +231,9 @@ export function DashboardClient({ data }: { data: any }) {
                             </TabsContent>
                             <TabsContent value="upcoming" className="pt-4 flex-1">
                                 <AlertList alerts={upcomingAlerts} isOverdue={false} />
+                            </TabsContent>
+                             <TabsContent value="low_stock" className="pt-4 flex-1">
+                                <LowStockList alerts={lowStockAlerts} />
                             </TabsContent>
                         </Tabs>
                     </CardContent>
@@ -239,6 +277,15 @@ export function DashboardClient({ data }: { data: any }) {
                         </Tabs>
                     </CardContent>
                  </Card>
+                 <Card>
+                    <CardHeader>
+                        <CardTitle>Low Stock Alerts</CardTitle>
+                        <CardDescription>Products that need to be reordered soon.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <LowStockList alerts={lowStockAlerts} />
+                    </CardContent>
+                </Card>
                   <Card>
                     <CardHeader>
                         <CardTitle>Revenue Overview</CardTitle>

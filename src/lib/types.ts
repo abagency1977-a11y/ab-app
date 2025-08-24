@@ -20,6 +20,7 @@ export interface Product {
   stock: number;
   price: number;
   gst: number;
+  reorderPoint?: number;
   historicalData?: { date: string; quantity: number }[];
 }
 
@@ -75,4 +76,11 @@ export interface PaymentAlert {
   balanceDue: number;
   isOverdue: boolean;
   days: number; // Positive for upcoming, negative for overdue
+}
+
+export interface LowStockAlert {
+    productId: string;
+    productName: string;
+    stock: number;
+    reorderPoint: number;
 }

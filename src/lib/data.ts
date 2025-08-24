@@ -1,7 +1,7 @@
 
 import { db } from './firebase';
 import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference, updateDoc, increment, where, orderBy } from 'firebase/firestore';
-import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert } from './types';
+import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert, LowStockAlert } from './types';
 import { differenceInDays, addDays, startOfToday } from 'date-fns';
 
 // MOCK DATA - This will be used to seed the database for the first time.
@@ -14,6 +14,7 @@ const mockProducts: Omit<Product, 'id'>[] = [
     stock: 150,
     price: 150.00,
     gst: 18,
+    reorderPoint: 20,
     historicalData: [
         { date: '2023-01-15', quantity: 20 },
         { date: '2023-02-10', quantity: 25 },
@@ -28,6 +29,7 @@ const mockProducts: Omit<Product, 'id'>[] = [
     stock: 300,
     price: 75.50,
     gst: 18,
+    reorderPoint: 50,
      historicalData: [
         { date: '2023-01-20', quantity: 50 },
         { date: '2023-02-15', quantity: 45 },
@@ -42,6 +44,7 @@ const mockProducts: Omit<Product, 'id'>[] = [
     stock: 80,
     price: 220.00,
     gst: 18,
+    reorderPoint: 15,
      historicalData: [
         { date: '2023-01-05', quantity: 10 },
         { date: '2023-02-08', quantity: 12 },
@@ -56,6 +59,7 @@ const mockProducts: Omit<Product, 'id'>[] = [
     stock: 0,
     price: 1.00,
     gst: 0,
+    reorderPoint: 0,
     historicalData: []
     }
 ];
@@ -516,6 +520,16 @@ export const getDashboardData = async () => {
         )
         .sort((a, b) => a.days - b.days);
 
+    const lowStockAlerts: LowStockAlert[] = products
+        .filter(p => p.stock <= (p.reorderPoint ?? 0) && p.name !== 'Outstanding Balance')
+        .map(p => ({
+            productId: p.id,
+            productName: p.name,
+            stock: p.stock,
+            reorderPoint: p.reorderPoint ?? 0
+        }))
+        .sort((a,b) => a.stock - b.stock);
+
     return {
         totalRevenue,
         totalBalanceDue,
@@ -525,6 +539,7 @@ export const getDashboardData = async () => {
         revenueChartData,
         recentOrders: orders.sort((a,b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()).slice(0, 5).map(o => ({...o, total: o.grandTotal})),
         paymentAlerts,
+        lowStockAlerts,
     };
 };
 
