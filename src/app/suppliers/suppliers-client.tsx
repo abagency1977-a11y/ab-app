@@ -34,12 +34,15 @@ function SupplierDialog({
     const isEditMode = !!existingSupplier;
 
     useEffect(() => {
-        if (existingSupplier) {
-            setFormData(existingSupplier);
-        } else {
-            setFormData({});
+        if (isOpen) {
+            if (existingSupplier) {
+                setFormData(existingSupplier);
+            } else {
+                setFormData({});
+            }
         }
-    }, [existingSupplier]);
+    }, [isOpen, existingSupplier]);
+
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
