@@ -3,7 +3,7 @@
 import { db } from './firebase';
 import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference, updateDoc, increment, where, orderBy } from 'firebase/firestore';
 import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert, LowStockAlert } from './types';
-import { differenceInDays, addDays, startOfToday } from 'date-fns';
+import { differenceInDays, addDays, startOfToday, subMonths } from 'date-fns';
 
 // MOCK DATA - This will be used to seed the database for the first time.
 const mockCustomers: Omit<Customer, 'id'>[] = [];
@@ -468,7 +468,9 @@ export const getDashboardData = async () => {
     const orders = await getOrders();
     const customers = await getCustomers();
     const products = await getProducts();
+    const today = startOfToday();
 
+    // Basic Dashboard Stats
     const totalRevenue = orders.reduce((sum, order) => {
         const orderPayments = order.payments?.reduce((paymentSum, payment) => paymentSum + payment.amount, 0) ?? 0;
         return sum + orderPayments;
@@ -488,9 +490,8 @@ export const getDashboardData = async () => {
         
     const ordersPlaced = orders.filter(o => o.status !== 'Canceled').length;
     
-    const today = startOfToday();
+    // Alerts
     const upcomingDateLimit = addDays(today, 7);
-
     const paymentAlerts = orders
         .filter(order => 
             order.status === 'Pending' && 
@@ -525,7 +526,7 @@ export const getDashboardData = async () => {
         }))
         .sort((a,b) => a.stock - b.stock);
 
-    // BI Report Data
+    // BI Report Data: Profitability & Top Products
     const monthlyData: Record<string, { revenue: number, profit: number }> = {};
     const productPerformance: Record<string, { productId: string, productName: string, unitsSold: number, totalRevenue: number, estimatedProfit: number }> = {};
 
@@ -535,16 +536,15 @@ export const getDashboardData = async () => {
             monthlyData[month] = { revenue: 0, profit: 0 };
         }
         
-        let orderRevenue = 0;
-        let orderProfit = 0;
-
         order.items.forEach(item => {
+            if(item.productName === 'Outstanding Balance' || item.productName === 'Opening Balance') return;
+
             const revenue = item.price * item.quantity;
             const cost = item.cost * item.quantity;
             const profit = revenue - cost;
             
-            orderRevenue += revenue;
-            orderProfit += profit;
+            monthlyData[month].revenue += revenue;
+            monthlyData[month].profit += profit;
             
             if (!productPerformance[item.productId]) {
                  productPerformance[item.productId] = { productId: item.productId, productName: item.productName, unitsSold: 0, totalRevenue: 0, estimatedProfit: 0 };
@@ -553,13 +553,57 @@ export const getDashboardData = async () => {
             productPerformance[item.productId].totalRevenue += revenue;
             productPerformance[item.productId].estimatedProfit += profit;
         });
-
-        monthlyData[month].revenue += orderRevenue;
-        monthlyData[month].profit += orderProfit;
-
     });
 
     const profitabilityChartData = Object.entries(monthlyData).map(([month, data]) => ({ month, revenue: data.revenue, profit: data.profit }));
+    
+    // BI Report Data: Inventory Intelligence
+    const oneYearAgo = subMonths(today, 12);
+    const sixMonthsAgo = subMonths(today, 6);
+
+    const cogsLastYear = orders
+        .filter(o => new Date(o.orderDate) >= oneYearAgo)
+        .reduce((sum, order) => {
+            return sum + order.items.reduce((itemSum, item) => itemSum + (item.cost * item.quantity), 0);
+        }, 0);
+
+    const averageInventoryValue = products.reduce((sum, p) => sum + (p.cost * p.stock), 0);
+    const inventoryTurnoverRate = averageInventoryValue > 0 ? cogsLastYear / averageInventoryValue : 0;
+
+    const soldProductIds = new Set(orders
+        .filter(o => new Date(o.orderDate) >= sixMonthsAgo)
+        .flatMap(o => o.items.map(i => i.productId))
+    );
+    const deadStock = products
+        .filter(p => !soldProductIds.has(p.id) && p.name !== 'Outstanding Balance')
+        .map(p => ({
+            productName: p.name,
+            sku: p.sku,
+            stock: p.stock,
+            cost: p.cost
+        }));
+    
+    const stockoutProducts = products
+        .filter(p => p.stock === 0 && p.name !== 'Outstanding Balance')
+        .map(p => {
+            const salesHistory = orders
+                .flatMap(o => o.items)
+                .filter(i => i.productId === p.id);
+
+            const totalDays = salesHistory.length > 0
+                ? differenceInDays(today, new Date(salesHistory[0].date || orders[0].orderDate))
+                : 0;
+            
+            const totalUnitsSold = salesHistory.reduce((sum, i) => sum + i.quantity, 0);
+            const avgDailySales = totalDays > 0 ? totalUnitsSold / totalDays : 0;
+            const potentialLostRevenue = avgDailySales * p.price;
+
+            return {
+                productName: p.name,
+                avgDailySales: avgDailySales.toFixed(2),
+                potentialLostRevenuePerDay: potentialLostRevenue
+            };
+        });
 
 
     return {
@@ -574,7 +618,10 @@ export const getDashboardData = async () => {
         lowStockAlerts,
         // Reporting data
         profitabilityChartData,
-        productPerformance: Object.values(productPerformance)
+        productPerformance: Object.values(productPerformance),
+        inventoryTurnoverRate: inventoryTurnoverRate.toFixed(2),
+        deadStock,
+        stockoutProducts,
     };
 };
 

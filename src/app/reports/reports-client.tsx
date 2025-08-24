@@ -1,20 +1,27 @@
 
+
 'use client';
 
 import React, { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Lightbulb, Loader2 } from 'lucide-react';
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Line, LineChart, Pie, PieChart, Cell } from 'recharts';
+import { Lightbulb, Loader2, TrendingUp, PackageX, AlertTriangle } from 'lucide-react';
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ChartConfig, ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { generateReportNarrative } from '@/ai/flows/generate-report-narrative';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 
-const formatNumber = (value: number | undefined) => {
-    if (value === undefined || isNaN(value)) return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(0);
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol' }).format(value);
+const formatNumber = (value: number | undefined, isCurrency = true) => {
+    if (value === undefined || isNaN(value)) {
+        return isCurrency ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(0) : '0';
+    }
+    if (isCurrency) {
+        return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol' }).format(value);
+    }
+    return value.toLocaleString('en-IN');
 };
 
 
@@ -30,9 +37,7 @@ const chartConfig = {
     label: "Mobile",
     color: "hsl(var(--chart-2))",
   },
-} satisfies ChartConfig
-
-const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
+} satisfies ChartConfig;
 
 
 export function ReportsClient({ reportData }: { reportData: any }) {
@@ -65,6 +70,9 @@ export function ReportsClient({ reportData }: { reportData: any }) {
             Orders Placed: ${reportData.ordersPlaced}
             Monthly Profitability: ${JSON.stringify(reportData.profitabilityChartData)}
             Top Products by Revenue: ${JSON.stringify(reportData.productPerformance.sort((a,b) => b.totalRevenue - a.totalRevenue).slice(0,3))}
+            Inventory Turnover Rate: ${reportData.inventoryTurnoverRate}
+            Dead Stock Count: ${reportData.deadStock.length}
+            Stockouts: ${reportData.stockoutProducts.length}
         `;
         try {
             const result = await generateReportNarrative({ reportData: dataSummary });
@@ -98,7 +106,41 @@ export function ReportsClient({ reportData }: { reportData: any }) {
                 </Alert>
             )}
 
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                 <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Inventory Turnover Rate</CardTitle>
+                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{reportData.inventoryTurnoverRate}</div>
+                        <p className="text-xs text-muted-foreground">Times inventory sold and replaced in the last year. Higher is better.</p>
+                    </CardContent>
+                </Card>
+                 <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Dead Stock Items</CardTitle>
+                        <PackageX className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{reportData.deadStock.length}</div>
+                        <p className="text-xs text-muted-foreground">Products not sold in the last 6 months. Consider discounting.</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Current Stockouts</CardTitle>
+                        <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{reportData.stockoutProducts.length}</div>
+                        <p className="text-xs text-muted-foreground">Products with zero stock, potentially losing sales.</p>
+                    </CardContent>
+                </Card>
+            </div>
+
+
+            <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
                 <Card>
                      <CardHeader>
                         <div className="flex justify-between items-center">
@@ -136,7 +178,7 @@ export function ReportsClient({ reportData }: { reportData: any }) {
                                         <TableCell>{p.productName}</TableCell>
                                         <TableCell className="text-right font-medium">
                                             {topProductsMetric === 'revenue' && formatNumber(p.totalRevenue)}
-                                            {topProductsMetric === 'units' && p.unitsSold}
+                                            {topProductsMetric === 'units' && formatNumber(p.unitsSold, false)}
                                             {topProductsMetric === 'profit' && formatNumber(p.estimatedProfit)}
                                         </TableCell>
                                     </TableRow>
@@ -160,7 +202,7 @@ export function ReportsClient({ reportData }: { reportData: any }) {
                                     <Tooltip
                                         cursor={false}
                                         content={<ChartTooltipContent
-                                            formatter={(value, name) => `${name === 'revenue' ? 'Revenue' : 'Est. Profit'}: ${formatNumber(value as number)}`}
+                                            formatter={(value, name) => <div className="flex flex-col"><span>{name === 'revenue' ? 'Revenue' : 'Est. Profit'}: {formatNumber(value as number)}</span></div>}
                                             indicator="dot"
                                         />}
                                     />
@@ -169,6 +211,49 @@ export function ReportsClient({ reportData }: { reportData: any }) {
                                 </BarChart>
                             </ResponsiveContainer>
                         </ChartContainer>
+                    </CardContent>
+                </Card>
+                 <Card>
+                    <CardHeader>
+                        <CardTitle>Dead Stock (Last 6 Months)</CardTitle>
+                        <CardDescription>These products haven't sold recently.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableHeader><TableRow><TableHead>Product</TableHead><TableHead>SKU</TableHead><TableHead className="text-right">Stock Left</TableHead><TableHead className="text-right">Value</TableHead></TableRow></TableHeader>
+                            <TableBody>
+                                {reportData.deadStock.map((p: any) => (
+                                    <TableRow key={p.sku}>
+                                        <TableCell>{p.productName}</TableCell>
+                                        <TableCell>{p.sku}</TableCell>
+                                        <TableCell className="text-right">{formatNumber(p.stock, false)}</TableCell>
+                                        <TableCell className="text-right">{formatNumber(p.stock * p.cost)}</TableCell>
+                                    </TableRow>
+                                ))}
+                                {reportData.deadStock.length === 0 && <TableRow><TableCell colSpan={4} className="text-center">No dead stock found. Great!</TableCell></TableRow>}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+                 <Card>
+                    <CardHeader>
+                        <CardTitle>Stockout Impact Analysis</CardTitle>
+                        <CardDescription>Estimated daily lost revenue for out-of-stock items.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                             <TableHeader><TableRow><TableHead>Product</TableHead><TableHead className="text-right">Avg. Daily Sales</TableHead><TableHead className="text-right">Est. Lost Revenue/Day</TableHead></TableRow></TableHeader>
+                             <TableBody>
+                                {reportData.stockoutProducts.map((p: any) => (
+                                    <TableRow key={p.productName}>
+                                        <TableCell>{p.productName}</TableCell>
+                                        <TableCell className="text-right">{formatNumber(p.avgDailySales, false)}</TableCell>
+                                        <TableCell className="text-right text-destructive font-medium">{formatNumber(p.potentialLostRevenuePerDay)}</TableCell>
+                                    </TableRow>
+                                ))}
+                                {reportData.stockoutProducts.length === 0 && <TableRow><TableCell colSpan={3} className="text-center">No stockouts currently. Keep it up!</TableCell></TableRow>}
+                             </TableBody>
+                        </Table>
                     </CardContent>
                 </Card>
             </div>
