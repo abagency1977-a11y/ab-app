@@ -31,6 +31,7 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
     const skuRef = useRef<HTMLInputElement>(null);
     const stockRef = useRef<HTMLInputElement>(null);
     const priceRef = useRef<HTMLInputElement>(null);
+    const costRef = useRef<HTMLInputElement>(null);
     const gstRef = useRef<HTMLInputElement>(null);
     const reorderPointRef = useRef<HTMLInputElement>(null);
     const { toast } = useToast();
@@ -41,6 +42,7 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
             sku: skuRef.current?.value || '',
             stock: Number(stockRef.current?.value || 0),
             price: Number(priceRef.current?.value || 0),
+            cost: Number(costRef.current?.value || 0),
             gst: Number(gstRef.current?.value || 0),
             reorderPoint: Number(reorderPointRef.current?.value || 0),
         };
@@ -99,8 +101,12 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
                         <Input id="stock" name="stock" ref={stockRef} type="number" className="col-span-3" required />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="price" className="text-right">Price</Label>
+                        <Label htmlFor="price" className="text-right">Sale Price</Label>
                         <Input id="price" name="price" ref={priceRef} type="number" step="0.01" className="col-span-3" required />
+                    </div>
+                     <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="cost" className="text-right">Cost Price</Label>
+                        <Input id="cost" name="cost" ref={costRef} type="number" step="0.01" className="col-span-3" required />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="gst" className="text-right">GST %</Label>
@@ -197,6 +203,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             sku: formData.get('sku') as string,
             stock: Number(formData.get('stock')),
             price: Number(formData.get('price')),
+            cost: Number(formData.get('cost')),
             gst: Number(formData.get('gst')),
             reorderPoint: Number(formData.get('reorderPoint')),
         };
@@ -305,7 +312,8 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                     <TableHead>SKU</TableHead>
                                     <TableHead>Stock</TableHead>
                                     <TableHead>Reorder Point</TableHead>
-                                    <TableHead className="text-right">Price</TableHead>
+                                    <TableHead className="text-right">Sale Price</TableHead>
+                                    <TableHead className="text-right">Cost Price</TableHead>
                                     <TableHead>GST %</TableHead>
                                     <TableHead>Actions</TableHead>
                                 </TableRow>
@@ -326,6 +334,9 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                             <TableCell>{product.reorderPoint ?? 'N/A'}</TableCell>
                                             <TableCell className="text-right">
                                                 {formatNumber(product.price)}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                {formatNumber(product.cost)}
                                             </TableCell>
                                             <TableCell>{product.gst}%</TableCell>
                                             <TableCell>
@@ -375,18 +386,22 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                             </DropdownMenu>
                                         </div>
                                     </CardHeader>
-                                    <CardContent className="grid grid-cols-2 gap-4">
+                                    <CardContent className="grid grid-cols-3 gap-4">
                                         <div>
                                             <p className="text-xs text-muted-foreground">Stock</p>
                                             <p className={cn("font-bold", isLowStock && "text-destructive")}>{product.stock}</p>
                                         </div>
                                         <div>
-                                            <p className="text-xs text-muted-foreground">Reorder Point</p>
+                                            <p className="text-xs text-muted-foreground">Reorder</p>
                                             <p className="font-bold">{product.reorderPoint ?? 'N/A'}</p>
                                         </div>
                                         <div>
-                                            <p className="text-xs text-muted-foreground">Price</p>
+                                            <p className="text-xs text-muted-foreground">Sale Price</p>
                                             <p className="font-bold">{formatNumber(product.price)}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-muted-foreground">Cost Price</p>
+                                            <p className="font-bold">{formatNumber(product.cost)}</p>
                                         </div>
                                         <div>
                                             <p className="text-xs text-muted-foreground">GST</p>
@@ -471,8 +486,12 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                 <Input id="reorderPoint" name="reorderPoint" type="number" className="col-span-3" defaultValue={productToEdit?.reorderPoint} />
                             </div>
                             <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="price" className="text-right">Price</Label>
+                                <Label htmlFor="price" className="text-right">Sale Price</Label>
                                 <Input id="price" name="price" type="number" step="0.01" className="col-span-3" defaultValue={productToEdit?.price} required />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="cost" className="text-right">Cost Price</Label>
+                                <Input id="cost" name="cost" type="number" step="0.01" className="col-span-3" defaultValue={productToEdit?.cost} required />
                             </div>
                             <div className="grid grid-cols-4 items-center gap-4">
                                 <Label htmlFor="gst" className="text-right">GST %</Label>

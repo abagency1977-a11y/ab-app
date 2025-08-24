@@ -1,7 +1,8 @@
 
+
 import { db } from './firebase';
 import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference, updateDoc, increment, where, orderBy } from 'firebase/firestore';
-import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert, LowStockAlert } from './types';
+import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert, LowStockAlert, SalesChannel } from './types';
 import { differenceInDays, addDays, startOfToday } from 'date-fns';
 
 // MOCK DATA - This will be used to seed the database for the first time.
@@ -13,6 +14,7 @@ const mockProducts: Omit<Product, 'id'>[] = [
     sku: 'PW-1000',
     stock: 150,
     price: 150.00,
+    cost: 75.00,
     gst: 18,
     reorderPoint: 20,
     historicalData: [
@@ -28,6 +30,7 @@ const mockProducts: Omit<Product, 'id'>[] = [
     sku: 'SG-2000',
     stock: 300,
     price: 75.50,
+    cost: 30.00,
     gst: 18,
     reorderPoint: 50,
      historicalData: [
@@ -43,6 +46,7 @@ const mockProducts: Omit<Product, 'id'>[] = [
     sku: 'AG-3000',
     stock: 80,
     price: 220.00,
+    cost: 110.00,
     gst: 18,
     reorderPoint: 15,
      historicalData: [
@@ -58,6 +62,7 @@ const mockProducts: Omit<Product, 'id'>[] = [
     sku: 'OB-0001',
     stock: 0,
     price: 1.00,
+    cost: 0.00,
     gst: 0,
     reorderPoint: 0,
     historicalData: []
@@ -458,7 +463,7 @@ export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 
 };
 
 
-// DASHBOARD DATA
+// DASHBOARD & REPORTING DATA
 export const getDashboardData = async () => {
     const orders = await getOrders();
     const customers = await getCustomers();
@@ -482,16 +487,6 @@ export const getDashboardData = async () => {
         .reduce((sum, product) => sum + product.stock, 0);
         
     const ordersPlaced = orders.filter(o => o.status !== 'Canceled').length;
-
-    const monthlyRevenue = orders.reduce((acc, order) => {
-        order.payments?.forEach(payment => {
-            const month = new Date(payment.paymentDate).toLocaleString('default', { month: 'short' });
-            acc[month] = (acc[month] || 0) + payment.amount;
-        });
-        return acc;
-    }, {} as Record<string, number>);
-
-    const revenueChartData = Object.entries(monthlyRevenue).map(([month, revenue]) => ({ month, revenue: Math.round(revenue)}));
     
     const today = startOfToday();
     const upcomingDateLimit = addDays(today, 7);
@@ -521,25 +516,71 @@ export const getDashboardData = async () => {
         .sort((a, b) => a.days - b.days);
 
     const lowStockAlerts: LowStockAlert[] = products
-        .filter(p => p.stock <= (p.reorderPoint ?? 0) && p.name !== 'Outstanding Balance')
+        .filter(p => p.reorderPoint !== undefined && p.stock <= p.reorderPoint && p.name !== 'Outstanding Balance')
         .map(p => ({
             productId: p.id,
             productName: p.name,
             stock: p.stock,
-            reorderPoint: p.reorderPoint ?? 0
+            reorderPoint: p.reorderPoint!
         }))
         .sort((a,b) => a.stock - b.stock);
 
+    // BI Report Data
+    const monthlyData: Record<string, { revenue: number, profit: number }> = {};
+    const channelPerformance: Record<SalesChannel, { revenue: number }> = { 'In-Store': { revenue: 0 }, 'Online': { revenue: 0 }, 'Phone': { revenue: 0 }, 'Other': { revenue: 0 }};
+    const productPerformance: Record<string, { productId: string, productName: string, unitsSold: number, totalRevenue: number, estimatedProfit: number }> = {};
+
+    orders.forEach(order => {
+        const month = new Date(order.orderDate).toLocaleString('default', { month: 'short', year: 'numeric' });
+        if (!monthlyData[month]) {
+            monthlyData[month] = { revenue: 0, profit: 0 };
+        }
+        
+        let orderRevenue = 0;
+        let orderProfit = 0;
+
+        order.items.forEach(item => {
+            const revenue = item.price * item.quantity;
+            const cost = item.cost * item.quantity;
+            const profit = revenue - cost;
+            
+            orderRevenue += revenue;
+            orderProfit += profit;
+            
+            if (!productPerformance[item.productId]) {
+                 productPerformance[item.productId] = { productId: item.productId, productName: item.productName, unitsSold: 0, totalRevenue: 0, estimatedProfit: 0 };
+            }
+            productPerformance[item.productId].unitsSold += item.quantity;
+            productPerformance[item.productId].totalRevenue += revenue;
+            productPerformance[item.productId].estimatedProfit += profit;
+        });
+
+        monthlyData[month].revenue += orderRevenue;
+        monthlyData[month].profit += orderProfit;
+
+        if (channelPerformance[order.channel]) {
+            channelPerformance[order.channel].revenue += orderRevenue;
+        }
+    });
+
+    const profitabilityChartData = Object.entries(monthlyData).map(([month, data]) => ({ month, revenue: data.revenue, profit: data.profit }));
+    const channelPerformanceChartData = Object.entries(channelPerformance).map(([channel, data]) => ({ channel, revenue: data.revenue }));
+
+
     return {
+        // Dashboard data
         totalRevenue,
         totalBalanceDue,
         totalCustomers,
         itemsInStock,
         ordersPlaced,
-        revenueChartData,
         recentOrders: orders.sort((a,b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()).slice(0, 5).map(o => ({...o, total: o.grandTotal})),
         paymentAlerts,
         lowStockAlerts,
+        // Reporting data
+        profitabilityChartData,
+        channelPerformance: channelPerformanceChartData,
+        productPerformance: Object.values(productPerformance)
     };
 };
 

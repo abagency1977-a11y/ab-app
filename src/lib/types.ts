@@ -19,6 +19,7 @@ export interface Product {
   sku: string;
   stock: number;
   price: number;
+  cost: number; // Cost of Goods Sold
   gst: number;
   reorderPoint?: number;
   historicalData?: { date: string; quantity: number }[];
@@ -27,6 +28,7 @@ export interface Product {
 export type OrderStatus = 'Pending' | 'Fulfilled' | 'Canceled';
 export type PaymentTerm = 'Full Payment' | 'Credit';
 export type PaymentMode = 'Cash' | 'Card' | 'UPI' | 'Cheque' | 'Online Transfer';
+export type SalesChannel = 'In-Store' | 'Online' | 'Phone' | 'Other';
 
 export interface Payment {
   id: string;
@@ -42,6 +44,7 @@ export interface OrderItem {
   productName: string;
   quantity: number;
   price: number;
+  cost: number; // Snapshot of cost at time of sale
   gst: number;
 }
 
@@ -52,6 +55,7 @@ export interface Order {
   orderDate: string;
   status: OrderStatus;
   items: OrderItem[];
+  channel: SalesChannel;
   total: number;
   discount: number;
   deliveryFees: number;
