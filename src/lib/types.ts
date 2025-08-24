@@ -13,6 +13,16 @@ export interface Customer {
   orders?: Order[];
 }
 
+export interface Supplier {
+  id: string;
+  name: string;
+  contactPerson?: string;
+  email: string;
+  phone: string;
+  address: string;
+  gstin?: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -46,6 +56,35 @@ export interface OrderItem {
   cost: number; // Snapshot of cost at time of sale
   gst: number;
 }
+
+export interface PurchaseItem {
+  productId: string;
+  productName: string;
+  quantity: number;
+  cost: number;
+  gst: number;
+}
+
+export interface PurchasePayment {
+    id: string;
+    paymentDate: string;
+    amount: number;
+    method: PaymentMode;
+    notes?: string;
+}
+
+export interface Purchase {
+    id: string;
+    supplierId: string;
+    supplierName: string;
+    purchaseDate: string;
+    billNumber: string;
+    items: PurchaseItem[];
+    total: number;
+    payments: PurchasePayment[];
+    balanceDue: number;
+}
+
 
 export interface Order {
   id:string;

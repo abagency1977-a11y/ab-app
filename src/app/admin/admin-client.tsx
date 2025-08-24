@@ -214,7 +214,7 @@ function ResetDatabaseCard() {
             
             toast({
                 title: "Database Reset Successful",
-                description: "Your customers and orders have been cleared. Please refresh the page.",
+                description: "Your customers, orders, and suppliers have been cleared. Please refresh the page.",
             });
         } catch (error: any) {
             toast({
@@ -232,7 +232,7 @@ function ResetDatabaseCard() {
             <CardHeader>
                 <CardTitle>Reset Application Data</CardTitle>
                 <CardDescription>
-                    This will permanently delete all customers, orders, and invoices. Your inventory will not be affected. This action cannot be undone.
+                    This will permanently delete all customers, suppliers, orders, and invoices. Your inventory will not be affected. This action cannot be undone.
                 </CardDescription>
             </CardHeader>
             <CardContent>
@@ -240,14 +240,14 @@ function ResetDatabaseCard() {
                     <AlertDialogTrigger asChild>
                         <Button variant="destructive" disabled={isLoading}>
                              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash className="mr-2 h-4 w-4" />}
-                            {isLoading ? "Resetting..." : "Reset Customer & Order Data"}
+                            {isLoading ? "Resetting..." : "Reset All Transactional Data"}
                         </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                         <AlertDialogHeader>
                             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                             <AlertDialogDescription>
-                                This will permanently delete all customer and order data. Your product inventory will remain. This action is irreversible and will start your order and invoice numbers from 1 again.
+                                This will permanently delete all customer, supplier, order, and purchase data. Your product inventory will remain. This action is irreversible and will start all counters from 1 again.
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>

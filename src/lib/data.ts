@@ -2,7 +2,7 @@
 
 import { db } from './firebase';
 import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference, updateDoc, increment, where, orderBy } from 'firebase/firestore';
-import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert, LowStockAlert } from './types';
+import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert, LowStockAlert, Supplier, Purchase } from './types';
 import { differenceInDays, addDays, startOfToday, subMonths } from 'date-fns';
 
 // MOCK DATA - This will be used to seed the database for the first time.
@@ -70,6 +70,9 @@ const mockProducts: Omit<Product, 'id'>[] = [
 ];
 
 const mockOrders: Omit<Order, 'id'>[] = [];
+const mockSuppliers: Omit<Supplier, 'id'>[] = [];
+const mockPurchases: Omit<Purchase, 'id'>[] = [];
+
 
 
 // Function to seed the database
@@ -94,9 +97,9 @@ async function seedDatabase() {
     try {
         await seedCollection('customers', mockCustomers, 'CUST');
         await seedCollection('products', mockProducts, 'PROD');
-        // Ensure that mock orders have correct customer and product IDs
-        // This is a simple approach; a more robust solution would map old IDs to new IDs
         await seedCollection('orders', mockOrders, 'ORD');
+        await seedCollection('suppliers', mockSuppliers, 'SUPP');
+        await seedCollection('purchases', mockPurchases, 'PUR');
     } catch (error) {
         console.error("Error seeding database: ", error);
     }
@@ -462,6 +465,43 @@ export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 
     }
 };
 
+// SUPPLIER FUNCTIONS
+export const getSuppliers = async (): Promise<Supplier[]> => {
+    try {
+        const snapshot = await getDocs(collection(db, 'suppliers'));
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Supplier));
+    } catch (error) {
+        console.error("Error fetching suppliers: ", error);
+        return [];
+    }
+};
+
+export const addSupplier = async (supplierData: Omit<Supplier, 'id'>): Promise<Supplier> => {
+    const docRef = await addDoc(collection(db, 'suppliers'), supplierData);
+    return { id: docRef.id, ...supplierData };
+};
+
+export const updateSupplier = async (supplierData: Supplier): Promise<void> => {
+    const { id, ...dataToUpdate } = supplierData;
+    if (!id) throw new Error("Supplier ID is required to update.");
+    await setDoc(doc(db, 'suppliers', id), dataToUpdate, { merge: true });
+};
+
+export const deleteSupplier = async (id: string): Promise<void> => {
+    await deleteDoc(doc(db, 'suppliers', id));
+};
+
+// PURCHASE FUNCTIONS (Simplified for now)
+export const getPurchases = async (): Promise<Purchase[]> => {
+    try {
+        const snapshot = await getDocs(collection(db, 'purchases'));
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Purchase));
+    } catch (error) {
+        console.error("Error fetching purchases: ", error);
+        return [];
+    }
+};
+
 
 // DASHBOARD & REPORTING DATA
 export const getDashboardData = async () => {
@@ -591,7 +631,7 @@ export const getDashboardData = async () => {
                 .filter(i => i.productId === p.id);
 
             const totalDays = salesHistory.length > 0
-                ? differenceInDays(today, new Date(salesHistory[0].date || orders[0].orderDate))
+                ? differenceInDays(today, new Date(orders.find(o => o.items.some(i => i.productId === p.id))!.orderDate))
                 : 0;
             
             const totalUnitsSold = salesHistory.reduce((sum, i) => sum + i.quantity, 0);
@@ -627,7 +667,7 @@ export const getDashboardData = async () => {
 
 // This function will be called from a server-side context to reset the DB
 export const resetDatabaseForFreshStart = async () => {
-    const collectionsToDelete = ['customers', 'orders', 'counters'];
+    const collectionsToDelete = ['customers', 'orders', 'counters', 'suppliers', 'purchases'];
     
     try {
         for (const collectionName of collectionsToDelete) {
@@ -646,7 +686,7 @@ export const resetDatabaseForFreshStart = async () => {
             console.log(`All documents in ${collectionName} deleted.`);
         }
 
-        console.log("Database collections (customers, orders, counters) have been cleared.");
+        console.log("Database collections have been cleared.");
 
         // We don't need to re-seed products, they should be preserved.
 
