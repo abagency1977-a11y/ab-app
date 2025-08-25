@@ -75,7 +75,7 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
     const [allCustomers, setAllCustomers] = useState<Customer[]>(initialCustomers);
     const [selectedInvoice, setSelectedInvoice] = useState<Order | null>(null);
     const [invoiceToDelete, setInvoiceToDelete] = useState<Order | null>(null);
-    const [receiptToPrint, setReceiptToPrint] = useState<{order: Order, payment: Payment, historicalPayments: Payment[]} | null>(null);
+    const [receiptToPrint, setReceiptToPrint] =<{order: Order, payment: Payment, historicalPayments: Payment[]} | null>(null);
     const [isReceiptLoading, setIsReceiptLoading] = useState(false);
     const { toast } = useToast();
     const receiptRef = useRef<HTMLDivElement>(null);
@@ -100,14 +100,19 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
         if (!selectedInvoice) return;
         
         try {
-            const updatedInvoice = await addPaymentToOrder(selectedInvoice.id, payment);
+            const updatedOrder = await addPaymentToOrder(selectedInvoice.id, payment);
             
-            const newAllInvoices = allInvoices.map(inv => inv.id === updatedInvoice.id ? updatedInvoice : inv);
-            setAllInvoices(newAllInvoices);
-            setSelectedInvoice(updatedInvoice); // Keep sheet open with updated data
+            // After a successful payment, refresh all orders to get recalculated balances
+            const refreshedOrders = await getOrders();
+            setAllInvoices(refreshedOrders);
+            
+            // Find the selected invoice in the refreshed list to update the sheet
+            const newlyUpdatedInvoice = refreshedOrders.find(o => o.id === updatedOrder.id);
+            setSelectedInvoice(newlyUpdatedInvoice || null);
+
             toast({
                 title: 'Payment Recorded',
-                description: `${formatNumber(payment.amount)} payment for invoice ${updatedInvoice.id.replace('ORD','INV')} has been recorded.`,
+                description: `${formatNumber(payment.amount)} payment for invoice ${updatedOrder.id.replace('ORD','INV')} has been recorded.`,
             });
         } catch(e: any) {
             toast({
@@ -183,7 +188,8 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
         if (!invoiceToDelete) return;
         try {
             await deleteOrder(invoiceToDelete);
-            setAllInvoices(prev => prev.filter(inv => inv.id !== invoiceToDelete.id));
+            const refreshedOrders = await getOrders();
+            setAllInvoices(refreshedOrders);
             toast({
                 title: "Invoice Deleted",
                 description: `Invoice ${invoiceToDelete.id.replace('ORD', 'INV')} has been successfully deleted.`
@@ -246,11 +252,19 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
                             </SheetDescription>
                         </SheetHeader>
                         <div className="space-y-6 py-4 overflow-y-auto flex-1 pr-6">
+                             <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">Previous Balance:</span>
+                                <span>{formatNumber(selectedInvoice.previousBalance)}</span>
+                            </div>
                             <div className="flex justify-between text-sm">
-                                <span className="text-muted-foreground">Total Amount:</span>
-                                <span>{formatNumber(selectedInvoice.grandTotal)}</span>
+                                <span className="text-muted-foreground">Current Bill:</span>
+                                <span>{formatNumber(selectedInvoice.grandTotal - selectedInvoice.previousBalance)}</span>
                             </div>
                             <div className="flex justify-between font-bold text-lg">
+                                <span className="text-muted-foreground">Total:</span>
+                                <span>{formatNumber(selectedInvoice.grandTotal)}</span>
+                            </div>
+                             <div className="flex justify-between font-bold text-lg">
                                 <span className="text-red-600">Balance Due:</span>
                                 <span className="text-red-600">{formatNumber(selectedInvoice.balanceDue)}</span>
                             </div>
@@ -306,7 +320,7 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
                     <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                     <AlertDialogDescription>
                         This action cannot be undone. This will permanently delete invoice <strong>{invoiceToDelete?.id.replace('ORD', 'INV')}</strong> and all its associated payments.
-                        This will also restore the item quantities to the inventory stock.
+                        This will also restore the item quantities to the inventory stock and recalculate customer balances.
                     </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -338,16 +352,17 @@ function PaymentForm({ balanceDue, onAddPayment }: { balanceDue: number; onAddPa
     const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
     const [paymentMethod, setPaymentMethod] = useState<PaymentMode>('Cash');
     const [notes, setNotes] = useState('');
+    const { toast } = useToast();
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const paymentAmount = parseFloat(amount);
         if (isNaN(paymentAmount) || paymentAmount <= 0) {
-            alert('Please enter a valid amount.');
+            toast({ title: "Invalid Amount", description: "Please enter a valid payment amount.", variant: "destructive" });
             return;
         }
         if (paymentAmount > balanceDue) {
-            alert('Payment cannot be greater than the balance due.');
+            toast({ title: "Overpayment Error", description: `Payment of ${formatNumber(paymentAmount)} cannot be greater than the balance due of ${formatNumber(balanceDue)}.`, variant: "destructive" });
             return;
         }
         

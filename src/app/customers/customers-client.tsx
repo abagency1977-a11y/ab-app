@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { PlusCircle, MoreHorizontal, ArrowUpDown, CreditCard, Loader2, Mail, Phone } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, ArrowUpDown, CreditCard, Loader2, Phone } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
@@ -459,7 +459,6 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                     isOpen={isBulkPaymentOpen} 
                     onOpenChange={setIsBulkPaymentOpen}
                     customer={customerForBulkPayment}
-                    allOrders={orders}
                     onPaymentSuccess={refreshData}
                 />
             )}
@@ -468,11 +467,10 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
 }
 
 
-function BulkPaymentDialog({ isOpen, onOpenChange, customer, allOrders, onPaymentSuccess }: {
+function BulkPaymentDialog({ isOpen, onOpenChange, customer, onPaymentSuccess }: {
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;
     customer: (Customer & { orders?: Order[] }) | null;
-    allOrders: Order[];
     onPaymentSuccess: () => void;
 }) {
     const [amount, setAmount] = useState('');
@@ -530,12 +528,12 @@ function BulkPaymentDialog({ isOpen, onOpenChange, customer, allOrders, onPaymen
                 return;
             }
 
-
             const result = await allocateBulkPayment({
                 customerId: customer.id,
                 paymentAmount,
                 paymentDate,
                 paymentMethod,
+                notes,
                 invoicesToPay: invoicesToPay.map(o => ({
                     id: o.id,
                     orderDate: o.orderDate,
@@ -543,29 +541,6 @@ function BulkPaymentDialog({ isOpen, onOpenChange, customer, allOrders, onPaymen
                     grandTotal: o.grandTotal,
                 })),
             });
-            
-            for (const allocation of result.allocations) {
-                const orderToUpdate = allOrders.find(o => o.id === allocation.invoiceId);
-                if (orderToUpdate) {
-                    const existingPayments = orderToUpdate.payments || [];
-                    const paymentId = `${orderToUpdate.id}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
-                    const newPayment: any = {
-                         id: paymentId,
-                         paymentDate,
-                         amount: allocation.amountAllocated,
-                         method: paymentMethod,
-                         notes: `Part of bulk payment. ${notes}`.trim(),
-                    };
-                    
-                    const updatedOrderData = {
-                        ...orderToUpdate,
-                        balanceDue: allocation.newBalanceDue,
-                        status: allocation.newStatus as Order['status'],
-                        payments: [...existingPayments, newPayment],
-                    };
-                    await updateOrder(updatedOrderData);
-                }
-            }
             
             toast({
                 title: "Bulk Payment Successful",

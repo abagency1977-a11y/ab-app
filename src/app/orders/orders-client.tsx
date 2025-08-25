@@ -46,7 +46,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
     const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState('');
-    const [dateFilter, setDateFilter] = useState('All');
+    const [dateFilter, setDateFilter] useState('All');
     const [isMounted, setIsMounted] = useState(false);
     
     useEffect(() => {
@@ -183,8 +183,6 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             const addressLines = doc.splitTextToSize(customer.address || 'No address provided', 80);
             doc.text(addressLines, margin, yPos);
             yPos += (addressLines.length * 5) + 5; 
-            doc.text(customer.email, margin, yPos);
-            yPos += 5;
             doc.text(customer.phone, margin, yPos);
             
             let rightYPos = 58;
@@ -320,7 +318,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     const handleAddOrder = async (newOrderData: Omit<Order, 'id' | 'customerName'>) => {
        try {
            const newOrder = await addOrder(newOrderData);
-           setOrders(prevOrders => [newOrder, ...prevOrders]);
+           setOrders(prevOrders => [newOrder, ...prevOrders].sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()));
            toast({
                title: "Order Placed",
                description: `Order ${newOrder.id} has been successfully created.`,
@@ -340,7 +338,9 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     const handleUpdateOrder = async (updatedOrderData: Order) => {
        try {
            await updateOrder(updatedOrderData);
-           setOrders(prevOrders => prevOrders.map(o => o.id === updatedOrderData.id ? updatedOrderData : o));
+           // After updating, we need to refresh ALL orders for that customer to get the recalculated balances
+           const allOrders = await getOrders();
+           setOrders(allOrders);
            toast({
                title: "Order Updated",
                description: `Order ${updatedOrderData.id} has been successfully updated.`,
@@ -360,7 +360,9 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         if (!orderToDelete) return;
         try {
             await deleteOrderFromDB(orderToDelete);
-            setOrders(prev => prev.filter(o => o.id !== orderToDelete.id));
+            // After deleting, we need to refresh ALL orders for that customer to get the recalculated balances
+            const allOrders = await getOrders();
+            setOrders(allOrders);
             toast({
                 title: "Order Deleted",
                 description: `Order ${orderToDelete.id} has been successfully deleted.`
@@ -529,7 +531,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                     <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                     <AlertDialogDescription>
                         This action cannot be undone. This will permanently delete order <strong>{orderToDelete?.id}</strong>. 
-                        This will also restore the item quantities to the inventory stock.
+                        This will also restore the item quantities to the inventory stock and recalculate customer balances.
                     </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -555,7 +557,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     onCustomerAdded: (customer: Omit<Customer, 'id'|'transactionHistory' | 'orders'>) => Promise<Customer | null>,
     existingOrder: Order | null,
 }) {
-    const [customerId, setCustomerId] = useState<string>('');
+    const [customerId, setCustomerId] useState('');
     const [orderDate, setOrderDate] = useState(new Date().toISOString().split('T')[0]);
     const [items, setItems] = useState<OrderItemState[]>([]);
     const [currentItem, setCurrentItem] = useState<OrderItemState>(initialItemState);
@@ -730,7 +732,6 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         const formData = new FormData(event.currentTarget);
         const newCustomerData = {
             name: formData.get('name') as string,
-            email: formData.get('email') as string,
             phone: formData.get('phone') as string,
             address: formData.get('address') as string,
         };
@@ -823,18 +824,6 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                 customerName: customer.name, // ensure customer name is fresh
             };
 
-            // Don't overwrite payments when editing, unless it's being switched to full payment now
-            if(finalOrderData.paymentTerm === 'Credit') {
-                finalOrderData.payments = existingOrder.payments;
-                finalOrderData.balanceDue = grandTotal - (existingOrder.payments?.reduce((sum, p) => sum + p.amount, 0) || 0);
-                 if (finalOrderData.balanceDue <= 0) {
-                    finalOrderData.status = 'Fulfilled';
-                } else {
-                    finalOrderData.status = 'Pending';
-                }
-            }
-
-
             try {
                 await onOrderUpdated(finalOrderData as Order);
                 resetForm();
@@ -843,17 +832,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
             }
         } else {
              try {
-               const newOrder = await onOrderAdded(orderData as Omit<Order, 'id' | 'customerName'>);
-               if (previousBalance > 0) {
-                   // Mark all previous 'Opening Balance' orders for this customer as fulfilled.
-                    const allCustomerOrders = await getOrders(); // A bit inefficient, but ensures we have all data. Could be optimized.
-                    const openingBalanceOrders = allCustomerOrders.filter(o => o.customerId === customerId && o.isOpeningBalance && o.status !== 'Fulfilled');
-
-                    for(const obOrder of openingBalanceOrders) {
-                        const updatedObOrder = { ...obOrder, status: 'Fulfilled', balanceDue: 0 };
-                        await updateOrder(updatedObOrder);
-                    }
-               }
+               await onOrderAdded(orderData as Omit<Order, 'id' | 'customerName'>);
                resetForm();
            } catch (e) {
                 // Error is already toasted in the parent component
@@ -1082,7 +1061,6 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                     <form onSubmit={handleAddCustomerSubmit}>
                         <div className="grid gap-4 py-4">
                             <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="name" className="text-right">Name</Label><Input id="name" name="name" className="col-span-3" required /></div>
-                            <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="email" className="text-right">Email</Label><Input id="email" name="email" type="email" className="col-span-3" required /></div>
                             <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="phone" className="text-right">Phone</Label><Input id="phone" name="phone" className="col-span-3" /></div>
                             <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="address" className="text-right">Address</Label><Input id="address" name="address" className="col-span-3" /></div>
                         </div>
@@ -1096,6 +1074,3 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         </>
     );
 }
-    
-
-    

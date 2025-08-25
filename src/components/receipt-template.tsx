@@ -33,7 +33,7 @@ export const ReceiptTemplate = React.forwardRef<HTMLDivElement, ReceiptTemplateP
                         <h2 className="text-xl font-bold mt-2">AB Agency</h2>
                         <p className="text-xs">No.1, Ayyanchery main road, Ayyanchery, Urapakkam</p>
                         <p className="text-xs">Chennai - 603210</p>
-                        <p className="text-xs mt-2">Email - abagency1977@gmail.com, MOB: 95511 95505 / 95001 82975</p>
+                        <p className="text-xs mt-2">MOB: 95511 95505 / 95001 82975</p>
                     </div>
                     <div className="text-right w-1/3">
                         <h2 className="text-3xl font-bold uppercase text-gray-700">Receipt</h2>
@@ -47,7 +47,6 @@ export const ReceiptTemplate = React.forwardRef<HTMLDivElement, ReceiptTemplateP
                     <h3 className="font-bold text-gray-600 mb-1 text-sm">Billed To:</h3>
                     <p className="font-bold text-base">{customer.name}</p>
                     <p className="text-xs">{customer.address}</p>
-                    <p className="text-xs">{customer.email}</p>
                     </div>
                     <div className="text-right">
                     <h3 className="font-bold text-gray-600 mb-1 text-sm">Payment Details:</h3>
@@ -115,5 +114,3 @@ export const ReceiptTemplate = React.forwardRef<HTMLDivElement, ReceiptTemplateP
 });
 
 ReceiptTemplate.displayName = 'ReceiptTemplate';
-
-    
