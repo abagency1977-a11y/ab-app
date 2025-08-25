@@ -286,17 +286,18 @@ async function getNextId(transaction: Transaction, counterName: string, prefix: 
 export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): Promise<Order> => {
     const customerRef = doc(db, "customers", orderData.customerId);
     
+    // Perform reads outside the transaction
+    const previousBalance = await getCustomerBalance(orderData.customerId);
+
     let newOrderWithId: Order;
 
     try {
         await runTransaction(db, async (transaction) => {
-            // --- ALL READS FIRST ---
+            // --- SINGLE READ FIRST ---
             const customerSnap = await transaction.get(customerRef);
             if (!customerSnap.exists()) throw new Error("Customer not found");
-            
             const customerName = customerSnap.data()?.name;
-            const previousBalance = await getCustomerBalance(orderData.customerId);
-            
+
             // --- ALL WRITES AFTER ---
             const orderId = await getNextId(transaction, 'orderCounter', 'ORD');
 
@@ -357,6 +358,7 @@ export const updateOrder = async (orderData: Order): Promise<void> => {
 
     try {
         await runTransaction(db, async (transaction) => {
+             // --- ALL READS FIRST ---
             const originalOrderSnap = await transaction.get(orderRef);
             if (!originalOrderSnap.exists()) {
                 throw new Error("Order to update does not exist.");
@@ -364,9 +366,8 @@ export const updateOrder = async (orderData: Order): Promise<void> => {
             const originalOrder = originalOrderSnap.data() as Order;
             const customerRef = doc(db, "customers", orderData.customerId);
             
+            // --- ALL WRITES AFTER ---
             orderData.isOpeningBalance = orderData.items.some(item => item.productName === 'Opening Balance');
-
-            // --- ALL WRITES ---
             
             // 1. Update customer totalSpent first (as it's a separate doc)
             let netValueDifference = 0;
@@ -787,3 +788,5 @@ export const resetDatabaseForFreshStart = async () => {
         throw new Error("Failed to reset the database.");
     }
 };
+
+    
