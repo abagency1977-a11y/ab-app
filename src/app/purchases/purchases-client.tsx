@@ -61,8 +61,7 @@ export function PurchasesClient({ initialPurchases, initialSuppliers, initialPro
     const filteredPurchases = useMemo(() => {
         return purchases.filter(p =>
             p.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            p.supplierName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            p.billNumber.toLowerCase().includes(searchQuery.toLowerCase())
+            p.supplierName.toLowerCase().includes(searchQuery.toLowerCase())
         ).sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime());
     }, [purchases, searchQuery]);
 
@@ -131,7 +130,7 @@ export function PurchasesClient({ initialPurchases, initialSuppliers, initialPro
                 </Button>
             </div>
             <Input 
-                placeholder="Search by ID, Supplier, or Bill No..."
+                placeholder="Search by ID or Supplier..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="max-w-sm"
@@ -142,7 +141,6 @@ export function PurchasesClient({ initialPurchases, initialSuppliers, initialPro
                         <TableRow>
                             <TableHead>Purchase ID</TableHead>
                             <TableHead>Supplier</TableHead>
-                            <TableHead>Bill No.</TableHead>
                             <TableHead>Date</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead className="text-right">Balance Due</TableHead>
@@ -155,7 +153,6 @@ export function PurchasesClient({ initialPurchases, initialSuppliers, initialPro
                             <TableRow key={purchase.id} onClick={() => setSelectedPurchase(purchase)} className="cursor-pointer">
                                 <TableCell className="font-medium">{purchase.id}</TableCell>
                                 <TableCell>{purchase.supplierName}</TableCell>
-                                <TableCell>{purchase.billNumber}</TableCell>
                                 <TableCell>{new Date(purchase.purchaseDate).toLocaleDateString('en-IN')}</TableCell>
                                 <TableCell>
                                     <Badge variant={purchase.balanceDue <= 0 ? 'default' : 'secondary'}>
@@ -264,7 +261,6 @@ function AddPurchaseDialog({ isOpen, onOpenChange, suppliers, products, onPurcha
 }) {
     const [supplierId, setSupplierId] = useState<string>('');
     const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
-    const [billNumber, setBillNumber] = useState('');
     const [items, setItems] = useState<PurchaseItemState[]>([]);
     const [currentItem, setCurrentItem] = useState<PurchaseItemState>(initialItemState);
     const [paymentAmount, setPaymentAmount] = useState('');
@@ -277,7 +273,6 @@ function AddPurchaseDialog({ isOpen, onOpenChange, suppliers, products, onPurcha
     const resetForm = useCallback(() => {
         setSupplierId('');
         setPurchaseDate(new Date().toISOString().split('T')[0]);
-        setBillNumber('');
         setItems([]);
         setCurrentItem(initialItemState);
         setPaymentAmount('');
@@ -319,10 +314,10 @@ function AddPurchaseDialog({ isOpen, onOpenChange, suppliers, products, onPurcha
 
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        if (!supplierId || items.length === 0 || !billNumber) {
+        if (!supplierId || items.length === 0) {
             toast({
                 title: "Validation Error",
-                description: 'Please select a supplier, enter a bill number, and add at least one item.',
+                description: 'Please select a supplier and add at least one item.',
                 variant: 'destructive'
             });
             return;
@@ -337,7 +332,6 @@ function AddPurchaseDialog({ isOpen, onOpenChange, suppliers, products, onPurcha
         const purchaseData: Omit<Purchase, 'id' | 'supplierName'> = {
             supplierId,
             purchaseDate,
-            billNumber,
             items: items.map(item => {
                 const product = products.find(p => p.id === item.productId)!;
                 return {
@@ -382,7 +376,7 @@ function AddPurchaseDialog({ isOpen, onOpenChange, suppliers, products, onPurcha
                     <ScrollArea className="h-[70vh]">
                         <div className="space-y-4 p-4">
                             <Card>
-                                <CardContent className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <Label>Supplier</Label>
                                         <Combobox options={supplierOptions} value={supplierId} onValueChange={setSupplierId} placeholder="Select a supplier" searchPlaceholder="Search suppliers..." emptyPlaceholder="No supplier found." />
@@ -390,10 +384,6 @@ function AddPurchaseDialog({ isOpen, onOpenChange, suppliers, products, onPurcha
                                     <div className="space-y-2">
                                         <Label>Purchase Date</Label>
                                         <Input type="date" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)} required />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Supplier Bill No.</Label>
-                                        <Input value={billNumber} onChange={e => setBillNumber(e.target.value)} required />
                                     </div>
                                 </CardContent>
                             </Card>

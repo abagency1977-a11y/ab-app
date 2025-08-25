@@ -6,7 +6,7 @@ import type { Customer, Order } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowLeft, Mail, Phone, Home, IndianRupee, Calendar, CheckCircle, AlertCircle, Download } from 'lucide-react';
+import { ArrowLeft, Phone, Home, IndianRupee, Calendar, CheckCircle, AlertCircle, Download } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -94,7 +94,6 @@ export function CustomerDetailsClient({ customer, orders }: { customer: Customer
         doc.text(`Phone: ${customer.phone}`, pageWidth - margin, yPos, { align: 'right' });
         yPos += 5;
         doc.text(`Address: ${customer.address}`, margin, yPos);
-        doc.text(`Email: ${customer.email}`, pageWidth - margin, yPos, { align: 'right' });
         yPos += 10;
 
 
@@ -164,8 +163,7 @@ export function CustomerDetailsClient({ customer, orders }: { customer: Customer
                         <InfoCard icon={CheckCircle} label="Total Paid" value={formatNumber(totalPaid)} className="text-green-700" />
                         <InfoCard icon={AlertCircle} label="Total Due" value={formatNumber(totalDue)} className={totalDue > 0 ? "text-red-700" : ""} />
                     </div>
-                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <InfoCard icon={Mail} label="Email" value={customer.email} />
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <InfoCard icon={Phone} label="Phone" value={customer.phone} />
                         <InfoCard icon={Home} label="Address" value={customer.address} />
                      </div>

@@ -2,7 +2,6 @@
 export interface Customer {
   id: string;
   name: string;
-  email: string;
   phone: string;
   address: string;
   transactionHistory: {
@@ -17,7 +16,6 @@ export interface Supplier {
   id: string;
   name: string;
   contactPerson?: string;
-  email: string;
   phone: string;
   address: string;
   gstin?: string;
@@ -78,7 +76,6 @@ export interface Purchase {
     supplierId: string;
     supplierName: string;
     purchaseDate: string;
-    billNumber: string;
     items: PurchaseItem[];
     total: number;
     payments: PurchasePayment[];

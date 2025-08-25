@@ -32,7 +32,6 @@ function AddCustomerDialog({ isOpen, onOpenChange, onCustomerAdded }: {
     onCustomerAdded: (customer: Customer) => void;
 }) {
     const nameRef = useRef<HTMLInputElement>(null);
-    const emailRef = useRef<HTMLInputElement>(null);
     const phoneRef = useRef<HTMLInputElement>(null);
     const addressRef = useRef<HTMLInputElement>(null);
     const { toast } = useToast();
@@ -40,15 +39,14 @@ function AddCustomerDialog({ isOpen, onOpenChange, onCustomerAdded }: {
     const handleAddCustomer = async () => {
         const newCustomerData = {
             name: nameRef.current?.value || '',
-            email: emailRef.current?.value || '',
             phone: phoneRef.current?.value || '',
             address: addressRef.current?.value || '',
         };
 
-        if (!newCustomerData.name || !newCustomerData.email) {
+        if (!newCustomerData.name) {
             toast({
                 title: "Validation Error",
-                description: "Customer name and email are required.",
+                description: "Customer name is required.",
                 variant: 'destructive',
             });
             return;
@@ -85,10 +83,6 @@ function AddCustomerDialog({ isOpen, onOpenChange, onCustomerAdded }: {
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="name" className="text-right">Name</Label>
                         <Input id="name" name="name" ref={nameRef} className="col-span-3" required />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="email" className="text-right">Email</Label>
-                        <Input id="email" name="email" ref={emailRef} type="email" className="col-span-3" required />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="phone" className="text-right">Phone</Label>
@@ -165,10 +159,6 @@ function EditCustomerDialog({ isOpen, onOpenChange, onCustomerUpdated, customer 
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="name" className="text-right">Name</Label>
                         <Input id="name" name="name" value={formData.name || ''} onChange={handleChange} className="col-span-3" required />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="email" className="text-right">Email</Label>
-                        <Input id="email" name="email" value={formData.email || ''} onChange={handleChange} type="email" className="col-span-3" required />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="phone" className="text-right">Phone</Label>
@@ -252,8 +242,7 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
     };
 
     const filteredCustomers = sortedCustomers.filter(customer =>
-        customer.name.toLowerCase().includes(search.toLowerCase()) ||
-        customer.email.toLowerCase().includes(search.toLowerCase())
+        customer.name.toLowerCase().includes(search.toLowerCase())
     );
     
     const handleCustomerAdded = (newCustomer: Customer) => {
@@ -340,7 +329,7 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                                     Customer <ArrowUpDown className="ml-2 h-4 w-4" />
                                 </Button>
                             </TableHead>
-                            <TableHead>Contact</TableHead>
+                            <TableHead>Phone</TableHead>
                             <TableHead>
                                <Button variant="ghost" onClick={() => requestSort('transactionHistory.totalSpent')}>
                                     Total Ordered <ArrowUpDown className="ml-2 h-4 w-4" />
@@ -355,8 +344,7 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                             <TableRow key={customer.id}>
                                 <TableCell className="font-medium">{customer.name}</TableCell>
                                 <TableCell>
-                                    <div className="text-sm">{customer.email}</div>
-                                    <div className="text-xs text-muted-foreground">{customer.phone}</div>
+                                    <div className="text-sm text-muted-foreground">{customer.phone}</div>
                                 </TableCell>
                                 <TableCell>
                                     {formatNumber(customer.transactionHistory.totalSpent)}
@@ -418,10 +406,6 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
                             </div>
                         </CardHeader>
                         <CardContent className="space-y-2">
-                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <Mail className="h-4 w-4" />
-                                <span>{customer.email}</span>
-                            </div>
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                 <Phone className="h-4 w-4" />
                                 <span>{customer.phone || 'N/A'}</span>

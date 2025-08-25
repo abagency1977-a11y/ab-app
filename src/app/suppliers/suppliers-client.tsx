@@ -50,10 +50,10 @@ function SupplierDialog({
     };
 
     const handleSubmit = async () => {
-        if (!formData.name || !formData.email) {
+        if (!formData.name) {
             toast({
                 title: "Validation Error",
-                description: "Supplier name and email are required.",
+                description: "Supplier name is required.",
                 variant: 'destructive',
             });
             return;
@@ -104,10 +104,6 @@ function SupplierDialog({
                         <Input id="contactPerson" name="contactPerson" value={formData.contactPerson || ''} onChange={handleChange} className="col-span-3" />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="email" className="text-right">Email</Label>
-                        <Input id="email" name="email" value={formData.email || ''} onChange={handleChange} type="email" className="col-span-3" required />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="phone" className="text-right">Phone</Label>
                         <Input id="phone" name="phone" value={formData.phone || ''} onChange={handleChange} className="col-span-3" />
                     </div>
@@ -146,8 +142,7 @@ export function SuppliersClient({ initialSuppliers }: { initialSuppliers: Suppli
     const filteredSuppliers = useMemo(() => {
         return suppliers.filter(supplier =>
             supplier.name.toLowerCase().includes(search.toLowerCase()) ||
-            (supplier.contactPerson && supplier.contactPerson.toLowerCase().includes(search.toLowerCase())) ||
-            supplier.email.toLowerCase().includes(search.toLowerCase())
+            (supplier.contactPerson && supplier.contactPerson.toLowerCase().includes(search.toLowerCase()))
         ).sort((a,b) => a.name.localeCompare(b.name));
     }, [suppliers, search]);
 
@@ -229,7 +224,6 @@ export function SuppliersClient({ initialSuppliers }: { initialSuppliers: Suppli
                         <TableRow>
                             <TableHead>Supplier</TableHead>
                             <TableHead>Contact Person</TableHead>
-                            <TableHead>Email</TableHead>
                             <TableHead>Phone</TableHead>
                             <TableHead>Actions</TableHead>
                         </TableRow>
@@ -239,7 +233,6 @@ export function SuppliersClient({ initialSuppliers }: { initialSuppliers: Suppli
                             <TableRow key={supplier.id}>
                                 <TableCell className="font-medium">{supplier.name}</TableCell>
                                 <TableCell>{supplier.contactPerson || 'N/A'}</TableCell>
-                                <TableCell>{supplier.email}</TableCell>
                                 <TableCell>{supplier.phone}</TableCell>
                                 <TableCell>
                                     <DropdownMenu>
@@ -293,10 +286,6 @@ export function SuppliersClient({ initialSuppliers }: { initialSuppliers: Suppli
                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                 <User className="h-4 w-4" />
                                 <span>{supplier.contactPerson || 'No contact person'}</span>
-                            </div>
-                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <Mail className="h-4 w-4" />
-                                <span>{supplier.email}</span>
                             </div>
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                 <Phone className="h-4 w-4" />
