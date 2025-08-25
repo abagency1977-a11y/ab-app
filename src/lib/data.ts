@@ -74,21 +74,21 @@ const mockPurchases: Omit<Purchase, 'id'>[] = [];
 
 // GET ALL DATA
 export async function getAllData() {
-    const customers = getCustomers();
-    const orders = getOrders();
-    const products = getProducts();
-    const suppliers = getSuppliers();
-    const purchases = getPurchases();
+    const customersPromise = getCustomers();
+    const ordersPromise = getOrders();
+    const productsPromise = getProducts();
+    const suppliersPromise = getSuppliers();
+    const purchasesPromise = getPurchases();
 
-    const [customersData, ordersData, productsData, suppliersData, purchasesData] = await Promise.all([customers, orders, products, suppliers, purchases]);
+    const [customers, orders, products, suppliers, purchases] = await Promise.all([
+        customersPromise,
+        ordersPromise,
+        productsPromise,
+        suppliersPromise,
+        purchasesPromise
+    ]);
     
-    return {
-        customers: customersData,
-        orders: ordersData,
-        products: productsData,
-        suppliers: suppliersData,
-        purchases: purchasesData,
-    };
+    return { customers, orders, products, suppliers, purchases };
 }
 
 
@@ -157,8 +157,7 @@ export const getCustomerBalance = async (customerId: string): Promise<number> =>
         // Fetch all orders for the customer
         const ordersQuery = query(
             collection(db, 'orders'), 
-            where('customerId', '==', customerId),
-            orderBy('orderDate', 'desc')
+            where('customerId', '==', customerId)
         );
         const snapshot = await getDocs(ordersQuery);
         
@@ -166,8 +165,12 @@ export const getCustomerBalance = async (customerId: string): Promise<number> =>
             return 0;
         }
 
+        const customerOrders = snapshot.docs.map(doc => doc.data() as Order);
+        // Sort in memory to avoid needing a composite index
+        customerOrders.sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
+
         // The most recent order's balance due is the customer's total balance.
-        const mostRecentOrder = snapshot.docs[0].data() as Order;
+        const mostRecentOrder = customerOrders[0];
         return mostRecentOrder.balanceDue ?? 0;
 
     } catch (error) {
@@ -809,4 +812,3 @@ export const resetDatabaseForFreshStart = async () => {
         throw new Error("Failed to reset the database.");
     }
 };
-
