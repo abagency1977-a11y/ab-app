@@ -406,7 +406,7 @@ export const deleteOrder = async (order: Order): Promise<void> => {
             if (customerSnap.exists() && !order.isOpeningBalance) {
                 const netOrderValue = order.total - order.discount + order.deliveryFees;
                 transaction.update(customerRef, {
-                    'transactionHistory.totalSpent': increment(-netValueValue)
+                    'transactionHistory.totalSpent': increment(-netOrderValue)
                 });
             }
 

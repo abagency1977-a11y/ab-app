@@ -2,17 +2,18 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import type { Purchase, Supplier, Product, PurchaseItem, PaymentMode } from '@/lib/types';
+import type { Purchase, Supplier, Product, PurchaseItem, PaymentMode, PurchasePayment } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, Loader2, Edit, Trash2, MoreHorizontal } from 'lucide-react';
+import { PlusCircle, Loader2, Edit, Trash2, MoreHorizontal, Receipt } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { addPurchase, getProducts } from '@/lib/data';
+import { addPurchase, getProducts, addPaymentToPurchase } from '@/lib/data';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -35,6 +36,7 @@ export function PurchasesClient({ initialPurchases, initialSuppliers, initialPro
     const [isLoading, setIsLoading] = useState(false);
     const [isAddPurchaseOpen, setIsAddPurchaseOpen] = useState(false);
     const [purchaseToEdit, setPurchaseToEdit] = useState<Purchase | null>(null);
+    const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
     const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState('');
     const [isMounted, setIsMounted] = useState(false);
@@ -81,6 +83,28 @@ export function PurchasesClient({ initialPurchases, initialSuppliers, initialPro
           throw e;
        }
     };
+    
+    const handleAddPaymentToPurchase = async (payment: Omit<PurchasePayment, 'id'>) => {
+        if (!selectedPurchase) return;
+        
+        try {
+            const updatedPurchase = await addPaymentToPurchase(selectedPurchase.id, payment);
+            
+            setPurchases(prev => prev.map(p => p.id === updatedPurchase.id ? updatedPurchase : p));
+            setSelectedPurchase(updatedPurchase);
+            
+            toast({
+                title: 'Payment Recorded',
+                description: `Payment for purchase ${updatedPurchase.id} has been recorded.`,
+            });
+        } catch(e: any) {
+            toast({
+                title: 'Error',
+                description: e.message || 'Failed to record payment.',
+                variant: 'destructive'
+            });
+        }
+    };
 
     if (!isMounted) {
         return (
@@ -121,13 +145,14 @@ export function PurchasesClient({ initialPurchases, initialSuppliers, initialPro
                             <TableHead>Bill No.</TableHead>
                             <TableHead>Date</TableHead>
                             <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Balance Due</TableHead>
                             <TableHead className="text-right">Total</TableHead>
                             <TableHead className="text-center">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {filteredPurchases.map((purchase) => (
-                            <TableRow key={purchase.id}>
+                            <TableRow key={purchase.id} onClick={() => setSelectedPurchase(purchase)} className="cursor-pointer">
                                 <TableCell className="font-medium">{purchase.id}</TableCell>
                                 <TableCell>{purchase.supplierName}</TableCell>
                                 <TableCell>{purchase.billNumber}</TableCell>
@@ -137,28 +162,16 @@ export function PurchasesClient({ initialPurchases, initialSuppliers, initialPro
                                         {purchase.balanceDue <= 0 ? 'Paid' : 'Partial'}
                                     </Badge>
                                 </TableCell>
+                                <TableCell className="text-right text-red-600 font-medium">
+                                    {formatNumberForDisplay(purchase.balanceDue)}
+                                </TableCell>
                                 <TableCell className="text-right">
                                     {formatNumberForDisplay(purchase.total)}
                                 </TableCell>
                                 <TableCell className="text-center">
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button variant="ghost" className="h-8 w-8 p-0">
-                                                <span className="sr-only">Open menu</span>
-                                                <MoreHorizontal className="h-4 w-4" />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                            {/* <DropdownMenuItem>
-                                                <Edit className="mr-2 h-4 w-4" />
-                                                Edit
-                                            </DropdownMenuItem> */}
-                                            {/* <DropdownMenuItem className="text-red-600">
-                                                <Trash2 className="mr-2 h-4 w-4" />
-                                                Delete
-                                            </DropdownMenuItem> */}
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
+                                    <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setSelectedPurchase(purchase); }}>
+                                        <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
                                 </TableCell>
                             </TableRow>
                         ))}
@@ -179,6 +192,61 @@ export function PurchasesClient({ initialPurchases, initialSuppliers, initialPro
                 onPurchaseAdded={handleAddPurchase}
                 existingPurchase={purchaseToEdit}
             />
+            
+            <Sheet open={!!selectedPurchase && !isAddPurchaseOpen && !purchaseToEdit} onOpenChange={(open) => !open && setSelectedPurchase(null)}>
+                <SheetContent className="sm:max-w-lg w-[90vw] flex flex-col">
+                    {selectedPurchase && (
+                        <>
+                        <SheetHeader>
+                            <SheetTitle>Purchase: {selectedPurchase.id}</SheetTitle>
+                            <SheetDescription>
+                                Manage payments for {selectedPurchase.supplierName}.
+                            </SheetDescription>
+                        </SheetHeader>
+                        <div className="space-y-6 py-4 overflow-y-auto flex-1 pr-6">
+                            <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">Total Amount:</span>
+                                <span>{formatNumberForDisplay(selectedPurchase.total)}</span>
+                            </div>
+                            <div className="flex justify-between font-bold text-lg">
+                                <span className="text-red-600">Balance Due:</span>
+                                <span className="text-red-600">{formatNumberForDisplay(selectedPurchase.balanceDue)}</span>
+                            </div>
+
+                            <Separator />
+                            
+                            {selectedPurchase.balanceDue > 0 && (
+                                <PaymentForm 
+                                    balanceDue={selectedPurchase.balanceDue}
+                                    onAddPayment={handleAddPaymentToPurchase} 
+                                />
+                            )}
+
+                            <Separator />
+
+                            <div className="space-y-2">
+                               <h4 className="font-medium">Payment History</h4>
+                                <div className="space-y-4 max-h-[40vh] overflow-y-auto p-1">
+                                    {(selectedPurchase.payments && selectedPurchase.payments.length > 0) ? (
+                                        selectedPurchase.payments.map(payment => (
+                                             <div key={payment.id} className="flex justify-between items-center text-sm p-2 bg-muted/50 rounded-lg">
+                                                <div>
+                                                    <p className="font-medium">{formatNumberForDisplay(payment.amount)}</p>
+                                                    <p className="text-xs text-muted-foreground">{new Date(payment.paymentDate).toLocaleDateString('en-IN')} via {payment.method}</p>
+                                                </div>
+                                             </div>
+                                        ))
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground text-center py-4">No payments recorded yet.</p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                        </>
+                    )}
+                </SheetContent>
+            </Sheet>
+
         </div>
     );
 }
@@ -437,5 +505,74 @@ function AddPurchaseDialog({ isOpen, onOpenChange, suppliers, products, onPurcha
                 </form>
             </DialogContent>
         </Dialog>
+    );
+}
+
+function PaymentForm({ balanceDue, onAddPayment }: { balanceDue: number; onAddPayment: (payment: Omit<PurchasePayment, 'id'>) => void }) {
+    const [amount, setAmount] = useState('');
+    const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+    const [paymentMethod, setPaymentMethod] = useState<PaymentMode>('Cash');
+    const [notes, setNotes] = useState('');
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const paymentAmount = parseFloat(amount);
+        if (isNaN(paymentAmount) || paymentAmount <= 0) {
+            alert('Please enter a valid amount.');
+            return;
+        }
+        if (paymentAmount > balanceDue) {
+            alert('Payment cannot be greater than the balance due.');
+            return;
+        }
+        
+        onAddPayment({
+            amount: paymentAmount,
+            paymentDate,
+            method: paymentMethod,
+            notes,
+        });
+
+        // Reset form
+        setAmount('');
+        setNotes('');
+    };
+
+    return (
+        <Card>
+            <form onSubmit={handleSubmit}>
+                <CardContent className="p-4 space-y-4">
+                    <DialogTitle className="text-lg">Record a Payment</DialogTitle>
+                    <div className="space-y-2">
+                        <Label htmlFor="amount">Amount Paid</Label>
+                        <Input id="amount" type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder={String(balanceDue)} max={balanceDue} required />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="paymentDate">Payment Date</Label>
+                            <Input id="paymentDate" type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} required />
+                        </div>
+                         <div className="space-y-2">
+                            <Label htmlFor="paymentMethod">Payment Method</Label>
+                            <Select value={paymentMethod} onValueChange={v => setPaymentMethod(v as PaymentMode)}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Cash">Cash</SelectItem>
+                                    <SelectItem value="Card">Card</SelectItem>
+                                    <SelectItem value="UPI">UPI</SelectItem>
+                                    <SelectItem value="Cheque">Cheque</SelectItem>
+                                    <SelectItem value="Online Transfer">Online Transfer</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="notes">Notes (Optional)</Label>
+                        <Input id="notes" value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. Transaction ID" />
+                    </div>
+                     <Button type="submit" className="w-full">Record Payment</Button>
+                </CardContent>
+            </form>
+        </Card>
     );
 }
