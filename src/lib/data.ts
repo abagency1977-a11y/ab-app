@@ -293,12 +293,12 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
 
     try {
         await runTransaction(db, async (transaction) => {
-            // --- SINGLE READ FIRST ---
+            // --- ALL READS FIRST ---
             const customerSnap = await transaction.get(customerRef);
             if (!customerSnap.exists()) throw new Error("Customer not found");
-            const customerName = customerSnap.data()?.name;
-
+            
             // --- ALL WRITES AFTER ---
+            const customerName = customerSnap.data()?.name;
             const orderId = await getNextId(transaction, 'orderCounter', 'ORD');
 
             newOrderWithId = { 
@@ -525,16 +525,18 @@ export const getPurchases = async (): Promise<Purchase[]> => {
 };
 
 export const addPurchase = async (purchaseData: Omit<Purchase, 'id' | 'supplierName'>): Promise<Purchase> => {
-    const supplierRef = doc(db, "suppliers", purchaseData.supplierId);
+    
     let newPurchaseWithId: Purchase;
 
     try {
         await runTransaction(db, async (transaction) => {
+            const supplierRef = doc(db, "suppliers", purchaseData.supplierId);
             const supplierSnap = await transaction.get(supplierRef);
             if (!supplierSnap.exists()) throw new Error("Supplier not found");
-
-            const purchaseId = await getNextId(transaction, 'purchaseCounter', 'PUR');
             const supplierName = supplierSnap.data()?.name;
+            
+            const purchaseId = await getNextId(transaction, 'purchaseCounter', 'PUR');
+
 
             newPurchaseWithId = { ...purchaseData, supplierName, id: purchaseId };
             

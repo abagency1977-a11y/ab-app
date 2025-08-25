@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { addPurchase, getProducts, addPaymentToPurchase } from '@/lib/data';
+import { addPurchase, getProducts, addPaymentToPurchase, getAllData } from '@/lib/data';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -48,7 +48,7 @@ export function PurchasesClient({ initialPurchases, initialSuppliers, initialPro
     const openPurchaseDialog = async () => {
         setIsLoading(true);
         try {
-            const freshProducts = await getProducts();
+            const { products: freshProducts } = await getAllData();
             setProducts(freshProducts);
             setIsAddPurchaseOpen(true);
         } catch(e) {
@@ -68,7 +68,8 @@ export function PurchasesClient({ initialPurchases, initialSuppliers, initialPro
     const handleAddPurchase = async (newPurchaseData: Omit<Purchase, 'id' | 'supplierName'>) => {
        try {
            const newPurchase = await addPurchase(newPurchaseData);
-           setPurchases(prev => [newPurchase, ...prev]);
+           const { purchases: allPurchases } = await getAllData();
+           setPurchases(allPurchases);
            toast({
                title: "Purchase Recorded",
                description: `Purchase ${newPurchase.id} has been successfully created.`,
@@ -88,9 +89,11 @@ export function PurchasesClient({ initialPurchases, initialSuppliers, initialPro
         
         try {
             const updatedPurchase = await addPaymentToPurchase(selectedPurchase.id, payment);
-            
-            setPurchases(prev => prev.map(p => p.id === updatedPurchase.id ? updatedPurchase : p));
-            setSelectedPurchase(updatedPurchase);
+            const { purchases: allPurchases } = await getAllData();
+            setPurchases(allPurchases);
+
+            const newlyUpdatedPurchase = allPurchases.find(p => p.id === updatedPurchase.id);
+            setSelectedPurchase(newlyUpdatedPurchase || null);
             
             toast({
                 title: 'Payment Recorded',
