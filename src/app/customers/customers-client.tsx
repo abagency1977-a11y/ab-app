@@ -13,7 +13,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getOrders, getCustomers, addCustomer, deleteCustomer as deleteCustomerFromDB, updateCustomer, updateOrder } from '@/lib/data';
+import { addCustomer, deleteCustomer as deleteCustomerFromDB, updateCustomer, updateOrder, getAllData } from '@/lib/data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { allocateBulkPayment, AllocateBulkPaymentOutput } from '@/ai/flows/allocate-bulk-payment';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -178,9 +178,9 @@ function EditCustomerDialog({ isOpen, onOpenChange, onCustomerUpdated, customer 
     );
 }
 
-export function CustomersClient({ customers: initialCustomers }: { customers: Customer[] }) {
+export function CustomersClient({ customers: initialCustomers, orders: initialOrders }: { customers: Customer[], orders: Order[] }) {
     const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
-    const [orders, setOrders] = useState<Order[]>([]);
+    const [orders, setOrders] = useState<Order[]>(initialOrders);
     const [search, setSearch] = useState('');
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'ascending' | 'descending' } | null>(null);
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -194,14 +194,10 @@ export function CustomersClient({ customers: initialCustomers }: { customers: Cu
 
      useEffect(() => {
         setIsMounted(true);
-        getOrders().then(setOrders);
     }, []);
 
     const refreshData = async () => {
-        const [refreshedCustomers, refreshedOrders] = await Promise.all([
-            getCustomers(),
-            getOrders()
-        ]);
+        const { customers: refreshedCustomers, orders: refreshedOrders } = await getAllData();
         setCustomers(refreshedCustomers);
         setOrders(refreshedOrders);
     };
@@ -655,3 +651,5 @@ function BulkPaymentDialog({ isOpen, onOpenChange, customer, onPaymentSuccess }:
         </Dialog>
     );
 }
+
+    

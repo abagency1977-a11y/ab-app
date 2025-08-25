@@ -20,7 +20,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { ReceiptTemplate } from '@/components/receipt-template';
-import { getCustomers, getOrders, addPaymentToOrder, deleteOrder } from '@/lib/data';
+import { addPaymentToOrder, deleteOrder, getAllData } from '@/lib/data';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const formatNumber = (value: number | undefined) => {
@@ -75,7 +75,7 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
     const [allCustomers, setAllCustomers] = useState<Customer[]>(initialCustomers);
     const [selectedInvoice, setSelectedInvoice] = useState<Order | null>(null);
     const [invoiceToDelete, setInvoiceToDelete] = useState<Order | null>(null);
-    const [receiptToPrint, setReceiptToPrint] =<{order: Order, payment: Payment, historicalPayments: Payment[]} | null>(null);
+    const [receiptToPrint, setReceiptToPrint] = useState<{order: Order, payment: Payment, historicalPayments: Payment[]} | null>(null);
     const [isReceiptLoading, setIsReceiptLoading] = useState(false);
     const { toast } = useToast();
     const receiptRef = useRef<HTMLDivElement>(null);
@@ -103,7 +103,7 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
             const updatedOrder = await addPaymentToOrder(selectedInvoice.id, payment);
             
             // After a successful payment, refresh all orders to get recalculated balances
-            const refreshedOrders = await getOrders();
+            const { orders: refreshedOrders } = await getAllData();
             setAllInvoices(refreshedOrders);
             
             // Find the selected invoice in the refreshed list to update the sheet
@@ -188,7 +188,7 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
         if (!invoiceToDelete) return;
         try {
             await deleteOrder(invoiceToDelete);
-            const refreshedOrders = await getOrders();
+            const { orders: refreshedOrders } = await getAllData();
             setAllInvoices(refreshedOrders);
             toast({
                 title: "Invoice Deleted",

@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
@@ -16,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { addOrder, addCustomer, deleteOrder as deleteOrderFromDB, getCustomerBalance, getProducts, updateOrder, getOrders } from '@/lib/data';
+import { addOrder, addCustomer, deleteOrder as deleteOrderFromDB, getCustomerBalance, getProducts, updateOrder, getAllData } from '@/lib/data';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
@@ -46,7 +45,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
     const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState('');
-    const [dateFilter, setDateFilter] useState('All');
+    const [dateFilter, setDateFilter] = useState('All');
     const [isMounted, setIsMounted] = useState(false);
     
     useEffect(() => {
@@ -318,7 +317,8 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     const handleAddOrder = async (newOrderData: Omit<Order, 'id' | 'customerName'>) => {
        try {
            const newOrder = await addOrder(newOrderData);
-           setOrders(prevOrders => [newOrder, ...prevOrders].sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()));
+           const { orders: allOrders } = await getAllData();
+           setOrders(allOrders);
            toast({
                title: "Order Placed",
                description: `Order ${newOrder.id} has been successfully created.`,
@@ -339,7 +339,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
        try {
            await updateOrder(updatedOrderData);
            // After updating, we need to refresh ALL orders for that customer to get the recalculated balances
-           const allOrders = await getOrders();
+           const { orders: allOrders } = await getAllData();
            setOrders(allOrders);
            toast({
                title: "Order Updated",
@@ -361,7 +361,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         try {
             await deleteOrderFromDB(orderToDelete);
             // After deleting, we need to refresh ALL orders for that customer to get the recalculated balances
-            const allOrders = await getOrders();
+            const { orders: allOrders } = await getAllData();
             setOrders(allOrders);
             toast({
                 title: "Order Deleted",
@@ -557,7 +557,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     onCustomerAdded: (customer: Omit<Customer, 'id'|'transactionHistory' | 'orders'>) => Promise<Customer | null>,
     existingOrder: Order | null,
 }) {
-    const [customerId, setCustomerId] useState('');
+    const [customerId, setCustomerId] = useState('');
     const [orderDate, setOrderDate] = useState(new Date().toISOString().split('T')[0]);
     const [items, setItems] = useState<OrderItemState[]>([]);
     const [currentItem, setCurrentItem] = useState<OrderItemState>(initialItemState);
@@ -1074,3 +1074,5 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         </>
     );
 }
+
+    

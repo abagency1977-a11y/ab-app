@@ -1,7 +1,7 @@
 
 import { db } from './firebase';
 import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference, updateDoc, increment, where, orderBy } from 'firebase/firestore';
-import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert, LowStockAlert, Supplier, Purchase, PurchasePayment } from './types';
+import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert, LowStockAlert, Supplier, Purchase, PurchasePayment, OrderStatus } from './types';
 import { differenceInDays, addDays, startOfToday, subMonths } from 'date-fns';
 
 // MOCK DATA - This will be used to seed the database for the first time.
@@ -72,6 +72,24 @@ const mockOrders: Omit<Order, 'id'>[] = [];
 const mockSuppliers: Omit<Supplier, 'id'>[] = [];
 const mockPurchases: Omit<Purchase, 'id'>[] = [];
 
+// GET ALL DATA
+export async function getAllData() {
+    const customers = getCustomers();
+    const orders = getOrders();
+    const products = getProducts();
+    const suppliers = getSuppliers();
+    const purchases = getPurchases();
+
+    const [customersData, ordersData, productsData, suppliersData, purchasesData] = await Promise.all([customers, orders, products, suppliers, purchases]);
+    
+    return {
+        customers: customersData,
+        orders: ordersData,
+        products: productsData,
+        suppliers: suppliersData,
+        purchases: purchasesData,
+    };
+}
 
 
 // Function to seed the database
@@ -159,7 +177,7 @@ export const getCustomerBalance = async (customerId: string): Promise<number> =>
 }
 
 
-export const addCustomer = async (customerData: Omit<Customer, 'id' | 'transactionHistory' | 'orders' | 'email'>): Promise<Customer> => {
+export const addCustomer = async (customerData: Omit<Customer, 'id' | 'transactionHistory' | 'orders'>): Promise<Customer> => {
     const newCustomer: Omit<Customer, 'id'> = {
         ...customerData,
         transactionHistory: { totalSpent: 0, lastPurchaseDate: new Date().toISOString().split('T')[0] },
@@ -209,6 +227,16 @@ export const deleteProduct = async(id: string) => {
 
 
 // ORDER & PAYMENT FUNCTIONS
+
+async function getOrders(): Promise<Order[]> {
+    try {
+        const snapshot = await getDocs(collection(db, 'orders'));
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+    } catch (error) {
+        console.error("Error fetching orders: ", error);
+        return [];
+    }
+};
 
 /**
  * Recalculates the entire balance chain for a customer's orders.
@@ -592,9 +620,8 @@ export const addPaymentToPurchase = async (purchaseId: string, payment: Omit<Pur
 
 // DASHBOARD & REPORTING DATA
 export const getDashboardData = async () => {
-    const orders = await getOrders();
-    const customers = await getCustomers();
-    const products = await getProducts();
+    const allData = await getAllData();
+    const { orders, customers, products } = allData;
     const today = startOfToday();
 
     // Basic Dashboard Stats
@@ -782,3 +809,4 @@ export const resetDatabaseForFreshStart = async () => {
         throw new Error("Failed to reset the database.");
     }
 };
+
