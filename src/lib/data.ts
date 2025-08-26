@@ -1,4 +1,5 @@
 
+
 import { db } from './firebase';
 import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference, updateDoc, increment, where, orderBy, Transaction } from 'firebase/firestore';
 import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert, LowStockAlert, Supplier, Purchase, PurchasePayment, OrderStatus } from './types';
@@ -167,7 +168,12 @@ export const getCustomerBalance = async (customerId: string): Promise<number> =>
 
         const customerOrders = snapshot.docs.map(doc => doc.data() as Order);
         // Sort in memory to avoid needing a composite index
-        customerOrders.sort((a, b) => new Date(a.orderDate).getTime() - new Date(b.orderDate).getTime() || a.id.localeCompare(b.id));
+        customerOrders.sort((a, b) => {
+            const dateA = new Date(a.orderDate).getTime();
+            const dateB = new Date(b.orderDate).getTime();
+            if(dateA !== dateB) return dateA - dateB;
+            return a.id.localeCompare(b.id);
+        });
 
         // The most recent order's balance due is the customer's total balance.
         const mostRecentOrder = customerOrders[customerOrders.length - 1];
@@ -268,27 +274,23 @@ async function recalculateCustomerBalances(transaction: Transaction, customerId:
     }
 }
 
-async function getNextId(transaction: Transaction, counterName: string, prefix: string): Promise<string> {
+async function readNextId(transaction: Transaction, counterName: string): Promise<number> {
     const counterRef = doc(db, "counters", counterName);
     const counterSnap = await transaction.get(counterRef);
-    let nextNumber = 1;
-
     if (counterSnap.exists()) {
-        nextNumber = counterSnap.data().currentNumber + 1;
-        transaction.update(counterRef, { currentNumber: nextNumber });
-    } else {
-        transaction.set(counterRef, { currentNumber: nextNumber });
+        return counterSnap.data().currentNumber + 1;
     }
-    
-    return `${prefix}-${String(nextNumber).padStart(4, '0')}`;
+    return 1;
+}
+
+function writeNextId(transaction: Transaction, counterName: string, nextNumber: number): void {
+    const counterRef = doc(db, "counters", counterName);
+    transaction.set(counterRef, { currentNumber: nextNumber }, { merge: true });
 }
 
 export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): Promise<Order> => {
     const customerRef = doc(db, "customers", orderData.customerId);
-    
-    // Perform reads outside the transaction
     const previousBalance = await getCustomerBalance(orderData.customerId);
-
     let newOrderWithId: Order;
 
     try {
@@ -296,10 +298,12 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
             // --- ALL READS FIRST ---
             const customerSnap = await transaction.get(customerRef);
             if (!customerSnap.exists()) throw new Error("Customer not found");
-            
+
+            const nextIdNumber = await readNextId(transaction, 'orderCounter');
+
             // --- ALL WRITES AFTER ---
             const customerName = customerSnap.data()?.name;
-            const orderId = await getNextId(transaction, 'orderCounter', 'ORD');
+            const orderId = `ORD-${String(nextIdNumber).padStart(4, '0')}`;
 
             newOrderWithId = { 
                 ...orderData, 
@@ -325,6 +329,8 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
 
             const newOrderRef = doc(db, "orders", orderId);
             transaction.set(newOrderRef, newOrderWithId);
+            
+            writeNextId(transaction, 'orderCounter', nextIdNumber);
 
             if (!newOrderWithId.isOpeningBalance) {
                 const netOrderValue = newOrderWithId.total - newOrderWithId.discount + newOrderWithId.deliveryFees;
@@ -530,13 +536,16 @@ export const addPurchase = async (purchaseData: Omit<Purchase, 'id' | 'supplierN
 
     try {
         await runTransaction(db, async (transaction) => {
+            // --- READS ---
             const supplierRef = doc(db, "suppliers", purchaseData.supplierId);
             const supplierSnap = await transaction.get(supplierRef);
             if (!supplierSnap.exists()) throw new Error("Supplier not found");
-            const supplierName = supplierSnap.data()?.name;
-            
-            const purchaseId = await getNextId(transaction, 'purchaseCounter', 'PUR');
 
+            const nextIdNumber = await readNextId(transaction, 'purchaseCounter');
+            
+            // --- WRITES ---
+            const supplierName = supplierSnap.data()?.name;
+            const purchaseId = `PUR-${String(nextIdNumber).padStart(4, '0')}`;
 
             newPurchaseWithId = { ...purchaseData, supplierName, id: purchaseId };
             
@@ -548,6 +557,8 @@ export const addPurchase = async (purchaseData: Omit<Purchase, 'id' | 'supplierN
             }
 
             transaction.set(doc(db, "purchases", purchaseId), newPurchaseWithId);
+
+            writeNextId(transaction, 'purchaseCounter', nextIdNumber);
 
             for (const item of newPurchaseWithId.items) {
                 const productRef = doc(db, "products", item.productId);
@@ -790,5 +801,3 @@ export const resetDatabaseForFreshStart = async () => {
         throw new Error("Failed to reset the database.");
     }
 };
-
-    
