@@ -1,10 +1,9 @@
-
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Terminal, UploadCloud, CheckCircle, AlertCircle, Loader2, Image as ImageIcon, Trash } from 'lucide-react';
+import { Terminal, UploadCloud, CheckCircle, AlertCircle, Loader2, Image as ImageIcon, Trash, RefreshCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -198,49 +197,75 @@ const FileUploader = ({ title, description, requiredFilename, acceptedFileType, 
 };
 
 
-function ResetDatabaseCard() {
-    const [isLoading, setIsLoading] = useState(false);
+function DataManagementCard() {
+    const [isLoading, setIsLoading] = useState<null | 'db' | 'payments'>(null);
     const { toast } = useToast();
 
-    const handleReset = async () => {
-        setIsLoading(true);
+    const handleReset = async (type: 'db' | 'payments') => {
+        setIsLoading(type);
+        const endpoint = type === 'db' ? '/api/reset-db' : '/api/reset-payments';
+        const successTitle = type === 'db' ? 'Database Reset Successful' : 'Payments Reset Successful';
+        const successDesc = type === 'db' 
+            ? "Your customers, orders, and suppliers have been cleared. Please refresh the page."
+            : "All order payments have been cleared. Invoices are now marked as Pending. Please refresh.";
+
         try {
-            const response = await fetch('/api/reset-db', { method: 'POST' });
+            const response = await fetch(endpoint, { method: 'POST' });
             const result = await response.json();
 
             if (!response.ok) {
-                throw new Error(result.message || 'Failed to reset database');
+                throw new Error(result.message || 'Failed to perform reset operation');
             }
             
             toast({
-                title: "Database Reset Successful",
-                description: "Your customers, orders, and suppliers have been cleared. Please refresh the page.",
+                title: successTitle,
+                description: successDesc,
             });
         } catch (error: any) {
             toast({
-                title: "Error Resetting Database",
+                title: "Error During Reset",
                 description: error.message,
                 variant: 'destructive',
             });
         } finally {
-            setIsLoading(false);
+            setIsLoading(null);
         }
     };
 
     return (
         <Card className="border-destructive">
             <CardHeader>
-                <CardTitle>Reset Application Data</CardTitle>
+                <CardTitle>Data Management</CardTitle>
                 <CardDescription>
-                    This will permanently delete all customers, suppliers, orders, and invoices. Your inventory will not be affected. This action cannot be undone.
+                    Use these options for major data cleanup. These actions are irreversible.
                 </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex flex-col sm:flex-row gap-4">
                  <AlertDialog>
                     <AlertDialogTrigger asChild>
-                        <Button variant="destructive" disabled={isLoading}>
-                             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash className="mr-2 h-4 w-4" />}
-                            {isLoading ? "Resetting..." : "Reset All Transactional Data"}
+                        <Button variant="outline" disabled={!!isLoading}>
+                             {isLoading === 'payments' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
+                            {isLoading === 'payments' ? "Resetting Payments..." : "Reset All Payments"}
+                        </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                               This will permanently remove ALL payment records from every invoice, resetting them to a "Pending" state. This is useful for clearing corrupted payment data. This action cannot be undone.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleReset('payments')}>Yes, Reset Payments</AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+                 <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                        <Button variant="destructive" disabled={!!isLoading}>
+                             {isLoading === 'db' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash className="mr-2 h-4 w-4" />}
+                            {isLoading === 'db' ? "Resetting Database..." : "Reset All Data"}
                         </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
@@ -252,7 +277,7 @@ function ResetDatabaseCard() {
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleReset}>Yes, Reset Data</AlertDialogAction>
+                            <AlertDialogAction onClick={() => handleReset('db')}>Yes, Reset All Data</AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>
@@ -286,7 +311,7 @@ export function AdminClient() {
                 </CardContent>
             </Card>
 
-            <ResetDatabaseCard />
+            <DataManagementCard />
         </div>
     );
 }
