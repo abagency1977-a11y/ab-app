@@ -1,8 +1,7 @@
 
-
 import { db } from './firebase';
 import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference, updateDoc, increment, where, orderBy, Transaction } from 'firebase/firestore';
-import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert, LowStockAlert, Supplier, Purchase, PurchasePayment, OrderStatus } from './types';
+import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert, LowStockAlert, Supplier, Purchase, PurchasePayment, OrderStatus, PaymentMode } from './types';
 import { differenceInDays, addDays, startOfToday, subMonths } from 'date-fns';
 
 // MOCK DATA - This will be used to seed the database for the first time.
@@ -101,7 +100,6 @@ async function seedCollection(collectionName: string, mockData: any[], idPrefix:
         console.log(`Seeding ${collectionName}...`);
         const batch = writeBatch(db);
         mockData.forEach((item, index) => {
-            // To ensure mock orders can reference mock customers/products, we use predictable IDs during seeding
             const docId = `${idPrefix}-${String(index + 1).padStart(3, '0')}`;
             const docRef = doc(db, collectionName, docId);
             batch.set(docRef, item);
@@ -110,22 +108,6 @@ async function seedCollection(collectionName: string, mockData: any[], idPrefix:
         console.log(`${collectionName} seeded.`);
     }
 }
-
-async function seedDatabase() {
-    try {
-        await seedCollection('customers', mockCustomers, 'CUST');
-        await seedCollection('products', mockProducts, 'PROD');
-        await seedCollection('orders', mockOrders, 'ORD');
-        await seedCollection('suppliers', mockSuppliers, 'SUPP');
-        await seedCollection('purchases', mockPurchases, 'PUR');
-    } catch (error) {
-        console.error("Error seeding database: ", error);
-    }
-}
-
-// Seed the database on startup if it's empty
-// seedDatabase();
-
 
 // CUSTOMER FUNCTIONS
 export const getCustomers = async (): Promise<Customer[]> => {
@@ -251,7 +233,7 @@ function writeNextId(transaction: Transaction, counterName: string, nextNumber: 
 
 type Workload = (transaction: Transaction, orders: Order[]) => Promise<void>;
 
-async function runCustomerBalanceUpdate(customerId: string, performWork: Workload) {
+async function runCustomerBalanceUpdate(customerId: string, workload: Workload) {
     try {
         await runTransaction(db, async (transaction) => {
             // 1. READ ALL customer orders first.
@@ -263,7 +245,7 @@ async function runCustomerBalanceUpdate(customerId: string, performWork: Workloa
             let orders = orderSnaps.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
 
             // 2. Perform the specific work (like adding a payment). This might modify the `orders` array in memory.
-            await performWork(transaction, orders);
+            await workload(transaction, orders);
             
             // 3. Sort orders chronologically to ensure correct balance calculation.
             orders.sort((a, b) => {
@@ -276,6 +258,11 @@ async function runCustomerBalanceUpdate(customerId: string, performWork: Workloa
             // 4. Recalculate balances for the entire chain.
             let previousBalanceDue = 0;
             for (const order of orders) {
+                // Ensure order.id exists before creating a doc reference
+                if (!order.id) {
+                    console.warn("Skipping order in recalculation due to missing ID:", order);
+                    continue;
+                }
                 const orderRef = doc(db, "orders", order.id);
 
                 const currentInvoiceTotal = order.total - order.discount + order.deliveryFees;
@@ -305,8 +292,6 @@ async function runCustomerBalanceUpdate(customerId: string, performWork: Workloa
 
 
 export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): Promise<Order> => {
-    const previousBalance = await getCustomerBalance(orderData.customerId);
-    
     let newOrderWithId!: Order;
 
     await runTransaction(db, async (transaction) => {
@@ -316,6 +301,19 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
         const nextIdNumber = await readNextId(transaction, 'orderCounter');
 
         if (!customerSnap.exists()) throw new Error("Customer not found");
+        
+        const existingOrdersQuery = query(collection(db, 'orders'), where('customerId', '==', orderData.customerId));
+        const existingOrdersSnap = await transaction.get(existingOrdersQuery);
+        const existingOrders = existingOrdersSnap.docs.map(doc => doc.data() as Order);
+        
+        existingOrders.sort((a, b) => {
+            const dateA = new Date(a.orderDate).getTime();
+            const dateB = new Date(b.orderDate).getTime();
+            if (dateA !== dateB) return dateA - dateB;
+            return (a.id || '').localeCompare(b.id || '');
+        });
+
+        const previousBalance = existingOrders.length > 0 ? existingOrders[existingOrders.length-1].balanceDue ?? 0 : 0;
 
         // --- All WRITES second ---
         const orderId = `ORD-${String(nextIdNumber).padStart(4, '0')}`;
@@ -367,12 +365,31 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
 
 export const updateOrder = async (orderData: Order): Promise<void> => {
     if (!orderData.id) throw new Error("Order ID is required to update.");
-    // This function will now be complex to implement correctly with balance recalculation
-    // For now, we will do a simpler update that doesn't use the new transaction model
-    // to avoid introducing more errors. A proper implementation would use runCustomerBalanceUpdate.
-    const orderRef = doc(db, "orders", orderData.id);
-    await setDoc(orderRef, orderData, { merge: true });
-    // Note: This simplified update will not correctly recalculate subsequent balances.
+    await runCustomerBalanceUpdate(orderData.customerId, async (transaction, orders) => {
+        const orderRef = doc(db, 'orders', orderData.id);
+        const originalOrder = orders.find(o => o.id === orderData.id);
+
+        if (!originalOrder) throw new Error(`Original order ${orderData.id} not found during update.`);
+
+        const index = orders.findIndex(o => o.id === orderData.id);
+        
+        // Restore stock from original order
+        for (const item of originalOrder.items) {
+            if (item.productId !== 'OPENING_BALANCE') {
+                transaction.update(doc(db, 'products', item.productId), { stock: increment(item.quantity) });
+            }
+        }
+        
+        // Update order in memory
+        orders[index] = orderData;
+        
+        // Decrement new stock
+        for (const item of orderData.items) {
+             if (item.productId !== 'OPENING_BALANCE') {
+                transaction.update(doc(db, 'products', item.productId), { stock: increment(-item.quantity) });
+            }
+        }
+    });
 };
 
 
@@ -416,7 +433,10 @@ export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 
     
     await runCustomerBalanceUpdate(order.customerId, async (transaction, orders) => {
         const orderToUpdate = orders.find(o => o.id === orderId);
-        if (!orderToUpdate) return;
+        if (!orderToUpdate) {
+            console.warn(`Order ${orderId} not found in customer's order list during payment.`);
+            return;
+        }
         
         const existingPayments = orderToUpdate.payments || [];
         const paymentId = `${orderId}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
@@ -538,16 +558,8 @@ export const getDashboardData = async () => {
         return sum + orderPayments;
     }, 0);
 
-    const totalBalanceDue = customers.reduce((sum, customer) => {
-        const customerOrders = orders
-            .filter(o => o.customerId === customer.id)
-            .sort((a,b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
-        
-        if (customerOrders.length > 0) {
-            return sum + (customerOrders[0].balanceDue ?? 0);
-        }
-        return sum;
-    }, 0);
+    const totalBalanceDue = orders.reduce((acc, order) => acc + (order.balanceDue ?? 0), 0);
+
 
     const totalCustomers = customers.length;
     
@@ -714,8 +726,6 @@ export const resetDatabaseForFreshStart = async () => {
         }
 
         console.log("Database collections have been cleared.");
-
-        // We don't need to re-seed products, they should be preserved.
 
     } catch (error) {
         console.error("Error during database reset:", error);
