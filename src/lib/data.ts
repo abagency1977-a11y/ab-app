@@ -241,7 +241,7 @@ export const deleteProduct = async(id: string) => {
  * Recalculates the entire balance chain for a customer's orders.
  * This should be called inside a transaction whenever an order is added, deleted, or a payment is made.
  */
-async function recalculateCustomerBalances(transaction: Transaction, customerId: string) {
+async function _recalculateCustomerBalances(transaction: Transaction, customerId: string) {
     const ordersQuery = query(
       collection(db, 'orders'), 
       where('customerId', '==', customerId), 
@@ -297,11 +297,11 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
         await runTransaction(db, async (transaction) => {
             // --- ALL READS FIRST ---
             const customerSnap = await transaction.get(customerRef);
+            const nextIdNumber = await readNextId(transaction, 'orderCounter'); 
+            
+            // --- ALL WRITES AFTER ---
             if (!customerSnap.exists()) throw new Error("Customer not found");
 
-            const nextIdNumber = await readNextId(transaction, 'orderCounter');
-
-            // --- ALL WRITES AFTER ---
             const customerName = customerSnap.data()?.name;
             const orderId = `ORD-${String(nextIdNumber).padStart(4, '0')}`;
 
@@ -412,7 +412,7 @@ export const updateOrder = async (orderData: Order): Promise<void> => {
             transaction.set(orderRef, orderData);
 
             // 5. Recalculate all balances for this customer
-            await recalculateCustomerBalances(transaction, orderData.customerId);
+            await _recalculateCustomerBalances(transaction, orderData.customerId);
         });
     } catch(e) {
         console.error("Update order transaction failed:", e);
@@ -431,9 +431,10 @@ export const deleteOrder = async (order: Order): Promise<void> => {
 
     try {
         await runTransaction(db, async (transaction) => {
+            // --- READS ---
             const customerSnap = await transaction.get(customerRef);
             
-            // --- ALL WRITES ---
+            // --- WRITES ---
             transaction.delete(orderRef);
 
             if (customerSnap.exists() && !order.isOpeningBalance) {
@@ -450,7 +451,7 @@ export const deleteOrder = async (order: Order): Promise<void> => {
                 }
             }
 
-            await recalculateCustomerBalances(transaction, order.customerId);
+            await _recalculateCustomerBalances(transaction, order.customerId);
         });
     } catch(e) {
         console.error("Delete order transaction failed: ", e);
@@ -467,13 +468,15 @@ export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 
 
     try {
         await runTransaction(db, async (transaction) => {
+            // --- READ ---
             const orderSnap = await transaction.get(orderRef);
             if (!orderSnap.exists()) {
                 throw new Error("Order not found!");
             }
-            
             const order = { id: orderSnap.id, ...orderSnap.data() } as Order;
             customerId = order.customerId;
+            
+            // --- WRITE ---
             const existingPayments = order.payments || [];
             const paymentId = `${order.id}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
             const newPayment: Payment = { ...payment, id: paymentId };
@@ -482,7 +485,7 @@ export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 
             
             transaction.update(orderRef, { payments: newPayments });
 
-            await recalculateCustomerBalances(transaction, customerId);
+            await _recalculateCustomerBalances(transaction, customerId);
         });
 
         const finalOrderSnap = await getDoc(orderRef);
@@ -801,3 +804,5 @@ export const resetDatabaseForFreshStart = async () => {
         throw new Error("Failed to reset the database.");
     }
 };
+
+    
