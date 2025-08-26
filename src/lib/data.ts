@@ -1,4 +1,5 @@
 
+'use client';
 import { db } from './firebase';
 import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference, updateDoc, increment, where, orderBy, Transaction } from 'firebase/firestore';
 import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert, LowStockAlert, Supplier, Purchase, PurchasePayment, OrderStatus, PaymentMode } from './types';
@@ -60,12 +61,13 @@ export const getCustomerBalance = async (customerId: string): Promise<number> =>
         
         if (snapshot.empty) return 0;
 
-        const orders = snapshot.docs.map(doc => doc.data() as Order);
+        let orders = snapshot.docs.map(doc => doc.data() as Order);
         
         orders.sort((a, b) => {
             const dateA = a.orderDate ? new Date(a.orderDate).getTime() : 0;
             const dateB = b.orderDate ? new Date(b.orderDate).getTime() : 0;
-            if(isNaN(dateA) || isNaN(dateB)) return 0; // handle invalid dates
+            if(isNaN(dateA)) return -1;
+            if(isNaN(dateB)) return 1;
             return dateA - dateB;
         });
 
@@ -156,31 +158,32 @@ async function runBalanceChainUpdate(customerId: string, workload: Workload) {
 
             // Sort by date to ensure correct calculation sequence
             orders.sort((a, b) => {
-                const dateA = a.orderDate ? new Date(a.orderDate).getTime() : 0;
-                const dateB = b.orderDate ? new Date(b.orderDate).getTime() : 0;
-                if(isNaN(dateA)) return -1;
-                if(isNaN(dateB)) return 1;
-                return dateA - dateB;
+                 try {
+                    const dateA = new Date(a.orderDate).getTime();
+                    const dateB = new Date(b.orderDate).getTime();
+                    if (isNaN(dateA)) return -1;
+                    if (isNaN(dateB)) return 1;
+                    return dateA - dateB;
+                } catch(e) {
+                    return 0;
+                }
             });
 
             // Recalculate the entire chain
             let runningPreviousBalance = 0;
             for (const order of orders) {
+                const orderRef = doc(db, 'orders', order.id);
                 order.previousBalance = runningPreviousBalance;
                 
-                const currentBillValue = order.total - order.discount + order.deliveryFees;
+                const currentBillValue = order.total - (order.discount || 0) + (order.deliveryFees || 0);
                 order.grandTotal = currentBillValue + order.previousBalance;
                 
                 const totalPaid = (order.payments || []).reduce((sum, p) => sum + p.amount, 0);
                 order.balanceDue = order.grandTotal - totalPaid;
-                order.status = order.balanceDue <= 0 ? 'Fulfilled' : 'Pending';
+                order.status = order.balanceDue <= 0 ? 'Fulfilled' : (totalPaid > 0 ? 'Part Payment' : 'Pending');
 
                 runningPreviousBalance = order.balanceDue > 0 ? order.balanceDue : 0;
-            }
-
-            // Write all updated orders back to the database
-            for (const order of orders) {
-                const orderRef = doc(db, 'orders', order.id);
+                
                 transaction.set(orderRef, order);
             }
         });
@@ -227,7 +230,7 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
         });
 
         if (!newOrder.isOpeningBalance) {
-            const netOrderValue = newOrder.total - newOrder.discount + newOrder.deliveryFees;
+            const netOrderValue = newOrder.total - (newOrder.discount || 0) + (newOrder.deliveryFees || 0);
             transaction.update(customerRef, {
                 'transactionHistory.totalSpent': increment(netOrderValue),
                 'transactionHistory.lastPurchaseDate': newOrder.orderDate
@@ -262,7 +265,7 @@ export const updateOrder = async (orderData: Order): Promise<void> => {
             }
         }
         if (!originalOrder.isOpeningBalance) {
-            const originalNetValue = originalOrder.total - originalOrder.discount + originalOrder.deliveryFees;
+            const originalNetValue = originalOrder.total - (originalOrder.discount || 0) + (originalOrder.deliveryFees || 0);
             transaction.update(doc(db, "customers", originalOrder.customerId), { 'transactionHistory.totalSpent': increment(-originalNetValue) });
         }
 
@@ -273,7 +276,7 @@ export const updateOrder = async (orderData: Order): Promise<void> => {
             }
         }
         if (!orderData.isOpeningBalance) {
-            const newNetValue = orderData.total - orderData.discount + orderData.deliveryFees;
+            const newNetValue = orderData.total - (orderData.discount || 0) + (orderData.deliveryFees || 0);
             transaction.update(doc(db, "customers", orderData.customerId), { 'transactionHistory.totalSpent': increment(newNetValue) });
         }
         
@@ -301,7 +304,7 @@ export const deleteOrder = async (orderToDelete: Order): Promise<void> => {
             }
         }
         if (!orderToDelete.isOpeningBalance) {
-            const netValue = orderToDelete.total - orderToDelete.discount + orderToDelete.deliveryFees;
+            const netValue = orderToDelete.total - (orderToDelete.discount || 0) + (orderToDelete.deliveryFees || 0);
             transaction.update(doc(db, "customers", orderToDelete.customerId), { 'transactionHistory.totalSpent': increment(-netValue) });
         }
     });
@@ -342,7 +345,6 @@ export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 
             const existingPayments: Payment[] = orderToUpdate.payments || [];
             const paymentId = `${orderId}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
             
-            // This is where we correctly append the new payment to the existing array.
             orderToUpdate.payments = [...existingPayments, { ...payment, id: paymentId }];
 
             return orders;
@@ -398,35 +400,30 @@ export const addPurchase = async (purchaseData: Omit<Purchase, 'id' | 'supplierN
     
     let newPurchaseWithId!: Purchase;
 
-    try {
-        await runTransaction(db, async (transaction) => {
-            const supplierRef = doc(db, "suppliers", purchaseData.supplierId);
-            const supplierSnap = await transaction.get(supplierRef);
-            if (!supplierSnap.exists()) throw new Error("Supplier not found");
+    await runTransaction(db, async (transaction) => {
+        const supplierRef = doc(db, "suppliers", purchaseData.supplierId);
+        const supplierSnap = await transaction.get(supplierRef);
+        if (!supplierSnap.exists()) throw new Error("Supplier not found");
 
-            const purchaseId = await getNextId(transaction, 'purchaseCounter', 'PUR');
+        const purchaseId = await getNextId(transaction, 'purchaseCounter', 'PUR');
 
-            newPurchaseWithId = { ...purchaseData, supplierName: supplierSnap.data()?.name, id: purchaseId };
-            
-            if (newPurchaseWithId.payments) {
-                newPurchaseWithId.payments = newPurchaseWithId.payments.map((p, i) => ({
-                    ...p,
-                    id: `${purchaseId}-PAY-${String(i + 1).padStart(2, '0')}`
-                }));
-            }
+        newPurchaseWithId = { ...purchaseData, supplierName: supplierSnap.data()?.name, id: purchaseId };
+        
+        if (newPurchaseWithId.payments) {
+            newPurchaseWithId.payments = newPurchaseWithId.payments.map((p, i) => ({
+                ...p,
+                id: `${purchaseId}-PAY-${String(i + 1).padStart(2, '0')}`
+            }));
+        }
 
-            transaction.set(doc(db, "purchases", purchaseId), newPurchaseWithId);
+        transaction.set(doc(db, "purchases", purchaseId), newPurchaseWithId);
 
-            for (const item of newPurchaseWithId.items) {
-                const productRef = doc(db, "products", item.productId);
-                transaction.update(productRef, { stock: increment(item.quantity) });
-            }
-        });
-    } catch(e) {
-         console.error("Add purchase transaction failed:", e);
-        if (e instanceof Error) throw new Error(`A database error occurred: ${e.message}`);
-        throw new Error("An unknown database error occurred during the transaction.");
-    }
+        for (const item of newPurchaseWithId.items) {
+            const productRef = doc(db, "products", item.productId);
+            transaction.update(productRef, { stock: increment(item.quantity) });
+        }
+    });
+
     return newPurchaseWithId;
 };
 
@@ -655,3 +652,5 @@ export const resetDatabaseForFreshStart = async () => {
 };
 
     
+
+      

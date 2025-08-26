@@ -48,7 +48,7 @@ const InvoiceTable = ({ invoices, onRowClick, onDeleteClick }: { invoices: Order
                         <TableCell onClick={() => onRowClick?.(invoice)} className="cursor-pointer">{invoice.customerName}</TableCell>
                         <TableCell onClick={() => onRowClick?.(invoice)} className="cursor-pointer">{new Date(invoice.orderDate).toLocaleDateString('en-IN')}</TableCell>
                         <TableCell onClick={() => onRowClick?.(invoice)} className="cursor-pointer">
-                            <Badge variant={invoice.status === 'Fulfilled' ? 'default' : invoice.status === 'Pending' ? 'secondary' : 'destructive'} className="capitalize">{invoice.status}</Badge>
+                            <Badge variant={invoice.status === 'Fulfilled' ? 'default' : invoice.status === 'Pending' ? 'secondary' : invoice.status === 'Part Payment' ? 'outline' : 'destructive'} className="capitalize">{invoice.status}</Badge>
                         </TableCell>
                         <TableCell onClick={() => onRowClick?.(invoice)} className={`text-right font-medium cursor-pointer ${invoice.balanceDue && invoice.balanceDue > 0 ? 'text-red-600' : ''}`}>
                             {formatNumber(invoice.balanceDue)}
@@ -90,8 +90,8 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
     }, []);
 
     const { fullPaidInvoices, creditInvoices } = useMemo(() => {
-        const fullPaid = allInvoices.filter(order => order.balanceDue !== undefined && order.balanceDue <= 0);
-        const credit = allInvoices.filter(order => order.balanceDue && order.balanceDue > 0);
+        const fullPaid = allInvoices.filter(order => order.status === 'Fulfilled');
+        const credit = allInvoices.filter(order => order.status !== 'Fulfilled' && order.status !== 'Canceled');
         return { fullPaidInvoices: fullPaid, creditInvoices: credit };
     }, [allInvoices]);
 
@@ -421,3 +421,5 @@ function PaymentForm({ balanceDue, onAddPayment }: { balanceDue: number; onAddPa
         </Card>
     );
 }
+
+      

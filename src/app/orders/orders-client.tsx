@@ -469,7 +469,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                                 <TableCell>{order.customerName}</TableCell>
                                 <TableCell>{new Date(order.orderDate).toLocaleDateString('en-IN')}</TableCell>
                                 <TableCell>
-                                    <Badge variant={order.status === 'Fulfilled' ? 'default' : 'secondary'}>{order.status}</Badge>
+                                    <Badge variant={order.status === 'Fulfilled' ? 'default' : order.status === 'Pending' ? 'secondary' : order.status === 'Part Payment' ? 'outline' : 'destructive'} className="capitalize">{order.status}</Badge>
                                 </TableCell>
                                 <TableCell className="text-right">
                                     {formatNumberForDisplay(order.grandTotal)}
@@ -1071,3 +1071,5 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         </>
     );
 }
+
+      
