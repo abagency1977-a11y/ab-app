@@ -276,7 +276,7 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName' | 'p
         
         const ordersQuery = query(collection(db, 'orders'), where('customerId', '==', orderData.customerId));
         const customerOrdersSnap = await transaction.get(ordersQuery);
-        let customerOrders = customerOrdersSnap.docs.map(d => d.data() as Order);
+        let customerOrders = customerOrdersSnap.docs.map(d => ({ id: d.id, ...d.data() } as Order));
 
         // --- PREPARE WRITES (IN-MEMORY) ---
         const orderId = `ORD-${String(nextIdNumber).padStart(4, '0')}`;
@@ -338,13 +338,13 @@ export const updateOrder = async (orderData: Order): Promise<void> => {
         const originalOrderRef = doc(db, "orders", orderData.id);
         const originalOrderSnap = await transaction.get(originalOrderRef);
         if (!originalOrderSnap.exists()) throw new Error("Order to update not found.");
-        const originalOrder = originalOrderSnap.data() as Order;
+        const originalOrder = { id: originalOrderSnap.id, ...originalOrderSnap.data() } as Order;
 
         const customerRef = doc(db, "customers", orderData.customerId);
 
         const ordersQuery = query(collection(db, 'orders'), where('customerId', '==', orderData.customerId));
         const customerOrdersSnap = await transaction.get(ordersQuery);
-        let customerOrders = customerOrdersSnap.docs.map(d => d.data() as Order);
+        let customerOrders = customerOrdersSnap.docs.map(d => ({ id: d.id, ...d.data() } as Order));
         
         // --- PREPARE WRITES (IN-MEMORY) ---
         orderData.isOpeningBalance = orderData.items.some(item => item.productName === 'Opening Balance');
@@ -396,7 +396,7 @@ export const deleteOrder = async (orderToDelete: Order): Promise<void> => {
 
         const ordersQuery = query(collection(db, 'orders'), where('customerId', '==', orderToDelete.customerId));
         const customerOrdersSnap = await transaction.get(ordersQuery);
-        let customerOrders = customerOrdersSnap.docs.map(d => d.data() as Order);
+        let customerOrders = customerOrdersSnap.docs.map(d => ({id: d.id, ...d.data()}) as Order);
 
         // --- PREPARE WRITES (IN-MEMORY) ---
         const filteredOrders = customerOrders.filter(o => o.id !== orderToDelete.id);
@@ -426,9 +426,8 @@ export const deleteOrder = async (orderToDelete: Order): Promise<void> => {
 }
 
 export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 'id'>): Promise<Order> => {
-    const orderToUpdateRef = doc(db, "orders", orderId);
-    // This initial read is just to get the customerId to start the transaction.
-    const initialSnap = await getDoc(orderToUpdateRef);
+    
+    const initialSnap = await getDoc(doc(db, "orders", orderId));
     if (!initialSnap.exists()) throw new Error("Order not found!");
     const customerId = initialSnap.data().customerId;
     
@@ -438,34 +437,33 @@ export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 
         // --- READS ---
         const ordersQuery = query(collection(db, 'orders'), where('customerId', '==', customerId));
         const customerOrdersSnap = await transaction.get(ordersQuery);
-        let customerOrders = customerOrdersSnap.docs.map(d => d.data() as Order);
+        let customerOrders = customerOrdersSnap.docs.map(d => ({id: d.id, ...d.data()}) as Order);
         
         // --- PREPARE WRITES (IN-MEMORY) ---
         const orderIndex = customerOrders.findIndex(o => o.id === orderId);
         if (orderIndex === -1) throw new Error("Order not found in customer's history for payment.");
         
-        const orderToUpdate = { ...customerOrders[orderIndex] }; // Make a mutable copy
-        
+        const orderToUpdate = { ...customerOrders[orderIndex] }; 
         const existingPayments = orderToUpdate.payments || [];
         const paymentId = `${orderId}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
         const newPayment: Payment = { ...payment, id: paymentId };
-        
         orderToUpdate.payments = [...existingPayments, newPayment];
         
-        customerOrders[orderIndex] = orderToUpdate; // Put the modified order back in the array
+        customerOrders[orderIndex] = orderToUpdate;
         
         const recalculatedOrders = _recalculateBalances(customerOrders);
-
         finalOrderState = recalculatedOrders.find(o => o.id === orderId)!;
 
         // --- WRITES ---
         for (const order of recalculatedOrders) {
-            transaction.set(doc(db, 'orders', order.id), order);
+            const orderRef = doc(db, 'orders', order.id);
+            transaction.set(orderRef, order);
         }
     });
     
     return finalOrderState;
 };
+
 
 
 // SUPPLIER FUNCTIONS
@@ -756,5 +754,6 @@ export const resetDatabaseForFreshStart = async () => {
 };
 
     
+
 
 
