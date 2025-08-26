@@ -234,8 +234,7 @@ function writeNextId(transaction: Transaction, counterName: string, nextNumber: 
     transaction.set(counterRef, { currentNumber: nextNumber }, { merge: true });
 }
 
-
-type Workload = (transaction: Transaction, orders: Order[]) => Promise<void>;
+type Workload = (transaction: Transaction, orders: Order[]) => Promise<Order[]>;
 
 async function runCustomerBalanceUpdate(customerId: string, workload: Workload) {
     try {
@@ -246,14 +245,14 @@ async function runCustomerBalanceUpdate(customerId: string, workload: Workload) 
                 where('customerId', '==', customerId)
             );
             const orderSnaps = await transaction.get(ordersQuery);
-            let orders = orderSnaps.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+            let initialOrders = orderSnaps.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
 
-            // 2. Perform the specific work. This might perform additional reads (e.g., counters)
-            // and will modify the `orders` array in memory by adding/updating/deleting.
-            await workload(transaction, orders);
+            // 2. Perform the specific work. This performs additional reads/writes and
+            // returns the modified list of orders.
+            const updatedOrders = await workload(transaction, initialOrders);
             
             // 3. Sort orders chronologically to ensure correct balance calculation.
-            orders.sort((a, b) => {
+            updatedOrders.sort((a, b) => {
                 const dateA = new Date(a.orderDate).getTime();
                 const dateB = new Date(b.orderDate).getTime();
                 if (dateA !== dateB) return dateA - dateB;
@@ -262,7 +261,7 @@ async function runCustomerBalanceUpdate(customerId: string, workload: Workload) 
 
             // 4. Recalculate balances for the entire chain and stage the writes.
             let previousBalanceDue = 0;
-            for (const order of orders) {
+            for (const order of updatedOrders) {
                 if (!order || !order.id) {
                     console.warn("Skipping order in recalculation due to missing ID or object:", order);
                     continue;
@@ -299,7 +298,6 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
     let newOrderWithId!: Order;
 
     const workload: Workload = async (transaction, orders) => {
-        // --- Additional READS (must be before writes) ---
         const customerRef = doc(db, "customers", orderData.customerId);
         const customerSnap = await transaction.get(customerRef);
         const nextIdNumber = await readNextId(transaction, 'orderCounter');
@@ -308,7 +306,6 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
         
         const previousBalance = orders.length > 0 ? orders[orders.length - 1].balanceDue ?? 0 : 0;
 
-        // --- PREPARE DATA ---
         const orderId = `ORD-${String(nextIdNumber).padStart(4, '0')}`;
         
         newOrderWithId = { 
@@ -333,10 +330,6 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
         newOrderWithId.balanceDue = newOrderWithId.grandTotal - totalPaid;
         newOrderWithId.status = newOrderWithId.balanceDue <= 0 ? 'Fulfilled' : 'Pending';
 
-        // Add to the in-memory array for recalculation
-        orders.push(newOrderWithId);
-
-        // --- WRITES ---
         const newOrderRef = doc(db, "orders", orderId);
         transaction.set(newOrderRef, newOrderWithId);
 
@@ -355,6 +348,8 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
                 transaction.update(productRef, { stock: increment(-item.quantity) });
             }
         }
+        
+        return [...orders, newOrderWithId];
     };
 
     await runCustomerBalanceUpdate(orderData.customerId, workload);
@@ -369,22 +364,21 @@ export const updateOrder = async (orderData: Order): Promise<void> => {
         if (!originalOrder) throw new Error(`Original order ${orderData.id} not found during update.`);
         const orderIndex = orders.findIndex(o => o.id === orderData.id);
         
-        // Restore stock from original order
         for (const item of originalOrder.items) {
             if (item.productId !== 'OPENING_BALANCE') {
                 transaction.update(doc(db, 'products', item.productId), { stock: increment(item.quantity) });
             }
         }
         
-        // Update order in memory
         orders[orderIndex] = orderData;
         
-        // Decrement new stock
         for (const item of orderData.items) {
              if (item.productId !== 'OPENING_BALANCE') {
                 transaction.update(doc(db, 'products', item.productId), { stock: increment(-item.quantity) });
             }
         }
+
+        return orders;
     };
     
     await runCustomerBalanceUpdate(orderData.customerId, workload);
@@ -400,10 +394,7 @@ export const deleteOrder = async (order: Order): Promise<void> => {
         
         transaction.delete(orderRef);
         
-        const index = orders.findIndex(o => o.id === order.id);
-        if (index > -1) {
-            orders.splice(index, 1);
-        }
+        const filteredOrders = orders.filter(o => o.id !== order.id);
 
         if (!order.isOpeningBalance) {
             const netOrderValue = order.total - order.discount + order.deliveryFees;
@@ -418,29 +409,28 @@ export const deleteOrder = async (order: Order): Promise<void> => {
                 transaction.update(productRef, { stock: increment(item.quantity) });
             }
         }
+        return filteredOrders;
     };
 
     await runCustomerBalanceUpdate(order.customerId, workload);
 }
 
 export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 'id'>): Promise<Order> => {
-    // This initial read is outside the transaction and is only to get the customerId
     const orderRef = doc(db, "orders", orderId);
     const orderSnap = await getDoc(orderRef);
     if (!orderSnap.exists()) {
         throw new Error("Order not found!");
     }
     const customerId = orderSnap.data().customerId;
-    const orderToReturn = orderSnap.data() as Order;
+    const orderForReturn = { id: orderSnap.id, ...orderSnap.data() } as Order;
     
     const workload: Workload = async (transaction, orders) => {
-        // Find the order in the array of all customer orders
         const orderIndex = orders.findIndex(o => o.id === orderId);
         if (orderIndex === -1) {
             throw new Error(`Order ${orderId} not found in memory during payment transaction.`);
         }
         
-        const orderToUpdate = orders[orderIndex];
+        const orderToUpdate = { ...orders[orderIndex] };
         
         const existingPayments = orderToUpdate.payments || [];
         const paymentId = `${orderId}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
@@ -448,13 +438,13 @@ export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 
         
         orderToUpdate.payments = [...existingPayments, newPayment];
         
-        // This is the critical step: put the modified order back into the array
-        // so the main recalculation loop uses the updated version.
         orders[orderIndex] = orderToUpdate;
+
+        return orders;
     };
 
     await runCustomerBalanceUpdate(customerId, workload);
-    return orderToReturn;
+    return orderForReturn;
 };
 
 
