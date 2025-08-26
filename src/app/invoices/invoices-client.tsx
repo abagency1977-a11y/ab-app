@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
@@ -58,7 +57,7 @@ const InvoiceTable = ({ invoices, onRowClick, onDeleteClick }: { invoices: Order
                             {formatNumber(invoice.grandTotal)}
                         </TableCell>
                          <TableCell className="text-center">
-                            <Button variant="ghost" size="icon" onClick={() => onDeleteClick?.(invoice)}>
+                            <Button variant="ghost" size="icon" onClick={(e) => {e.stopPropagation(); onDeleteClick?.(invoice);}}>
                                 <Trash2 className="h-4 w-4 text-red-600" />
                             </Button>
                         </TableCell>
@@ -100,20 +99,23 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
         const { orders, customers } = await getAllData();
         setAllInvoices(orders);
         setAllCustomers(customers);
+        // After refresh, find and update the selectedInvoice to show new data in the sheet
+        if (selectedInvoice) {
+            const updatedSelectedInvoice = orders.find(o => o.id === selectedInvoice.id);
+            setSelectedInvoice(updatedSelectedInvoice || null);
+        }
     };
     
     const handleAddPayment = async (payment: Omit<Payment, 'id'>) => {
         if (!selectedInvoice) return;
         
         try {
-            const updatedOrder = await addPaymentToOrder(selectedInvoice.id, payment);
-            await refreshData();
-            setSelectedInvoice(updatedOrder);
-
+            await addPaymentToOrder(selectedInvoice.id, payment);
             toast({
                 title: 'Payment Recorded',
-                description: `${formatNumber(payment.amount)} payment for invoice ${updatedOrder.id.replace('ORD','INV')} has been recorded.`,
+                description: `${formatNumber(payment.amount)} payment for invoice ${selectedInvoice.id.replace('ORD','INV')} has been recorded.`,
             });
+            await refreshData();
         } catch(e: any) {
             toast({
                 title: 'Error',
@@ -188,11 +190,11 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
         if (!invoiceToDelete) return;
         try {
             await deleteOrder(invoiceToDelete);
-            await refreshData();
             toast({
                 title: "Invoice Deleted",
                 description: `Invoice ${invoiceToDelete.id.replace('ORD', 'INV')} has been successfully deleted.`
             });
+            await refreshData();
         } catch(e: any) {
             toast({
                 title: 'Error Deleting Invoice',

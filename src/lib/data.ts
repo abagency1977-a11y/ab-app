@@ -1,4 +1,5 @@
 
+
 import { db } from './firebase';
 import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference, updateDoc, increment, where, orderBy, Transaction } from 'firebase/firestore';
 import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert, LowStockAlert, Supplier, Purchase, PurchasePayment, OrderStatus, PaymentMode } from './types';
@@ -135,188 +136,219 @@ async function getNextId(transaction: Transaction, counterName: string, prefix: 
 }
 
 
-export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): Promise<Order> => {
-    let newOrderWithId!: Order;
-    
-    try {
-        await runTransaction(db, async (transaction) => {
-            // --- READS ---
-            const customerRef = doc(db, "customers", orderData.customerId);
-            const customerSnap = await transaction.get(customerRef);
-            if (!customerSnap.exists()) throw new Error("Customer not found");
-            
-            const ordersQuery = query(collection(db, 'orders'), where('customerId', '==', orderData.customerId));
-            const customerOrdersSnap = await transaction.get(ordersQuery);
-            const customerOrders = customerOrdersSnap.docs.map(d => d.data() as Order);
+/**
+ * A centralized transaction runner for all operations that affect a customer's balance chain.
+ * This ensures that after any modification (new order, payment, deletion), the entire
+ * history of that customer's orders is re-calculated atomically to ensure correct
+ * previous balances, grand totals, and balances due.
+ *
+ * @param customerId - The ID of the customer whose balance chain is being updated.
+ * @param workload - A function that receives the sorted list of a customer's orders
+ *                   and performs an in-memory modification (e.g., adds a new order,
+ *                   applies a payment, removes an order). It must return the
+ *                   modified list of orders.
+ */
+async function runBalanceChainUpdate(
+  customerId: string,
+  workload: (orders: Order[]) => Order[]
+) {
+  try {
+    await runTransaction(db, async (transaction) => {
+      // 1. READ all orders for the customer first.
+      const ordersQuery = query(
+        collection(db, 'orders'),
+        where('customerId', '==', customerId),
+        orderBy('orderDate', 'asc') // CRITICAL: Must be sorted chronologically.
+      );
+      const customerOrdersSnap = await transaction.get(ordersQuery);
+      let orders = customerOrdersSnap.docs.map(
+        (d) => ({ id: d.id, ...d.data() }) as Order
+      );
 
-            // --- PREPARE WRITES (IN-MEMORY) ---
-            const previousBalance = customerOrders.reduce((acc, o) => acc + (o.balanceDue ?? 0), 0);
+      // 2. PERFORM the requested modification in-memory.
+      orders = workload(orders);
+       // Re-sort in case a new order was added at a specific date
+      orders.sort((a, b) => new Date(a.orderDate).getTime() - new Date(b.orderDate).getTime());
 
-            const orderId = await getNextId(transaction, 'orderCounter', 'ORD');
-            
-            const grandTotal = orderData.total - orderData.discount + orderData.deliveryFees + previousBalance;
+      // 3. RECALCULATE the entire balance chain.
+      let runningPreviousBalance = 0;
+      for (const order of orders) {
+        order.previousBalance = runningPreviousBalance;
+        order.grandTotal = order.total - order.discount + order.deliveryFees + order.previousBalance;
+        
+        const totalPaid = (order.payments || []).reduce((sum, p) => sum + p.amount, 0);
+        order.balanceDue = order.grandTotal - totalPaid;
+        order.status = order.balanceDue <= 0 ? 'Fulfilled' : 'Pending';
 
-            newOrderWithId = { 
-                ...orderData, 
-                id: orderId,
-                previousBalance,
-                grandTotal,
-                balanceDue: orderData.paymentTerm === 'Credit' ? grandTotal : 0,
-                status: orderData.paymentTerm === 'Full Payment' ? 'Fulfilled' : 'Pending',
-                customerName: customerSnap.data().name,
-                isOpeningBalance: orderData.items.some(item => item.productName === 'Opening Balance'),
-            };
+        // The balance due of the current order becomes the previous balance for the next one.
+        runningPreviousBalance = order.balanceDue;
+      }
 
-            if (newOrderWithId.payments) {
-                newOrderWithId.payments = newOrderWithId.payments.map((p, i) => ({
-                    ...p,
-                    amount: grandTotal, // Full payment is for the new grand total
-                    id: `${orderId}-PAY-${String(i + 1).padStart(2, '0')}`
-                }));
-            }
-
-            // --- WRITES ---
-            transaction.set(doc(db, "orders", orderId), newOrderWithId);
-
-            if (!newOrderWithId.isOpeningBalance) {
-                transaction.update(customerRef, {
-                    'transactionHistory.totalSpent': increment(newOrderWithId.total - newOrderWithId.discount + newOrderWithId.deliveryFees),
-                    'transactionHistory.lastPurchaseDate': newOrderWithId.orderDate
-                });
-            }
-
-            for (const item of newOrderWithId.items) {
-                if(item.productId !== 'OPENING_BALANCE') {
-                    const productRef = doc(db, "products", item.productId);
-                    transaction.update(productRef, { stock: increment(-item.quantity) });
-                }
-            }
-        });
-    } catch(e) {
-        console.error("Add order transaction failed: ", e);
-        if (e instanceof Error) throw new Error(`A database error occurred: ${e.message}`);
-        throw new Error("An unknown database error occurred during the transaction.");
+      // 4. WRITE all changes back to the database.
+      for (const order of orders) {
+        const orderRef = doc(db, 'orders', order.id);
+        transaction.set(orderRef, order);
+      }
+    });
+  } catch (e) {
+    console.error("Balance chain update transaction failed:", e);
+    if (e instanceof Error) {
+      throw new Error(`A database error occurred: ${e.message}`);
     }
-    return newOrderWithId;
+    throw new Error("An unknown database error occurred during the transaction.");
+  }
+}
+
+export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): Promise<Order> => {
+    const customerRef = doc(db, 'customers', orderData.customerId);
+    const customerSnap = await getDoc(customerRef);
+    if (!customerSnap.exists()) {
+        throw new Error("Customer not found");
+    }
+    const customerName = customerSnap.data()?.name;
+    
+    let newOrderId: string | null = null;
+    
+    await runTransaction(db, async(transaction) => {
+        newOrderId = await getNextId(transaction, 'orderCounter', 'ORD');
+
+        let newOrder: Order = {
+            ...orderData,
+            id: newOrderId!,
+            customerName: customerName,
+            isOpeningBalance: orderData.items.some(item => item.productName === 'Opening Balance'),
+            balanceDue: 0, // Will be calculated
+            previousBalance: 0, // Will be calculated
+            grandTotal: 0, // Will be calculated
+            status: 'Pending', // Will be calculated
+        };
+
+        if (newOrder.paymentTerm === 'Full Payment' && newOrder.payments) {
+            newOrder.payments[0].id = `${newOrderId}-PAY-01`;
+        }
+        
+        // This is a special workload for runBalanceChainUpdate. It just adds the new order.
+        await runBalanceChainUpdate(orderData.customerId, (orders) => {
+            return [...orders, newOrder];
+        });
+
+        // Update customer's total spent history (if not an opening balance order)
+        if (!newOrder.isOpeningBalance) {
+            const netOrderValue = newOrder.total - newOrder.discount + newOrder.deliveryFees;
+            transaction.update(customerRef, {
+                'transactionHistory.totalSpent': increment(netOrderValue),
+                'transactionHistory.lastPurchaseDate': newOrder.orderDate
+            });
+        }
+        // Decrement stock
+        for (const item of newOrder.items) {
+            if (item.productId !== 'OPENING_BALANCE') {
+                const productRef = doc(db, "products", item.productId);
+                transaction.update(productRef, { stock: increment(-item.quantity) });
+            }
+        }
+    });
+
+    const finalOrder = await getDoc(doc(db, 'orders', newOrderId!));
+    return {id: finalOrder.id, ...finalOrder.data()} as Order;
 };
+
 
 export const updateOrder = async (orderData: Order): Promise<void> => {
     if (!orderData.id) throw new Error("Order ID is required to update.");
 
-    try {
-        await runTransaction(db, async (transaction) => {
-            const orderRef = doc(db, "orders", orderData.id);
-            const originalOrderSnap = await transaction.get(orderRef);
-            if (!originalOrderSnap.exists()) throw new Error("Order to update not found.");
-            const originalOrder = originalOrderSnap.data() as Order;
-            
-            // Revert customer total from original order
-            if (!originalOrder.isOpeningBalance) {
-                 const originalNetValue = originalOrder.total - originalOrder.discount + originalOrder.deliveryFees;
-                 transaction.update(doc(db, "customers", originalOrder.customerId), {'transactionHistory.totalSpent': increment(-originalNetValue)});
-            }
-            // Revert stock from original order
-            for (const item of originalOrder.items) {
-                if(item.productId !== 'OPENING_BALANCE') {
-                     transaction.update(doc(db, "products", item.productId), { stock: increment(item.quantity) });
-                }
-            }
+    await runTransaction(db, async (transaction) => {
+        const originalOrderSnap = await getDoc(doc(db, "orders", orderData.id));
+        if (!originalOrderSnap.exists()) {
+            throw new Error("Cannot update order that does not exist.");
+        }
+        const originalOrder = originalOrderSnap.data() as Order;
 
-            // Apply new customer total and stock from updated order
-            orderData.isOpeningBalance = orderData.items.some(item => item.productName === 'Opening Balance');
-             if (!orderData.isOpeningBalance) {
-                const newNetValue = orderData.total - orderData.discount + orderData.deliveryFees;
-                transaction.update(doc(db, "customers", orderData.customerId), {'transactionHistory.totalSpent': increment(newNetValue)});
+        // Revert stock and customer history based on the original order
+        for (const item of originalOrder.items) {
+            if(item.productId !== 'OPENING_BALANCE') {
+                transaction.update(doc(db, "products", item.productId), { stock: increment(item.quantity) });
             }
-            for (const item of orderData.items) {
-                if(item.productId !== 'OPENING_BALANCE') {
-                    transaction.update(doc(db, "products", item.productId), { stock: increment(-item.quantity) });
-                }
-            }
+        }
+        if (!originalOrder.isOpeningBalance) {
+            const originalNetValue = originalOrder.total - originalOrder.discount + originalOrder.deliveryFees;
+            transaction.update(doc(db, "customers", originalOrder.customerId), { 'transactionHistory.totalSpent': increment(-originalNetValue) });
+        }
 
-            // Finally, update the order document itself
-            transaction.set(orderRef, orderData);
+        // Apply new stock and customer history based on the updated order
+        orderData.isOpeningBalance = orderData.items.some(item => item.productName === 'Opening Balance');
+        for (const item of orderData.items) {
+            if(item.productId !== 'OPENING_BALANCE') {
+                transaction.update(doc(db, "products", item.productId), { stock: increment(-item.quantity) });
+            }
+        }
+        if (!orderData.isOpeningBalance) {
+            const newNetValue = orderData.total - orderData.discount + orderData.deliveryFees;
+            transaction.update(doc(db, "customers", orderData.customerId), { 'transactionHistory.totalSpent': increment(newNetValue) });
+        }
+
+        // Trigger the balance chain update with the modified order
+        await runBalanceChainUpdate(orderData.customerId, (orders) => {
+            const orderIndex = orders.findIndex(o => o.id === orderData.id);
+            if (orderIndex > -1) {
+                orders[orderIndex] = orderData;
+            }
+            return orders;
         });
-    } catch(e) {
-        console.error("Update order transaction failed:", e);
-        if (e instanceof Error) throw new Error(`A database error occurred: ${e.message}`);
-        throw new Error("An unknown database error occurred during the transaction.");
-    }
+    });
 };
 
 
 export const deleteOrder = async (orderToDelete: Order): Promise<void> => {
     if (!orderToDelete.id) throw new Error("Order ID is required for deletion.");
     
-    try {
-        await runTransaction(db, async (transaction) => {
-            transaction.delete(doc(db, "orders", orderToDelete.id));
-
-            if (!orderToDelete.isOpeningBalance) {
-                const netOrderValue = orderToDelete.total - orderToDelete.discount + orderToDelete.deliveryFees;
-                transaction.update(doc(db, "customers", orderToDelete.customerId), {
-                    'transactionHistory.totalSpent': increment(-netOrderValue)
-                });
+    await runTransaction(db, async (transaction) => {
+        // Revert stock and customer total
+        for (const item of orderToDelete.items) {
+             if(item.productId !== 'OPENING_BALANCE') {
+                transaction.update(doc(db, "products", item.productId), { stock: increment(item.quantity) });
             }
-
-            for (const item of orderToDelete.items) {
-                if(item.productId !== 'OPENING_BALANCE') {
-                    const productRef = doc(db, "products", item.productId);
-                    transaction.update(productRef, { stock: increment(item.quantity) });
-                }
-            }
-        });
-    } catch(e) {
-        console.error("Delete order transaction failed:", e);
-        if (e instanceof Error) throw new Error(`A database error occurred: ${e.message}`);
-        throw new Error("An unknown database error occurred during the transaction.");
-    }
-}
-
-export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 'id'>): Promise<Order> => {
-    const orderRef = doc(db, "orders", orderId);
-    let updatedOrder!: Order;
-
-    try {
-        await runTransaction(db, async (transaction) => {
-            const orderSnap = await transaction.get(orderRef);
-            if (!orderSnap.exists()) {
-                throw new Error(`Order with ID ${orderId} not found.`);
-            }
-            
-            const order = { id: orderSnap.id, ...orderSnap.data() } as Order;
-            
-            const existingPayments: Payment[] = order.payments || [];
-            const paymentId = `${order.id}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
-            const newPayment: Payment = { ...payment, id: paymentId };
-
-            const allPayments = [...existingPayments, newPayment];
-            const totalPaid = allPayments.reduce((sum, p) => sum + p.amount, 0);
-            
-            const newBalance = order.grandTotal - totalPaid;
-            const newStatus: OrderStatus = newBalance <= 0 ? 'Fulfilled' : order.status;
-
-            const updateData = {
-                payments: allPayments,
-                balanceDue: newBalance,
-                status: newStatus
-            };
-            
-            transaction.update(orderRef, updateData);
-            updatedOrder = { ...order, ...updateData };
-        });
-    } catch (e) {
-        console.error("Add payment transaction failed:", e);
-        if (e instanceof Error) {
-            throw new Error(`A database error occurred: ${e.message}`);
         }
-        throw new Error("An unknown database error occurred during the transaction.");
-    }
-    
-    return updatedOrder;
+        if (!orderToDelete.isOpeningBalance) {
+            const netValue = orderToDelete.total - orderToDelete.discount + orderToDelete.deliveryFees;
+            transaction.update(doc(db, "customers", orderToDelete.customerId), { 'transactionHistory.totalSpent': increment(-netValue) });
+        }
+
+        // Delete the order itself
+        transaction.delete(doc(db, "orders", orderToDelete.id));
+
+        // Trigger balance update for the remaining orders
+        await runBalanceChainUpdate(orderToDelete.customerId, (orders) => {
+            return orders.filter(o => o.id !== orderToDelete.id);
+        });
+    });
 };
 
+export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 'id'>): Promise<void> => {
+    const orderRef = doc(db, 'orders', orderId);
+    const orderSnap = await getDoc(orderRef);
+    if (!orderSnap.exists()) {
+        throw new Error(`Order ${orderId} not found.`);
+    }
+    const customerId = orderSnap.data().customerId;
 
+    await runBalanceChainUpdate(customerId, (orders) => {
+        const orderIndex = orders.findIndex(o => o.id === orderId);
+        if (orderIndex === -1) {
+            // This should not happen if the initial read was correct
+            throw new Error(`Order ${orderId} not found in customer's order list during transaction.`);
+        }
+        
+        const orderToUpdate = orders[orderIndex];
+        const existingPayments: Payment[] = orderToUpdate.payments || [];
+        const paymentId = `${orderId}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
+        
+        orderToUpdate.payments = [...existingPayments, { ...payment, id: paymentId }];
+        
+        // The recalculation loop in runBalanceChainUpdate will handle updating the balance and status.
+        return orders;
+    });
+};
 
 // SUPPLIER FUNCTIONS
 export const getSuppliers = async (): Promise<Supplier[]> => {

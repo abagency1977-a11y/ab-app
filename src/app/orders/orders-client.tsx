@@ -636,28 +636,36 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
             setItems([]);
             setPaymentTerm('Full Payment');
             setPreviousBalance(0);
+            setDiscount(0);
+            setDeliveryFees(0);
+            setEnableDiscount(false);
         }
     }, [isOpen, existingOrder, products, isEditMode]);
 
 
     useEffect(() => {
         const fetchBalance = async () => {
-            if (customerId && !isEditMode) {
-                const balance = await getCustomerBalance(customerId);
-                setPreviousBalance(balance);
+            if (customerId) {
+                 // For edit mode, we use the stored previousBalance.
+                if (isEditMode && existingOrder) {
+                    setPreviousBalance(existingOrder.previousBalance);
+                } else {
+                    const balance = await getCustomerBalance(customerId);
+                    setPreviousBalance(balance);
+                }
                 const customer = customers.find(c => c.id === customerId);
                 if (customer) {
                     setDeliveryAddress(customer.address);
                 }
-            } else if (!isEditMode) {
+            } else {
                 setPreviousBalance(0);
                 setDeliveryAddress('');
             }
         };
-        if (isOpen && !isEditMode) {
+        if (isOpen) {
           fetchBalance();
         }
-    }, [customerId, customers, isOpen, isEditMode]);
+    }, [customerId, customers, isOpen, isEditMode, existingOrder]);
 
     const handleProductSelect = (productId: string) => {
         const product = products.find(p => p.id === productId);
