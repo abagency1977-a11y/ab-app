@@ -1,4 +1,5 @@
 
+'use client';
 import { db } from './firebase';
 import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference, updateDoc, increment, where, orderBy, Transaction } from 'firebase/firestore';
 import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert, LowStockAlert, Supplier, Purchase, PurchasePayment, OrderStatus, PaymentMode } from './types';
@@ -60,10 +61,18 @@ export const getCustomerBalance = async (customerId: string): Promise<number> =>
         
         if (snapshot.empty) return 0;
 
-        return snapshot.docs.reduce((totalDue, doc) => {
-            const order = doc.data() as Order;
-            return totalDue + (order.balanceDue ?? 0);
-        }, 0);
+        const orders = snapshot.docs.map(doc => doc.data() as Order);
+        
+        orders.sort((a, b) => {
+            const dateA = a.orderDate ? new Date(a.orderDate).getTime() : 0;
+            const dateB = b.orderDate ? new Date(b.orderDate).getTime() : 0;
+            if(isNaN(dateA) || isNaN(dateB)) return 0; // handle invalid dates
+            return dateA - dateB;
+        });
+
+        const latestOrder = orders[orders.length - 1];
+
+        return latestOrder.balanceDue && latestOrder.balanceDue > 0 ? latestOrder.balanceDue : 0;
 
     } catch (error) {
         console.error(`Error fetching balance for customer ${customerId}:`, error);
@@ -134,73 +143,67 @@ async function getNextId(transaction: Transaction, counterName: string, prefix: 
     return `${prefix}-${String(nextNumber).padStart(4, '0')}`;
 }
 
-type Workload = (orders: Order[], transaction: Transaction) => Promise<void>;
+type Workload = (orders: Order[]) => Order[];
 
+async function runBalanceChainUpdate(customerId: string, workload: Workload) {
+    try {
+        await runTransaction(db, async (transaction) => {
+            const ordersQuery = query(collection(db, 'orders'), where('customerId', '==', customerId));
+            const customerOrdersSnap = await transaction.get(ordersQuery);
+            let orders = customerOrdersSnap.docs.map(d => ({id: d.id, ...d.data()}) as Order);
 
-async function runBalanceChainUpdate(
-  customerId: string,
-  workload: Workload
-) {
-  try {
-    await runTransaction(db, async (transaction) => {
-      const ordersQuery = query(
-        collection(db, 'orders'),
-        where('customerId', '==', customerId)
-      );
-      const customerOrdersSnap = await transaction.get(ordersQuery);
-      let orders = customerOrdersSnap.docs.map(
-        (d) => ({ id: d.id, ...d.data() }) as Order
-      );
+            // Apply the specific operation (add, update, delete, pay)
+            orders = workload(orders);
 
-      await workload(orders, transaction);
-      
-      orders.sort((a, b) => {
-        const dateA = a.orderDate ? new Date(a.orderDate).getTime() : 0;
-        const dateB = b.orderDate ? new Date(b.orderDate).getTime() : 0;
-        if(isNaN(dateA) || isNaN(dateB)) return 0;
-        return dateA - dateB;
-      });
+            // Sort by date to ensure correct calculation sequence
+            orders.sort((a, b) => {
+                const dateA = a.orderDate ? new Date(a.orderDate).getTime() : 0;
+                const dateB = b.orderDate ? new Date(b.orderDate).getTime() : 0;
+                if(isNaN(dateA) || isNaN(dateB)) return 0; // handle invalid dates
+                return dateA - dateB;
+            });
 
-      let runningPreviousBalance = 0;
-      for (const order of orders) {
-        order.previousBalance = runningPreviousBalance;
-        
-        const currentBillValue = order.total - order.discount + order.deliveryFees;
-        order.grandTotal = currentBillValue + order.previousBalance;
-        
-        const totalPaid = (order.payments || []).reduce((sum, p) => sum + p.amount, 0);
-        order.balanceDue = order.grandTotal - totalPaid;
-        order.status = order.balanceDue <= 0 ? 'Fulfilled' : 'Pending';
+            // Recalculate the entire chain
+            let runningPreviousBalance = 0;
+            for (const order of orders) {
+                order.previousBalance = runningPreviousBalance;
+                
+                const currentBillValue = order.total - order.discount + order.deliveryFees;
+                order.grandTotal = currentBillValue + order.previousBalance;
+                
+                const totalPaid = (order.payments || []).reduce((sum, p) => sum + p.amount, 0);
+                order.balanceDue = order.grandTotal - totalPaid;
+                order.status = order.balanceDue <= 0 ? 'Fulfilled' : 'Pending';
 
-        runningPreviousBalance = order.balanceDue;
-      }
+                runningPreviousBalance = order.balanceDue;
+            }
 
-      for (const order of orders) {
-        const orderRef = doc(db, 'orders', order.id);
-        transaction.set(orderRef, order);
-      }
-    });
-  } catch (e) {
-    console.error("Balance chain update transaction failed:", e);
-    if (e instanceof Error) {
-      throw new Error(`A database error occurred: ${e.message}`);
+            // Write all updated orders back to the database
+            for (const order of orders) {
+                const orderRef = doc(db, 'orders', order.id);
+                transaction.set(orderRef, order);
+            }
+        });
+    } catch (e) {
+        console.error("runBalanceChainUpdate transaction failed:", e);
+        if (e instanceof Error) {
+            throw new Error(`A database error occurred: ${e.message}`);
+        }
+        throw new Error("An unknown database error occurred during the transaction.");
     }
-    throw new Error("An unknown database error occurred during the transaction.");
-  }
 }
 
 export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): Promise<Order> => {
-    let newOrderId: string | null = null;
+    let finalNewOrder : Order | null = null;
     
     await runTransaction(db, async(transaction) => {
         const customerRef = doc(db, 'customers', orderData.customerId);
         const customerSnap = await transaction.get(customerRef);
-        if (!customerSnap.exists()) {
-            throw new Error("Customer not found");
-        }
+        if (!customerSnap.exists()) throw new Error("Customer not found");
+        
         const customerName = customerSnap.data()?.name;
         
-        newOrderId = await getNextId(transaction, 'orderCounter', 'ORD');
+        const newOrderId = await getNextId(transaction, 'orderCounter', 'ORD');
 
         let newOrder: Order = {
             ...orderData,
@@ -216,9 +219,11 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
         if (newOrder.paymentTerm === 'Full Payment' && newOrder.payments && newOrder.payments.length > 0) {
             newOrder.payments[0].id = `${newOrderId}-PAY-01`;
         }
-        
-        await runBalanceChainUpdate(orderData.customerId, async (orders, txn) => {
-            orders.push(newOrder);
+
+        finalNewOrder = newOrder; // Store for return value
+
+        await runBalanceChainUpdate(orderData.customerId, (orders) => {
+            return [...orders, newOrder];
         });
 
         if (!newOrder.isOpeningBalance) {
@@ -236,10 +241,9 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
             }
         }
     });
-
-    const finalOrderSnap = await getDoc(doc(db, 'orders', newOrderId!));
-    if (!finalOrderSnap.exists()) throw new Error("Failed to create and retrieve the new order.");
-    return {id: finalOrderSnap.id, ...finalOrderSnap.data()} as Order;
+    
+    if (!finalNewOrder) throw new Error("Failed to create the new order.");
+    return finalNewOrder;
 };
 
 
@@ -248,9 +252,8 @@ export const updateOrder = async (orderData: Order): Promise<void> => {
 
     await runTransaction(db, async (transaction) => {
         const originalOrderSnap = await getDoc(doc(db, "orders", orderData.id));
-        if (!originalOrderSnap.exists()) {
-            throw new Error("Cannot update order that does not exist.");
-        }
+        if (!originalOrderSnap.exists()) throw new Error("Cannot update order that does not exist.");
+
         const originalOrder = originalOrderSnap.data() as Order;
 
         for (const item of originalOrder.items) {
@@ -274,12 +277,9 @@ export const updateOrder = async (orderData: Order): Promise<void> => {
             transaction.update(doc(db, "customers", orderData.customerId), { 'transactionHistory.totalSpent': increment(newNetValue) });
         }
         
-        await runBalanceChainUpdate(orderData.customerId, async (orders) => {
-            const orderIndex = orders.findIndex(o => o.id === orderData.id);
-            if (orderIndex > -1) {
-                orders[orderIndex] = orderData;
-            }
-        });
+        await runBalanceChainUpdate(orderData.customerId, (orders) => 
+            orders.map(o => o.id === orderData.id ? orderData : o)
+        );
     });
 };
 
@@ -288,14 +288,12 @@ export const deleteOrder = async (orderToDelete: Order): Promise<void> => {
     if (!orderToDelete.id) throw new Error("Order ID is required for deletion.");
     
     await runTransaction(db, async (transaction) => {
+        
+        await runBalanceChainUpdate(orderToDelete.customerId, (orders) => 
+            orders.filter(o => o.id !== orderToDelete.id)
+        );
 
-        await runBalanceChainUpdate(orderToDelete.customerId, async (orders) => {
-            const index = orders.findIndex(o => o.id === orderToDelete.id);
-            if(index > -1) {
-                orders.splice(index, 1);
-                transaction.delete(doc(db, "orders", orderToDelete.id));
-            }
-        });
+        transaction.delete(doc(db, "orders", orderToDelete.id));
 
         for (const item of orderToDelete.items) {
              if(item.productId !== 'OPENING_BALANCE') {
@@ -317,9 +315,10 @@ export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 
     }
     const customerId = orderSnap.data().customerId;
 
-    await runBalanceChainUpdate(customerId, async (orders) => {
+    await runBalanceChainUpdate(customerId, (orders) => {
         const orderIndex = orders.findIndex(o => o.id === orderId);
         if (orderIndex === -1) {
+            // This should not happen if the initial check passes, but good for safety.
             throw new Error(`Order ${orderId} not found in customer's order list during transaction.`);
         }
         
@@ -327,9 +326,13 @@ export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 
         const existingPayments: Payment[] = orderToUpdate.payments || [];
         const paymentId = `${orderId}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
         
+        // This is where we correctly append the new payment to the existing array.
         orderToUpdate.payments = [...existingPayments, { ...payment, id: paymentId }];
+
+        return orders;
     });
 };
+
 
 // SUPPLIER FUNCTIONS
 export const getSuppliers = async (): Promise<Supplier[]> => {
@@ -449,7 +452,11 @@ export const getDashboardData = async () => {
         return sum + orderPayments;
     }, 0);
 
-    const totalBalanceDue = orders.reduce((acc, order) => acc + (order.balanceDue ?? 0), 0);
+    let totalBalanceDue = 0;
+    for (const customer of customers) {
+        const balance = await getCustomerBalance(customer.id);
+        totalBalanceDue += balance;
+    }
 
 
     const totalCustomers = customers.length;
