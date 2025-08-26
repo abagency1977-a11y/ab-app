@@ -781,7 +781,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         const customer = customers.find(c => c.id === customerId);
         if (!customer) return;
 
-        let orderData: Omit<Order, 'id'> | Order = {
+        let orderData: any = {
             id: isEditMode ? existingOrder.id : '',
             customerId,
             orderDate,
@@ -806,20 +806,30 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
             deliveryAddress: deliveryAddress || customer.address,
             isGstInvoice,
             isOpeningBalance: items.some(item => item.productId === 'OPENING_BALANCE'),
-            ...(deliveryDate && { deliveryDate }),
-            ...{
-                payments: paymentTerm === 'Full Payment' ? [{
-                    id: 'temp-payment-id',
-                    paymentDate: orderDate,
-                    amount: grandTotal,
-                    method: paymentMode,
-                    notes: paymentRemarks,
-                }] : (isEditMode ? existingOrder.payments : []),
-                balanceDue: paymentTerm === 'Credit' ? grandTotal : 0,
-                status: paymentTerm === 'Full Payment' ? 'Fulfilled' : 'Pending',
-                dueDate: paymentTerm === 'Credit' ? dueDate : undefined,
-            }
         };
+
+        if (deliveryDate) {
+            orderData.deliveryDate = deliveryDate;
+        }
+
+        if (paymentTerm === 'Credit') {
+            orderData.payments = isEditMode ? existingOrder.payments : [];
+            orderData.balanceDue = grandTotal;
+            orderData.status = 'Pending';
+            if (dueDate) {
+                orderData.dueDate = dueDate;
+            }
+        } else { // Full Payment
+            orderData.payments = [{
+                id: 'temp-payment-id',
+                paymentDate: orderDate,
+                amount: grandTotal,
+                method: paymentMode,
+                notes: paymentRemarks,
+            }];
+            orderData.balanceDue = 0;
+            orderData.status = 'Fulfilled';
+        }
         
         if (isEditMode) {
              try {
