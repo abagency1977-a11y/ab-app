@@ -156,6 +156,8 @@ export const getCustomerBalance = async (customerId: string): Promise<number> =>
             // Fallback sort by ID to ensure consistent order for same-day orders
             return (a.id || '').localeCompare(b.id || '');
         });
+        
+        if (customerOrders.length === 0) return 0;
 
         const mostRecentOrder = customerOrders[customerOrders.length - 1];
         return mostRecentOrder.balanceDue ?? 0;
@@ -232,6 +234,7 @@ function writeNextId(transaction: Transaction, counterName: string, nextNumber: 
     transaction.set(counterRef, { currentNumber: nextNumber }, { merge: true });
 }
 
+
 type Workload = (transaction: Transaction, orders: Order[]) => Promise<void>;
 
 async function runCustomerBalanceUpdate(customerId: string, workload: Workload) {
@@ -245,8 +248,8 @@ async function runCustomerBalanceUpdate(customerId: string, workload: Workload) 
             const orderSnaps = await transaction.get(ordersQuery);
             let orders = orderSnaps.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
 
-            // 2. Perform the specific work (like adding a payment). This might perform additional reads
-            // and will modify the `orders` array in memory.
+            // 2. Perform the specific work. This might perform additional reads (e.g., counters)
+            // and will modify the `orders` array in memory by adding/updating/deleting.
             await workload(transaction, orders);
             
             // 3. Sort orders chronologically to ensure correct balance calculation.
@@ -260,7 +263,6 @@ async function runCustomerBalanceUpdate(customerId: string, workload: Workload) 
             // 4. Recalculate balances for the entire chain and stage the writes.
             let previousBalanceDue = 0;
             for (const order of orders) {
-                // Ensure order and order.id are valid before creating a reference
                 if (!order || !order.id) {
                     console.warn("Skipping order in recalculation due to missing ID or object:", order);
                     continue;
@@ -364,10 +366,8 @@ export const updateOrder = async (orderData: Order): Promise<void> => {
 
     const workload: Workload = async (transaction, orders) => {
         const originalOrder = orders.find(o => o.id === orderData.id);
-
         if (!originalOrder) throw new Error(`Original order ${orderData.id} not found during update.`);
-
-        const index = orders.findIndex(o => o.id === orderData.id);
+        const orderIndex = orders.findIndex(o => o.id === orderData.id);
         
         // Restore stock from original order
         for (const item of originalOrder.items) {
@@ -377,7 +377,7 @@ export const updateOrder = async (orderData: Order): Promise<void> => {
         }
         
         // Update order in memory
-        orders[index] = orderData;
+        orders[orderIndex] = orderData;
         
         // Decrement new stock
         for (const item of orderData.items) {
@@ -434,22 +434,29 @@ export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 
     const orderToReturn = orderSnap.data() as Order;
     
     const workload: Workload = async (transaction, orders) => {
-        const orderToUpdate = orders.find(o => o.id === orderId);
-
-        if (!orderToUpdate) {
+        // Find the order in the array of all customer orders
+        const orderIndex = orders.findIndex(o => o.id === orderId);
+        if (orderIndex === -1) {
             throw new Error(`Order ${orderId} not found in memory during payment transaction.`);
         }
+        
+        const orderToUpdate = orders[orderIndex];
         
         const existingPayments = orderToUpdate.payments || [];
         const paymentId = `${orderId}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
         const newPayment: Payment = { ...payment, id: paymentId };
         
         orderToUpdate.payments = [...existingPayments, newPayment];
+        
+        // This is the critical step: put the modified order back into the array
+        // so the main recalculation loop uses the updated version.
+        orders[orderIndex] = orderToUpdate;
     };
 
     await runCustomerBalanceUpdate(customerId, workload);
     return orderToReturn;
 };
+
 
 // SUPPLIER FUNCTIONS
 export const getSuppliers = async (): Promise<Supplier[]> => {
@@ -737,3 +744,5 @@ export const resetDatabaseForFreshStart = async () => {
         throw new Error("Failed to reset the database.");
     }
 };
+
+    
