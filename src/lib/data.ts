@@ -147,7 +147,7 @@ export const getCustomerBalance = async (customerId: string): Promise<number> =>
             return 0;
         }
 
-        let customerOrders = snapshot.docs.map(doc => doc.data() as Order);
+        let customerOrders = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()} as Order));
         
         customerOrders.sort((a, b) => {
             const dateA = new Date(a.orderDate).getTime();
@@ -423,7 +423,7 @@ export const deleteOrder = async (order: Order): Promise<void> => {
     await runCustomerBalanceUpdate(order.customerId, workload);
 }
 
-export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 'id'>): Promise<void> => {
+export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 'id'>): Promise<Order> => {
     // This initial read is outside the transaction and is only to get the customerId
     const orderRef = doc(db, "orders", orderId);
     const orderSnap = await getDoc(orderRef);
@@ -431,12 +431,12 @@ export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 
         throw new Error("Order not found!");
     }
     const customerId = orderSnap.data().customerId;
+    const orderToReturn = orderSnap.data() as Order;
     
     const workload: Workload = async (transaction, orders) => {
         const orderToUpdate = orders.find(o => o.id === orderId);
+
         if (!orderToUpdate) {
-            // This could happen if the order list is out of sync, but runCustomerBalanceUpdate should handle it.
-            // Let's throw an error to be safe.
             throw new Error(`Order ${orderId} not found in memory during payment transaction.`);
         }
         
@@ -444,11 +444,11 @@ export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 
         const paymentId = `${orderId}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
         const newPayment: Payment = { ...payment, id: paymentId };
         
-        // This is the key fix: update the order in the in-memory array
         orderToUpdate.payments = [...existingPayments, newPayment];
     };
 
     await runCustomerBalanceUpdate(customerId, workload);
+    return orderToReturn;
 };
 
 // SUPPLIER FUNCTIONS
