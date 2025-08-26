@@ -258,7 +258,6 @@ async function runCustomerBalanceUpdate(customerId: string, workload: Workload) 
             // 4. Recalculate balances for the entire chain.
             let previousBalanceDue = 0;
             for (const order of orders) {
-                // Ensure order.id exists before creating a doc reference
                 if (!order.id) {
                     console.warn("Skipping order in recalculation due to missing ID:", order);
                     continue;
@@ -294,28 +293,17 @@ async function runCustomerBalanceUpdate(customerId: string, workload: Workload) 
 export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): Promise<Order> => {
     let newOrderWithId!: Order;
 
-    await runTransaction(db, async (transaction) => {
-        // --- All READS first ---
+    await runCustomerBalanceUpdate(orderData.customerId, async (transaction, orders) => {
+        // --- READS ---
         const customerRef = doc(db, "customers", orderData.customerId);
         const customerSnap = await transaction.get(customerRef);
         const nextIdNumber = await readNextId(transaction, 'orderCounter');
 
         if (!customerSnap.exists()) throw new Error("Customer not found");
         
-        const existingOrdersQuery = query(collection(db, 'orders'), where('customerId', '==', orderData.customerId));
-        const existingOrdersSnap = await transaction.get(existingOrdersQuery);
-        const existingOrders = existingOrdersSnap.docs.map(doc => doc.data() as Order);
-        
-        existingOrders.sort((a, b) => {
-            const dateA = new Date(a.orderDate).getTime();
-            const dateB = new Date(b.orderDate).getTime();
-            if (dateA !== dateB) return dateA - dateB;
-            return (a.id || '').localeCompare(b.id || '');
-        });
+        const previousBalance = orders.length > 0 ? orders[orders.length - 1].balanceDue ?? 0 : 0;
 
-        const previousBalance = existingOrders.length > 0 ? existingOrders[existingOrders.length-1].balanceDue ?? 0 : 0;
-
-        // --- All WRITES second ---
+        // --- WRITES ---
         const orderId = `ORD-${String(nextIdNumber).padStart(4, '0')}`;
         
         newOrderWithId = { 
@@ -343,6 +331,9 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
         const newOrderRef = doc(db, "orders", orderId);
         transaction.set(newOrderRef, newOrderWithId);
 
+        // Add to the in-memory array for recalculation
+        orders.push(newOrderWithId);
+
         writeNextId(transaction, 'orderCounter', nextIdNumber);
 
         if (!newOrderWithId.isOpeningBalance) {
@@ -366,7 +357,6 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
 export const updateOrder = async (orderData: Order): Promise<void> => {
     if (!orderData.id) throw new Error("Order ID is required to update.");
     await runCustomerBalanceUpdate(orderData.customerId, async (transaction, orders) => {
-        const orderRef = doc(db, 'orders', orderData.id);
         const originalOrder = orders.find(o => o.id === orderData.id);
 
         if (!originalOrder) throw new Error(`Original order ${orderData.id} not found during update.`);
@@ -397,7 +387,7 @@ export const deleteOrder = async (order: Order): Promise<void> => {
     if (!order.id) throw new Error("Order ID is required for deletion.");
     
     await runCustomerBalanceUpdate(order.customerId, async (transaction, orders) => {
-        const orderRef = doc(db, "orders", order.id);
+        const orderRef = doc(db, "orders", order.id!);
         const customerRef = doc(db, "customers", order.customerId);
         
         transaction.delete(orderRef);
@@ -434,14 +424,15 @@ export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 
     await runCustomerBalanceUpdate(order.customerId, async (transaction, orders) => {
         const orderToUpdate = orders.find(o => o.id === orderId);
         if (!orderToUpdate) {
-            console.warn(`Order ${orderId} not found in customer's order list during payment.`);
-            return;
+            // This should not happen if the initial read includes the order
+            throw new Error(`Order ${orderId} not found in customer's order list during payment transaction.`);
         }
         
         const existingPayments = orderToUpdate.payments || [];
         const paymentId = `${orderId}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
         const newPayment: Payment = { ...payment, id: paymentId };
         
+        // This is the key fix: update the order in the in-memory array
         orderToUpdate.payments = [...existingPayments, newPayment];
     });
 };
@@ -732,3 +723,5 @@ export const resetDatabaseForFreshStart = async () => {
         throw new Error("Failed to reset the database.");
     }
 };
+
+    
