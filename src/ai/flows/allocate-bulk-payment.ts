@@ -49,7 +49,6 @@ export async function allocateBulkPayment(input: AllocateBulkPaymentInput): Prom
   const allocationResult = await allocateBulkPaymentFlow(input);
   
   if (allocationResult.allocations.length > 0) {
-      // Use Promise.all to handle all payment additions concurrently
       await Promise.all(allocationResult.allocations.map(allocation => {
           if (allocation.amountAllocated > 0) {
             return addPaymentToOrder(allocation.invoiceId, {

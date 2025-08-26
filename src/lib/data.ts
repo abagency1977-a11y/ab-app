@@ -4,73 +4,6 @@ import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc
 import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert, LowStockAlert, Supplier, Purchase, PurchasePayment, OrderStatus, PaymentMode } from './types';
 import { differenceInDays, addDays, startOfToday, subMonths } from 'date-fns';
 
-// MOCK DATA - This will be used to seed the database for the first time.
-const mockCustomers: Omit<Customer, 'id'>[] = [];
-
-const mockProducts: Omit<Product, 'id'>[] = [
-  {
-    name: 'Premium Widget',
-    sku: 'PW-1000',
-    stock: 150,
-    price: 150.00,
-    cost: 75.00,
-    gst: 18,
-    reorderPoint: 20,
-    historicalData: [
-        { date: '2023-01-15', quantity: 20 },
-        { date: '2023-02-10', quantity: 25 },
-        { date: '2023-03-12', quantity: 22 },
-        { date: '2023-04-18', quantity: 30 },
-        { date: '2023-05-20', quantity: 28 },
-    ]
-  },
-  {
-    name: 'Standard Gadget',
-    sku: 'SG-2000',
-    stock: 300,
-    price: 75.50,
-    cost: 30.00,
-    gst: 18,
-    reorderPoint: 50,
-     historicalData: [
-        { date: '2023-01-20', quantity: 50 },
-        { date: '2023-02-15', quantity: 45 },
-        { date: '2023-03-20', quantity: 60 },
-        { date: '2023-04-25', quantity: 55 },
-        { date: '2023-05-28', quantity: 65 },
-    ]
-  },
-  {
-    name: 'Advanced Gizmo',
-    sku: 'AG-3000',
-    stock: 80,
-    price: 220.00,
-    cost: 110.00,
-    gst: 18,
-    reorderPoint: 15,
-     historicalData: [
-        { date: '2023-01-05', quantity: 10 },
-        { date: '2023-02-08', quantity: 12 },
-        { date: '2023-03-10', quantity: 15 },
-        { date: '2023-04-14', quantity: 11 },
-        { date: '2023-05-19', quantity: 18 },
-    ]
-  },
-    {
-    name: 'Outstanding Balance',
-    sku: 'OB-0001',
-    stock: 0,
-    price: 1.00,
-    cost: 0.00,
-    gst: 0,
-    reorderPoint: 0,
-    historicalData: []
-    }
-];
-
-const mockSuppliers: Omit<Supplier, 'id'>[] = [];
-const mockPurchases: Omit<Purchase, 'id'>[] = [];
-
 // GET ALL DATA
 export async function getAllData() {
     const customersPromise = getCustomers();
@@ -90,23 +23,6 @@ export async function getAllData() {
     return { customers, orders, products, suppliers, purchases };
 }
 
-
-// Function to seed the database
-async function seedCollection(collectionName: string, mockData: any[], idPrefix: string) {
-    const collectionRef = collection(db, collectionName);
-    const snapshot = await getDocs(query(collectionRef, limit(1)));
-    if (snapshot.empty) {
-        console.log(`Seeding ${collectionName}...`);
-        const batch = writeBatch(db);
-        mockData.forEach((item, index) => {
-            const docId = `${idPrefix}-${String(index + 1).padStart(3, '0')}`;
-            const docRef = doc(db, collectionName, docId);
-            batch.set(docRef, item);
-        });
-        await batch.commit();
-        console.log(`${collectionName} seeded.`);
-    }
-}
 
 // CUSTOMER FUNCTIONS
 export const getCustomers = async (): Promise<Customer[]> => {
@@ -172,7 +88,6 @@ export const updateCustomer = async (customerData: Partial<Customer>): Promise<v
 };
 
 export const deleteCustomer = async (id: string) => {
-    // This is a simple delete. A more robust solution would check for associated orders first.
     await deleteDoc(doc(db, 'customers', id));
 };
 
@@ -202,7 +117,6 @@ export const updateProduct = async (productData: Partial<Product>): Promise<void
 
 
 export const deleteProduct = async(id: string) => {
-    // This is a simple delete. A more robust solution would check for associated orders first.
     await deleteDoc(doc(db, 'products', id));
 };
 
@@ -226,29 +140,47 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
     
     try {
         await runTransaction(db, async (transaction) => {
+            // --- READS ---
             const customerRef = doc(db, "customers", orderData.customerId);
             const customerSnap = await transaction.get(customerRef);
             if (!customerSnap.exists()) throw new Error("Customer not found");
+            
+            const ordersQuery = query(collection(db, 'orders'), where('customerId', '==', orderData.customerId));
+            const customerOrdersSnap = await transaction.get(ordersQuery);
+            const customerOrders = customerOrdersSnap.docs.map(d => d.data() as Order);
+
+            // --- PREPARE WRITES (IN-MEMORY) ---
+            const previousBalance = customerOrders.reduce((acc, o) => acc + (o.balanceDue ?? 0), 0);
 
             const orderId = await getNextId(transaction, 'orderCounter', 'ORD');
             
-            newOrderWithId = { ...orderData, id: orderId, customerName: customerSnap.data().name };
+            const grandTotal = orderData.total - orderData.discount + orderData.deliveryFees + previousBalance;
 
-            newOrderWithId.isOpeningBalance = orderData.items.some(item => item.productName === 'Opening Balance');
+            newOrderWithId = { 
+                ...orderData, 
+                id: orderId,
+                previousBalance,
+                grandTotal,
+                balanceDue: orderData.paymentTerm === 'Credit' ? grandTotal : 0,
+                status: orderData.paymentTerm === 'Full Payment' ? 'Fulfilled' : 'Pending',
+                customerName: customerSnap.data().name,
+                isOpeningBalance: orderData.items.some(item => item.productName === 'Opening Balance'),
+            };
 
             if (newOrderWithId.payments) {
                 newOrderWithId.payments = newOrderWithId.payments.map((p, i) => ({
                     ...p,
+                    amount: grandTotal, // Full payment is for the new grand total
                     id: `${orderId}-PAY-${String(i + 1).padStart(2, '0')}`
                 }));
             }
-            
+
+            // --- WRITES ---
             transaction.set(doc(db, "orders", orderId), newOrderWithId);
 
             if (!newOrderWithId.isOpeningBalance) {
-                // Update customer totalSpent with the grand total of the current order
                 transaction.update(customerRef, {
-                    'transactionHistory.totalSpent': increment(newOrderWithId.grandTotal),
+                    'transactionHistory.totalSpent': increment(newOrderWithId.total - newOrderWithId.discount + newOrderWithId.deliveryFees),
                     'transactionHistory.lastPurchaseDate': newOrderWithId.orderDate
                 });
             }
@@ -280,7 +212,8 @@ export const updateOrder = async (orderData: Order): Promise<void> => {
             
             // Revert customer total from original order
             if (!originalOrder.isOpeningBalance) {
-                 transaction.update(doc(db, "customers", originalOrder.customerId), {'transactionHistory.totalSpent': increment(-originalOrder.grandTotal)});
+                 const originalNetValue = originalOrder.total - originalOrder.discount + originalOrder.deliveryFees;
+                 transaction.update(doc(db, "customers", originalOrder.customerId), {'transactionHistory.totalSpent': increment(-originalNetValue)});
             }
             // Revert stock from original order
             for (const item of originalOrder.items) {
@@ -292,7 +225,8 @@ export const updateOrder = async (orderData: Order): Promise<void> => {
             // Apply new customer total and stock from updated order
             orderData.isOpeningBalance = orderData.items.some(item => item.productName === 'Opening Balance');
              if (!orderData.isOpeningBalance) {
-                transaction.update(doc(db, "customers", orderData.customerId), {'transactionHistory.totalSpent': increment(orderData.grandTotal)});
+                const newNetValue = orderData.total - orderData.discount + orderData.deliveryFees;
+                transaction.update(doc(db, "customers", orderData.customerId), {'transactionHistory.totalSpent': increment(newNetValue)});
             }
             for (const item of orderData.items) {
                 if(item.productId !== 'OPENING_BALANCE') {
@@ -319,8 +253,9 @@ export const deleteOrder = async (orderToDelete: Order): Promise<void> => {
             transaction.delete(doc(db, "orders", orderToDelete.id));
 
             if (!orderToDelete.isOpeningBalance) {
+                const netOrderValue = orderToDelete.total - orderToDelete.discount + orderToDelete.deliveryFees;
                 transaction.update(doc(db, "customers", orderToDelete.customerId), {
-                    'transactionHistory.totalSpent': increment(-orderToDelete.grandTotal)
+                    'transactionHistory.totalSpent': increment(-netOrderValue)
                 });
             }
 
@@ -351,7 +286,7 @@ export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 
             
             const order = { id: orderSnap.id, ...orderSnap.data() } as Order;
             
-            const existingPayments = order.payments || [];
+            const existingPayments: Payment[] = order.payments || [];
             const paymentId = `${order.id}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
             const newPayment: Payment = { ...payment, id: paymentId };
 
@@ -674,4 +609,3 @@ export const resetDatabaseForFreshStart = async () => {
         throw new Error("Failed to reset the database.");
     }
 };
-
