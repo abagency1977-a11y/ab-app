@@ -84,7 +84,8 @@ export function PaymentsClient({ orders: initialOrders, customers: initialCustom
 
     const { fullPaidInvoices, creditInvoices } = useMemo(() => {
         const fullPaid = allInvoices.filter(order => order.status === 'Fulfilled');
-        const credit = allInvoices.filter(order => order.status !== 'Fulfilled' && order.status !== 'Canceled');
+        // Only show orders that have a partial payment
+        const credit = allInvoices.filter(order => order.status === 'Part Payment');
         return { fullPaidInvoices: fullPaid, creditInvoices: credit };
     }, [allInvoices]);
 
@@ -378,3 +379,4 @@ function PaymentForm({ balanceDue, onAddPayment }: { balanceDue: number; onAddPa
         </Card>
     );
 }
+
