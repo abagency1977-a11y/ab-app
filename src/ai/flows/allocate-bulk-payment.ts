@@ -46,21 +46,21 @@ export type AllocateBulkPaymentOutput = z.infer<typeof AllocateBulkPaymentOutput
 
 
 export async function allocateBulkPayment(input: AllocateBulkPaymentInput): Promise<AllocateBulkPaymentOutput> {
-  // AI is now only used for the initial allocation logic.
-  // The complex balance recalculation is handled deterministically in the data layer.
   const allocationResult = await allocateBulkPaymentFlow(input);
   
   if (allocationResult.allocations.length > 0) {
-      for (const allocation of allocationResult.allocations) {
+      // Use Promise.all to handle all payment additions concurrently
+      await Promise.all(allocationResult.allocations.map(allocation => {
           if (allocation.amountAllocated > 0) {
-            await addPaymentToOrder(allocation.invoiceId, {
+            return addPaymentToOrder(allocation.invoiceId, {
                 amount: allocation.amountAllocated,
                 paymentDate: input.paymentDate,
                 method: input.paymentMethod,
                 notes: `Part of bulk payment. ${input.notes || ''}`.trim(),
             });
           }
-      }
+          return Promise.resolve();
+      }));
   }
 
   return allocationResult;
