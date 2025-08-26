@@ -147,12 +147,13 @@ export const getCustomerBalance = async (customerId: string): Promise<number> =>
             return 0;
         }
 
-        const customerOrders = snapshot.docs.map(doc => doc.data() as Order);
+        let customerOrders = snapshot.docs.map(doc => doc.data() as Order);
         
         customerOrders.sort((a, b) => {
             const dateA = new Date(a.orderDate).getTime();
             const dateB = new Date(b.orderDate).getTime();
             if (dateA !== dateB) return dateA - dateB;
+            // Fallback sort by ID to ensure consistent order for same-day orders
             return (a.id || '').localeCompare(b.id || '');
         });
 
@@ -236,7 +237,7 @@ type Workload = (transaction: Transaction, orders: Order[]) => Promise<void>;
 async function runCustomerBalanceUpdate(customerId: string, workload: Workload) {
     try {
         await runTransaction(db, async (transaction) => {
-            // 1. READ ALL customer orders first.
+            // 1. READ ALL customer orders first. This is the main read.
             const ordersQuery = query(
                 collection(db, 'orders'),
                 where('customerId', '==', customerId)
@@ -244,7 +245,8 @@ async function runCustomerBalanceUpdate(customerId: string, workload: Workload) 
             const orderSnaps = await transaction.get(ordersQuery);
             let orders = orderSnaps.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
 
-            // 2. Perform the specific work (like adding a payment). This might modify the `orders` array in memory.
+            // 2. Perform the specific work (like adding a payment). This might perform additional reads
+            // and will modify the `orders` array in memory.
             await workload(transaction, orders);
             
             // 3. Sort orders chronologically to ensure correct balance calculation.
@@ -255,11 +257,12 @@ async function runCustomerBalanceUpdate(customerId: string, workload: Workload) 
                 return (a.id || '').localeCompare(b.id || '');
             });
 
-            // 4. Recalculate balances for the entire chain.
+            // 4. Recalculate balances for the entire chain and stage the writes.
             let previousBalanceDue = 0;
             for (const order of orders) {
-                if (!order.id) {
-                    console.warn("Skipping order in recalculation due to missing ID:", order);
+                // Ensure order and order.id are valid before creating a reference
+                if (!order || !order.id) {
+                    console.warn("Skipping order in recalculation due to missing ID or object:", order);
                     continue;
                 }
                 const orderRef = doc(db, "orders", order.id);
@@ -293,8 +296,8 @@ async function runCustomerBalanceUpdate(customerId: string, workload: Workload) 
 export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): Promise<Order> => {
     let newOrderWithId!: Order;
 
-    await runCustomerBalanceUpdate(orderData.customerId, async (transaction, orders) => {
-        // --- READS ---
+    const workload: Workload = async (transaction, orders) => {
+        // --- Additional READS (must be before writes) ---
         const customerRef = doc(db, "customers", orderData.customerId);
         const customerSnap = await transaction.get(customerRef);
         const nextIdNumber = await readNextId(transaction, 'orderCounter');
@@ -303,7 +306,7 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
         
         const previousBalance = orders.length > 0 ? orders[orders.length - 1].balanceDue ?? 0 : 0;
 
-        // --- WRITES ---
+        // --- PREPARE DATA ---
         const orderId = `ORD-${String(nextIdNumber).padStart(4, '0')}`;
         
         newOrderWithId = { 
@@ -328,11 +331,12 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
         newOrderWithId.balanceDue = newOrderWithId.grandTotal - totalPaid;
         newOrderWithId.status = newOrderWithId.balanceDue <= 0 ? 'Fulfilled' : 'Pending';
 
-        const newOrderRef = doc(db, "orders", orderId);
-        transaction.set(newOrderRef, newOrderWithId);
-
         // Add to the in-memory array for recalculation
         orders.push(newOrderWithId);
+
+        // --- WRITES ---
+        const newOrderRef = doc(db, "orders", orderId);
+        transaction.set(newOrderRef, newOrderWithId);
 
         writeNextId(transaction, 'orderCounter', nextIdNumber);
 
@@ -349,14 +353,16 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
                 transaction.update(productRef, { stock: increment(-item.quantity) });
             }
         }
-    });
+    };
 
+    await runCustomerBalanceUpdate(orderData.customerId, workload);
     return newOrderWithId;
 };
 
 export const updateOrder = async (orderData: Order): Promise<void> => {
     if (!orderData.id) throw new Error("Order ID is required to update.");
-    await runCustomerBalanceUpdate(orderData.customerId, async (transaction, orders) => {
+
+    const workload: Workload = async (transaction, orders) => {
         const originalOrder = orders.find(o => o.id === orderData.id);
 
         if (!originalOrder) throw new Error(`Original order ${orderData.id} not found during update.`);
@@ -379,14 +385,16 @@ export const updateOrder = async (orderData: Order): Promise<void> => {
                 transaction.update(doc(db, 'products', item.productId), { stock: increment(-item.quantity) });
             }
         }
-    });
+    };
+    
+    await runCustomerBalanceUpdate(orderData.customerId, workload);
 };
 
 
 export const deleteOrder = async (order: Order): Promise<void> => {
     if (!order.id) throw new Error("Order ID is required for deletion.");
     
-    await runCustomerBalanceUpdate(order.customerId, async (transaction, orders) => {
+    const workload: Workload = async (transaction, orders) => {
         const orderRef = doc(db, "orders", order.id!);
         const customerRef = doc(db, "customers", order.customerId);
         
@@ -410,22 +418,26 @@ export const deleteOrder = async (order: Order): Promise<void> => {
                 transaction.update(productRef, { stock: increment(item.quantity) });
             }
         }
-    });
+    };
+
+    await runCustomerBalanceUpdate(order.customerId, workload);
 }
 
 export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 'id'>): Promise<void> => {
+    // This initial read is outside the transaction and is only to get the customerId
     const orderRef = doc(db, "orders", orderId);
     const orderSnap = await getDoc(orderRef);
     if (!orderSnap.exists()) {
         throw new Error("Order not found!");
     }
-    const order = orderSnap.data() as Order;
+    const customerId = orderSnap.data().customerId;
     
-    await runCustomerBalanceUpdate(order.customerId, async (transaction, orders) => {
+    const workload: Workload = async (transaction, orders) => {
         const orderToUpdate = orders.find(o => o.id === orderId);
         if (!orderToUpdate) {
-            // This should not happen if the initial read includes the order
-            throw new Error(`Order ${orderId} not found in customer's order list during payment transaction.`);
+            // This could happen if the order list is out of sync, but runCustomerBalanceUpdate should handle it.
+            // Let's throw an error to be safe.
+            throw new Error(`Order ${orderId} not found in memory during payment transaction.`);
         }
         
         const existingPayments = orderToUpdate.payments || [];
@@ -434,7 +446,9 @@ export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 
         
         // This is the key fix: update the order in the in-memory array
         orderToUpdate.payments = [...existingPayments, newPayment];
-    });
+    };
+
+    await runCustomerBalanceUpdate(customerId, workload);
 };
 
 // SUPPLIER FUNCTIONS
@@ -723,5 +737,3 @@ export const resetDatabaseForFreshStart = async () => {
         throw new Error("Failed to reset the database.");
     }
 };
-
-    
