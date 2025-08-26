@@ -1,3 +1,4 @@
+
 import { db } from './firebase';
 import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference, updateDoc, increment, where, orderBy, Transaction } from 'firebase/firestore';
 import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert, LowStockAlert, Supplier, Purchase, PurchasePayment, OrderStatus, PaymentMode } from './types';
@@ -157,7 +158,8 @@ async function runBalanceChainUpdate(customerId: string, workload: Workload) {
             orders.sort((a, b) => {
                 const dateA = a.orderDate ? new Date(a.orderDate).getTime() : 0;
                 const dateB = b.orderDate ? new Date(b.orderDate).getTime() : 0;
-                if(isNaN(dateA) || isNaN(dateB)) return 0; // handle invalid dates
+                if(isNaN(dateA)) return -1;
+                if(isNaN(dateB)) return 1;
                 return dateA - dateB;
             });
 
@@ -173,7 +175,7 @@ async function runBalanceChainUpdate(customerId: string, workload: Workload) {
                 order.balanceDue = order.grandTotal - totalPaid;
                 order.status = order.balanceDue <= 0 ? 'Fulfilled' : 'Pending';
 
-                runningPreviousBalance = order.balanceDue;
+                runningPreviousBalance = order.balanceDue > 0 ? order.balanceDue : 0;
             }
 
             // Write all updated orders back to the database
@@ -651,3 +653,5 @@ export const resetDatabaseForFreshStart = async () => {
         throw new Error("Failed to reset the database.");
     }
 };
+
+    
