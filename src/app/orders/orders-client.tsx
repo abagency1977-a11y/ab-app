@@ -269,7 +269,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 finalY += 6;
             };
 
-            addTotalRow("Current Invoice Total:", orderToPrint.total);
+            addTotalRow("Subtotal:", orderToPrint.total);
             if(orderToPrint.deliveryFees > 0) addTotalRow("Delivery Fees:", orderToPrint.deliveryFees);
             if(orderToPrint.discount > 0) addTotalRow("Discount:", -orderToPrint.discount);
             if(orderToPrint.previousBalance > 0) addTotalRow("Previous Balance:", orderToPrint.previousBalance);
@@ -280,7 +280,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             const grandTotalText = `Grand Total: ${formatNumber(orderToPrint.grandTotal)}`;
             doc.setFont('helvetica', 'bold');
             
-            const isCredit = orderToPrint.paymentTerm === 'Credit';
+            const isCredit = orderToPrint.paymentTerm === 'Credit' && (orderToPrint.balanceDue ?? 0) > 0;
             const boxColor = isCredit ? [255, 235, 238] : [222, 247, 236]; // Light Red or Light Green
             const textColor = isCredit ? [220, 38, 38] : [22, 101, 52]; // Red-600 or Green-800
             
@@ -313,12 +313,16 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         }
     };
 
+    const refreshData = async () => {
+        const { orders: refreshedOrders, customers: refreshedCustomers } = await getAllData();
+        setOrders(refreshedOrders);
+        setCustomers(refreshedCustomers);
+    }
 
     const handleAddOrder = async (newOrderData: Omit<Order, 'id' | 'customerName'>) => {
        try {
            const newOrder = await addOrder(newOrderData);
-           const { orders: allOrders } = await getAllData();
-           setOrders(allOrders);
+           await refreshData();
            toast({
                title: "Order Placed",
                description: `Order ${newOrder.id} has been successfully created.`,
@@ -338,9 +342,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     const handleUpdateOrder = async (updatedOrderData: Order) => {
        try {
            await updateOrder(updatedOrderData);
-           // After updating, we need to refresh ALL orders for that customer to get the recalculated balances
-           const { orders: allOrders } = await getAllData();
-           setOrders(allOrders);
+           await refreshData();
            toast({
                title: "Order Updated",
                description: `Order ${updatedOrderData.id} has been successfully updated.`,
@@ -360,9 +362,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         if (!orderToDelete) return;
         try {
             await deleteOrderFromDB(orderToDelete);
-            // After deleting, we need to refresh ALL orders for that customer to get the recalculated balances
-            const { orders: allOrders } = await getAllData();
-            setOrders(allOrders);
+            await refreshData();
             toast({
                 title: "Order Deleted",
                 description: `Order ${orderToDelete.id} has been successfully deleted.`
@@ -616,9 +616,9 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                 }
             }));
             setPaymentTerm(existingOrder.paymentTerm);
-            if(existingOrder.paymentTerm === 'Full Payment') {
-                setPaymentMode(existingOrder.paymentMode || 'Cash');
-                setPaymentRemarks(existingOrder.paymentRemarks || '');
+            if(existingOrder.paymentTerm === 'Full Payment' && existingOrder.payments && existingOrder.payments.length > 0) {
+                setPaymentMode(existingOrder.payments[0].method || 'Cash');
+                setPaymentRemarks(existingOrder.payments[0].notes || '');
             } else {
                 setDueDate(existingOrder.dueDate ? new Date(existingOrder.dueDate).toISOString().split('T')[0] : '');
             }
@@ -630,22 +630,26 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
             setDeliveryFees(existingOrder.deliveryFees);
             setPreviousBalance(existingOrder.previousBalance);
         } else if (isOpen && !existingOrder) {
-            // For new orders, always reset the date to today
+            // For new orders, always reset the form but keep dialog open
+            setCustomerId('');
             setOrderDate(new Date().toISOString().split('T')[0]);
+            setItems([]);
+            setPaymentTerm('Full Payment');
+            setPreviousBalance(0);
         }
     }, [isOpen, existingOrder, products, isEditMode]);
 
 
     useEffect(() => {
         const fetchBalance = async () => {
-            if (customerId) {
+            if (customerId && !isEditMode) {
                 const balance = await getCustomerBalance(customerId);
                 setPreviousBalance(balance);
                 const customer = customers.find(c => c.id === customerId);
                 if (customer) {
                     setDeliveryAddress(customer.address);
                 }
-            } else {
+            } else if (!isEditMode) {
                 setPreviousBalance(0);
                 setDeliveryAddress('');
             }
@@ -742,16 +746,15 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         }
     };
 
-    const { subTotal, totalGst, currentInvoiceTotal } = useMemo(() => {
+    const { subTotal, currentInvoiceTotal } = useMemo(() => {
         const subTotal = items.reduce((sum, item) => sum + (parseFloat(item.price) || 0) * (parseInt(item.quantity) || 0), 0);
         
-        let totalGst = 0;
-        if (isGstInvoice) {
-            totalGst = items.reduce((sum, item) => sum + ((parseFloat(item.price) || 0) * (parseInt(item.quantity) || 0) * ((parseFloat(item.gst) || 0) / 100)), 0);
-        }
+        const totalGst = isGstInvoice 
+            ? items.reduce((sum, item) => sum + ((parseFloat(item.price) || 0) * (parseInt(item.quantity) || 0) * ((parseFloat(item.gst) || 0) / 100)), 0)
+            : 0;
         
         const totalValue = subTotal + totalGst;
-        return { subTotal, totalGst, currentInvoiceTotal: totalValue };
+        return { subTotal, currentInvoiceTotal: totalValue };
     }, [items, isGstInvoice]);
 
     const grandTotal = useMemo(() => currentInvoiceTotal - discount + deliveryFees + previousBalance, [currentInvoiceTotal, discount, deliveryFees, previousBalance]);
@@ -770,11 +773,11 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         const customer = customers.find(c => c.id === customerId);
         if (!customer) return;
 
-        let orderData: Omit<Order, 'id' | 'customerName'> | Order = {
+        let orderData: Omit<Order, 'id'> | Order = {
+            id: isEditMode ? existingOrder.id : '',
             customerId,
-            orderDate: orderDate,
+            orderDate,
             customerName: customer.name,
-            status: 'Pending',
             items: items.map(item => {
                 const product = products.find(p => p.id === item.productId);
                 return {
@@ -787,45 +790,32 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                 };
             }),
             total: currentInvoiceTotal,
-            previousBalance: previousBalance,
+            previousBalance,
             discount,
             deliveryFees,
             grandTotal,
             paymentTerm,
             deliveryAddress: deliveryAddress || customer.address,
             isGstInvoice,
-            isOpeningBalance: items.some(item => item.productId === 'OPENING_BALANCE'), // This will be set in the backend function
+            isOpeningBalance: items.some(item => item.productId === 'OPENING_BALANCE'),
             ...(deliveryDate && { deliveryDate }),
-            ...(paymentTerm === 'Full Payment' && { 
-                paymentMode, 
-                paymentRemarks,
-                balanceDue: 0,
-                status: 'Fulfilled',
-                payments: [{
+            ...{
+                payments: paymentTerm === 'Full Payment' ? [{
                     id: 'temp-payment-id',
                     paymentDate: orderDate,
                     amount: grandTotal,
                     method: paymentMode,
                     notes: paymentRemarks,
-                }]
-            }),
-            ...(paymentTerm === 'Credit' && {
-                dueDate,
-                balanceDue: grandTotal,
-                payments: []
-            })
+                }] : (isEditMode ? existingOrder.payments : []),
+                balanceDue: paymentTerm === 'Credit' ? grandTotal : 0,
+                status: paymentTerm === 'Full Payment' ? 'Fulfilled' : 'Pending',
+                dueDate: paymentTerm === 'Credit' ? dueDate : undefined,
+            }
         };
         
-        if (isEditMode && existingOrder) {
-             // In edit mode, we merge existing data with new data
-            let finalOrderData = {
-                ...existingOrder,
-                ...orderData,
-                customerName: customer.name, // ensure customer name is fresh
-            };
-
-            try {
-                await onOrderUpdated(finalOrderData as Order);
+        if (isEditMode) {
+             try {
+                await onOrderUpdated(orderData as Order);
                 resetForm();
             } catch(e) {
                 // error is toasted in parent
@@ -843,7 +833,6 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     const customerOptions = useMemo(() => customers.map(c => ({ value: c.id, label: c.name })), [customers]);
     const productOptions = useMemo(() => {
         const standardProducts = products.map(p => ({ value: p.id, label: `${p.name} (SKU: ${p.sku})` }));
-        // Add a special "Opening Balance" product option
         const openingBalanceOption = { value: 'OPENING_BALANCE', label: 'Opening Balance' };
         return [openingBalanceOption, ...standardProducts];
     }, [products]);
@@ -1014,8 +1003,8 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                     <div className="space-y-4">
                                         <Card><CardContent className="p-4 space-y-2">
                                             <DialogTitle className="text-lg">Order Summary</DialogTitle>
-                                            <div className="flex justify-between"><span>Current Invoice Total:</span> <span className="font-semibold">{formatNumberForDisplay(currentInvoiceTotal)}</span></div>
-                                            {previousBalance > 0 && <div className="flex justify-between text-destructive"><span>Previous Balance:</span> <span className="font-semibold">{formatNumberForDisplay(previousBalance)}</span></div>}
+                                            <div className="flex justify-between"><span>Current Items Total:</span> <span className="font-semibold">{formatNumberForDisplay(currentInvoiceTotal)}</span></div>
+                                            {previousBalance > 0 && <div className="flex justify-between text-destructive"><span>Previous Due:</span> <span className="font-semibold">{formatNumberForDisplay(previousBalance)}</span></div>}
                                              <div className="flex justify-between items-center">
                                                 <Label htmlFor="delivery_fees" className="flex-1">Delivery Fees</Label>
                                                 <Input type="number" placeholder="0.00" className="w-24 h-8" value={String(deliveryFees)} onChange={e => setDeliveryFees(parseFloat(e.target.value) || 0)} />
@@ -1029,7 +1018,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                             </div>
                                             <Separator />
                                             <div className="flex justify-between text-lg">
-                                                <span className="font-bold">Grand Total Value:</span>
+                                                <span className="font-bold">Grand Total:</span>
                                                 <span className="font-bold text-primary">{formatNumberForDisplay(grandTotal)}</span>
                                             </div>
                                             
@@ -1074,5 +1063,3 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         </>
     );
 }
-
-    

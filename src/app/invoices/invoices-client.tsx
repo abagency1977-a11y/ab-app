@@ -95,20 +95,20 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
         const credit = allInvoices.filter(order => order.balanceDue && order.balanceDue > 0);
         return { fullPaidInvoices: fullPaid, creditInvoices: credit };
     }, [allInvoices]);
+
+    const refreshData = async () => {
+        const { orders, customers } = await getAllData();
+        setAllInvoices(orders);
+        setAllCustomers(customers);
+    };
     
     const handleAddPayment = async (payment: Omit<Payment, 'id'>) => {
         if (!selectedInvoice) return;
         
         try {
             const updatedOrder = await addPaymentToOrder(selectedInvoice.id, payment);
-            
-            // After a successful payment, refresh all orders to get recalculated balances
-            const { orders: refreshedOrders } = await getAllData();
-            setAllInvoices(refreshedOrders);
-            
-            // Find the selected invoice in the refreshed list to update the sheet
-            const newlyUpdatedInvoice = refreshedOrders.find(o => o.id === updatedOrder.id);
-            setSelectedInvoice(newlyUpdatedInvoice || null);
+            await refreshData();
+            setSelectedInvoice(updatedOrder);
 
             toast({
                 title: 'Payment Recorded',
@@ -188,8 +188,7 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
         if (!invoiceToDelete) return;
         try {
             await deleteOrder(invoiceToDelete);
-            const { orders: refreshedOrders } = await getAllData();
-            setAllInvoices(refreshedOrders);
+            await refreshData();
             toast({
                 title: "Invoice Deleted",
                 description: `Invoice ${invoiceToDelete.id.replace('ORD', 'INV')} has been successfully deleted.`
@@ -258,7 +257,7 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
                             </div>
                             <div className="flex justify-between text-sm">
                                 <span className="text-muted-foreground">Current Bill:</span>
-                                <span>{formatNumber(selectedInvoice.grandTotal - selectedInvoice.previousBalance)}</span>
+                                <span>{formatNumber(selectedInvoice.total)}</span>
                             </div>
                             <div className="flex justify-between font-bold text-lg">
                                 <span className="text-muted-foreground">Total:</span>
@@ -420,5 +419,3 @@ function PaymentForm({ balanceDue, onAddPayment }: { balanceDue: number; onAddPa
         </Card>
     );
 }
-
-    
