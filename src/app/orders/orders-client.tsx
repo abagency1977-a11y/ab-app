@@ -6,7 +6,7 @@ import type { Order, Customer, Product, PaymentTerm, PaymentMode, OrderStatus } 
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, FileText, Receipt, Loader2, PlusCircle, Trash2, Download, Edit, Share2 } from 'lucide-react';
+import { MoreHorizontal, FileText, Receipt, Loader2, PlusCircle, Trash2, Download, Edit, Share2, FileSpreadsheet } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +26,7 @@ import 'jspdf-autotable';
 import { startOfWeek, startOfMonth, subMonths, isWithinInterval } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Combobox } from '@/components/ui/combobox';
+import * as XLSX from 'xlsx';
 
 
 const formatNumberForDisplay = (value: number | undefined) => {
@@ -313,6 +314,62 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         }
     };
 
+    const handleExportToExcel = () => {
+        const dataToExport = orders.flatMap(order => 
+            order.items.map(item => {
+                const totalPaid = order.payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
+                return {
+                    'Order ID': order.id,
+                    'Customer Name': order.customerName,
+                    'Order Date': new Date(order.orderDate).toLocaleDateString('en-CA'), // YYYY-MM-DD
+                    'Status': order.status,
+                    'Payment Term': order.paymentTerm,
+                    'Due Date': order.dueDate ? new Date(order.dueDate).toLocaleDateString('en-CA') : 'N/A',
+                    'Item Name': item.productName,
+                    'Item Quantity': item.quantity,
+                    'Item Price': item.price,
+                    'Item GST %': item.gst,
+                    'Subtotal': order.total,
+                    'Discount': order.discount,
+                    'Delivery Fees': order.deliveryFees,
+                    'Previous Balance': order.previousBalance,
+                    'Grand Total': order.grandTotal,
+                    'Total Paid': totalPaid,
+                    'Balance Due': order.balanceDue,
+                };
+            })
+        );
+
+        const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Orders");
+
+        // Set column widths
+        const colWidths = [
+            { wch: 15 }, // Order ID
+            { wch: 25 }, // Customer Name
+            { wch: 12 }, // Order Date
+            { wch: 15 }, // Status
+            { wch: 15 }, // Payment Term
+            { wch: 12 }, // Due Date
+            { wch: 30 }, // Item Name
+            { wch: 10 }, // Item Quantity
+            { wch: 10 }, // Item Price
+            { wch: 10 }, // Item GST %
+            { wch: 12 }, // Subtotal
+            { wch: 10 }, // Discount
+            { wch: 12 }, // Delivery Fees
+            { wch: 15 }, // Previous Balance
+            { wch: 15 }, // Grand Total
+            { wch: 12 }, // Total Paid
+            { wch: 12 }, // Balance Due
+        ];
+        worksheet['!cols'] = colWidths;
+
+        XLSX.writeFile(workbook, "All_Orders_Backup.xlsx");
+        toast({ title: 'Success', description: 'All orders have been exported to Excel.' });
+    };
+
     const refreshData = async () => {
         const { orders: refreshedOrders, customers: refreshedCustomers } = await getAllData();
         setOrders(refreshedOrders);
@@ -426,10 +483,16 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         <div className="space-y-4">
             <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-bold">Orders</h1>
-                 <Button onClick={openOrderDialog} disabled={isLoading}>
-                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
-                     Place Order
-                </Button>
+                <div className="flex gap-2">
+                    <Button onClick={handleExportToExcel} variant="outline">
+                        <FileSpreadsheet className="mr-2 h-4 w-4" />
+                        Export to Excel
+                    </Button>
+                    <Button onClick={openOrderDialog} disabled={isLoading}>
+                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
+                        Place Order
+                    </Button>
+                </div>
             </div>
             <div className="flex items-center gap-4">
                 <Input 
