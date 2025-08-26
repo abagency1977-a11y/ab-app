@@ -1,5 +1,4 @@
 
-
 import { db } from './firebase';
 import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference, updateDoc, increment, where, orderBy, Transaction } from 'firebase/firestore';
 import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert, LowStockAlert, Supplier, Purchase, PurchasePayment, OrderStatus, PaymentMode } from './types';
@@ -267,209 +266,253 @@ function _recalculateBalances(orders: Order[]): Order[] {
 export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName' | 'previousBalance' | 'grandTotal' | 'balanceDue' | 'status'>): Promise<Order> => {
     let newOrderWithId!: Order;
     
-    await runTransaction(db, async (transaction) => {
-        // --- READS ---
-        const customerRef = doc(db, "customers", orderData.customerId);
-        const customerSnap = await transaction.get(customerRef);
-        if (!customerSnap.exists()) throw new Error("Customer not found");
+    try {
+        await runTransaction(db, async (transaction) => {
+            // --- READS ---
+            const customerRef = doc(db, "customers", orderData.customerId);
+            const customerSnap = await transaction.get(customerRef);
+            if (!customerSnap.exists()) throw new Error("Customer not found");
 
-        const nextIdNumber = await readNextId(transaction, 'orderCounter');
-        
-        const ordersQuery = query(collection(db, 'orders'), where('customerId', '==', orderData.customerId));
-        const customerOrdersSnap = await transaction.get(ordersQuery);
-        let customerOrders = customerOrdersSnap.docs.map(d => ({ id: d.id, ...d.data() } as Order));
+            const nextIdNumber = await readNextId(transaction, 'orderCounter');
+            
+            const ordersQuery = query(collection(db, 'orders'), where('customerId', '==', orderData.customerId));
+            const customerOrdersSnap = await transaction.get(ordersQuery);
+            let customerOrders = customerOrdersSnap.docs.map(d => ({ id: d.id, ...d.data() } as Order));
 
-        // --- PREPARE WRITES (IN-MEMORY) ---
-        const orderId = `ORD-${String(nextIdNumber).padStart(4, '0')}`;
-        
-        newOrderWithId = { 
-            ...orderData, 
-            id: orderId, 
-            customerName: customerSnap.data().name,
-            previousBalance: 0,
-            grandTotal: 0,
-            balanceDue: 0,
-            status: 'Pending',
-        };
+            // --- PREPARE WRITES (IN-MEMORY) ---
+            const orderId = `ORD-${String(nextIdNumber).padStart(4, '0')}`;
+            
+            newOrderWithId = { 
+                ...orderData, 
+                id: orderId, 
+                customerName: customerSnap.data().name,
+                previousBalance: 0,
+                grandTotal: 0,
+                balanceDue: 0,
+                status: 'Pending',
+            };
 
-        newOrderWithId.isOpeningBalance = orderData.items.some(item => item.productName === 'Opening Balance');
+            newOrderWithId.isOpeningBalance = orderData.items.some(item => item.productName === 'Opening Balance');
 
-        if (newOrderWithId.payments) {
-            newOrderWithId.payments = newOrderWithId.payments.map((p, i) => ({
-                 ...p,
-                 id: `${orderId}-PAY-${String(i + 1).padStart(2, '0')}`
-            }));
-        }
-
-        const allOrdersForRecalc = [...customerOrders, newOrderWithId];
-        const recalculatedOrders = _recalculateBalances(allOrdersForRecalc);
-        
-        // --- WRITES ---
-        writeNextId(transaction, 'orderCounter', nextIdNumber);
-        
-        if (!newOrderWithId.isOpeningBalance) {
-            const currentInvoiceTotal = newOrderWithId.total - newOrderWithId.discount + newOrderWithId.deliveryFees;
-            transaction.update(customerRef, {
-                'transactionHistory.totalSpent': increment(currentInvoiceTotal),
-                'transactionHistory.lastPurchaseDate': newOrderWithId.orderDate
-            });
-        }
-        
-        for (const item of newOrderWithId.items) {
-            if(item.productId !== 'OPENING_BALANCE') {
-                const productRef = doc(db, "products", item.productId);
-                transaction.update(productRef, { stock: increment(-item.quantity) });
+            if (newOrderWithId.payments) {
+                newOrderWithId.payments = newOrderWithId.payments.map((p, i) => ({
+                    ...p,
+                    id: `${orderId}-PAY-${String(i + 1).padStart(2, '0')}`
+                }));
             }
-        }
 
-        for (const order of recalculatedOrders) {
-            const orderRef = doc(db, 'orders', order.id);
-            transaction.set(orderRef, order);
-        }
-    });
+            const allOrdersForRecalc = [...customerOrders, newOrderWithId];
+            const recalculatedOrders = _recalculateBalances(allOrdersForRecalc);
+            
+            // --- WRITES ---
+            writeNextId(transaction, 'orderCounter', nextIdNumber);
+            
+            if (!newOrderWithId.isOpeningBalance) {
+                const currentInvoiceTotal = newOrderWithId.total - newOrderWithId.discount + newOrderWithId.deliveryFees;
+                transaction.update(customerRef, {
+                    'transactionHistory.totalSpent': increment(currentInvoiceTotal),
+                    'transactionHistory.lastPurchaseDate': newOrderWithId.orderDate
+                });
+            }
+            
+            for (const item of newOrderWithId.items) {
+                if(item.productId !== 'OPENING_BALANCE') {
+                    const productRef = doc(db, "products", item.productId);
+                    transaction.update(productRef, { stock: increment(-item.quantity) });
+                }
+            }
 
+            for (const order of recalculatedOrders) {
+                 if (order.id) {
+                    const orderRef = doc(db, 'orders', order.id);
+                    transaction.set(orderRef, order);
+                }
+            }
+        });
+    } catch(e) {
+        console.error("Add order transaction failed: ", e);
+        if (e instanceof Error) {
+            throw new Error(`A database error occurred: ${e.message}`);
+        }
+        throw new Error("An unknown database error occurred during the transaction.");
+    }
     return newOrderWithId;
 };
 
 export const updateOrder = async (orderData: Order): Promise<void> => {
     if (!orderData.id) throw new Error("Order ID is required to update.");
 
-    await runTransaction(db, async (transaction) => {
-        // --- READS ---
-        const originalOrderRef = doc(db, "orders", orderData.id);
-        const originalOrderSnap = await transaction.get(originalOrderRef);
-        if (!originalOrderSnap.exists()) throw new Error("Order to update not found.");
-        const originalOrder = { id: originalOrderSnap.id, ...originalOrderSnap.data() } as Order;
+    try {
+        await runTransaction(db, async (transaction) => {
+            // --- READS ---
+            const originalOrderRef = doc(db, "orders", orderData.id);
+            const originalOrderSnap = await transaction.get(originalOrderRef);
+            if (!originalOrderSnap.exists()) throw new Error("Order to update not found.");
+            const originalOrder = { id: originalOrderSnap.id, ...originalOrderSnap.data() } as Order;
 
-        const customerRef = doc(db, "customers", orderData.customerId);
+            const customerRef = doc(db, "customers", orderData.customerId);
 
-        const ordersQuery = query(collection(db, 'orders'), where('customerId', '==', orderData.customerId));
-        const customerOrdersSnap = await transaction.get(ordersQuery);
-        let customerOrders = customerOrdersSnap.docs.map(d => ({ id: d.id, ...d.data() } as Order));
-        
-        // --- PREPARE WRITES (IN-MEMORY) ---
-        orderData.isOpeningBalance = orderData.items.some(item => item.productName === 'Opening Balance');
+            const ordersQuery = query(collection(db, 'orders'), where('customerId', '==', orderData.customerId));
+            const customerOrdersSnap = await transaction.get(ordersQuery);
+            let customerOrders = customerOrdersSnap.docs.map(d => ({ id: d.id, ...d.data() } as Order));
+            
+            // --- PREPARE WRITES (IN-MEMORY) ---
+            orderData.isOpeningBalance = orderData.items.some(item => item.productName === 'Opening Balance');
 
-        const orderIndex = customerOrders.findIndex(o => o.id === orderData.id);
-        customerOrders[orderIndex] = orderData; // Replace old order with new data for recalculation
+            const orderIndex = customerOrders.findIndex(o => o.id === orderData.id);
+            customerOrders[orderIndex] = orderData; // Replace old order with new data for recalculation
 
-        const recalculatedOrders = _recalculateBalances(customerOrders);
+            const recalculatedOrders = _recalculateBalances(customerOrders);
 
-        // --- WRITES ---
-        // 1. Revert stock from original order
-        for (const item of originalOrder.items) {
-             if (item.productId !== 'OPENING_BALANCE') {
-                transaction.update(doc(db, "products", item.productId), { stock: increment(item.quantity) });
+            // --- WRITES ---
+            // 1. Revert stock from original order
+            for (const item of originalOrder.items) {
+                if (item.productId !== 'OPENING_BALANCE') {
+                    transaction.update(doc(db, "products", item.productId), { stock: increment(item.quantity) });
+                }
             }
-        }
-        // 2. Decrement new stock
-        for (const item of orderData.items) {
-             if (item.productId !== 'OPENING_BALANCE') {
-                transaction.update(doc(db, "products", item.productId), { stock: increment(-item.quantity) });
+            // 2. Decrement new stock
+            for (const item of orderData.items) {
+                if (item.productId !== 'OPENING_BALANCE') {
+                    transaction.update(doc(db, "products", item.productId), { stock: increment(-item.quantity) });
+                }
             }
-        }
 
-        // 3. Update customer totalSpent
-        let netValueDifference = 0;
-        const originalNetValue = originalOrder.total - originalOrder.discount + originalOrder.deliveryFees;
-        const newNetValue = orderData.total - orderData.discount + orderData.deliveryFees;
-        if (originalOrder.isOpeningBalance && !orderData.isOpeningBalance) netValueDifference = newNetValue;
-        else if (!originalOrder.isOpeningBalance && orderData.isOpeningBalance) netValueDifference = -originalNetValue;
-        else if (!originalOrder.isOpeningBalance && !orderData.isOpeningBalance) netValueDifference = newNetValue - originalNetValue;
-        if (netValueDifference !== 0) {
-             transaction.update(customerRef, { 'transactionHistory.totalSpent': increment(netValueDifference) });
-        }
+            // 3. Update customer totalSpent
+            let netValueDifference = 0;
+            const originalNetValue = originalOrder.total - originalOrder.discount + originalOrder.deliveryFees;
+            const newNetValue = orderData.total - orderData.discount + orderData.deliveryFees;
+            if (originalOrder.isOpeningBalance && !orderData.isOpeningBalance) netValueDifference = newNetValue;
+            else if (!originalOrder.isOpeningBalance && orderData.isOpeningBalance) netValueDifference = -originalNetValue;
+            else if (!originalOrder.isOpeningBalance && !orderData.isOpeningBalance) netValueDifference = newNetValue - originalNetValue;
+            if (netValueDifference !== 0) {
+                transaction.update(customerRef, { 'transactionHistory.totalSpent': increment(netValueDifference) });
+            }
 
-        // 4. Write all recalculated orders
-        for (const order of recalculatedOrders) {
-            transaction.set(doc(db, 'orders', order.id), order);
+            // 4. Write all recalculated orders
+            for (const order of recalculatedOrders) {
+                if(order.id) {
+                    transaction.set(doc(db, 'orders', order.id), order);
+                }
+            }
+        });
+    } catch(e) {
+        console.error("Update order transaction failed:", e);
+        if (e instanceof Error) {
+            throw new Error(`A database error occurred: ${e.message}`);
         }
-    });
+        throw new Error("An unknown database error occurred during the transaction.");
+    }
 };
 
 
 export const deleteOrder = async (orderToDelete: Order): Promise<void> => {
     if (!orderToDelete.id) throw new Error("Order ID is required for deletion.");
     
-    await runTransaction(db, async (transaction) => {
-        // --- READS ---
-        const customerRef = doc(db, "customers", orderToDelete.customerId);
+    try {
+        await runTransaction(db, async (transaction) => {
+            // --- READS ---
+            const customerRef = doc(db, "customers", orderToDelete.customerId);
 
-        const ordersQuery = query(collection(db, 'orders'), where('customerId', '==', orderToDelete.customerId));
-        const customerOrdersSnap = await transaction.get(ordersQuery);
-        let customerOrders = customerOrdersSnap.docs.map(d => ({id: d.id, ...d.data()}) as Order);
+            const ordersQuery = query(collection(db, 'orders'), where('customerId', '==', orderToDelete.customerId));
+            const customerOrdersSnap = await transaction.get(ordersQuery);
+            let customerOrders = customerOrdersSnap.docs.map(d => ({id: d.id, ...d.data()}) as Order);
 
-        // --- PREPARE WRITES (IN-MEMORY) ---
-        const filteredOrders = customerOrders.filter(o => o.id !== orderToDelete.id);
-        const recalculatedOrders = _recalculateBalances(filteredOrders);
+            // --- PREPARE WRITES (IN-MEMORY) ---
+            const filteredOrders = customerOrders.filter(o => o.id !== orderToDelete.id);
+            const recalculatedOrders = _recalculateBalances(filteredOrders);
 
-        // --- WRITES ---
-        transaction.delete(doc(db, "orders", orderToDelete.id));
+            // --- WRITES ---
+            transaction.delete(doc(db, "orders", orderToDelete.id));
 
-        if (!orderToDelete.isOpeningBalance) {
-            const netOrderValue = orderToDelete.total - orderToDelete.discount + orderToDelete.deliveryFees;
-            transaction.update(customerRef, {
-                'transactionHistory.totalSpent': increment(-netOrderValue)
-            });
-        }
-
-        for (const item of orderToDelete.items) {
-            if(item.productId !== 'OPENING_BALANCE' && item.productName !== 'Outstanding Balance') {
-                const productRef = doc(db, "products", item.productId);
-                transaction.update(productRef, { stock: increment(item.quantity) });
+            if (!orderToDelete.isOpeningBalance) {
+                const netOrderValue = orderToDelete.total - orderToDelete.discount + orderToDelete.deliveryFees;
+                transaction.update(customerRef, {
+                    'transactionHistory.totalSpent': increment(-netOrderValue)
+                });
             }
-        }
 
-        for (const order of recalculatedOrders) {
-            transaction.set(doc(db, 'orders', order.id), order);
+            for (const item of orderToDelete.items) {
+                if(item.productId !== 'OPENING_BALANCE' && item.productName !== 'Outstanding Balance') {
+                    const productRef = doc(db, "products", item.productId);
+                    transaction.update(productRef, { stock: increment(item.quantity) });
+                }
+            }
+
+            for (const order of recalculatedOrders) {
+                if(order.id) {
+                    transaction.set(doc(db, 'orders', order.id), order);
+                }
+            }
+        });
+    } catch(e) {
+        console.error("Delete order transaction failed:", e);
+        if (e instanceof Error) {
+            throw new Error(`A database error occurred: ${e.message}`);
         }
-    });
+        throw new Error("An unknown database error occurred during the transaction.");
+    }
 }
 
 export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 'id'>): Promise<Order> => {
     let finalOrderState!: Order;
 
-    await runTransaction(db, async (transaction) => {
-        // --- READS ---
-        const targetedOrderRef = doc(db, "orders", orderId);
-        const targetedOrderSnap = await transaction.get(targetedOrderRef);
-        if (!targetedOrderSnap.exists()) {
-            throw new Error(`Order with ID ${orderId} not found.`);
-        }
-        const customerId = targetedOrderSnap.data().customerId;
-        if (!customerId) {
-            throw new Error(`Order with ID ${orderId} has no customerId.`);
-        }
+    try {
+        await runTransaction(db, async (transaction) => {
+            // --- READS ---
+            const targetedOrderRef = doc(db, "orders", orderId);
+            const targetedOrderSnap = await transaction.get(targetedOrderRef);
+            if (!targetedOrderSnap.exists()) {
+                throw new Error(`Order with ID ${orderId} not found.`);
+            }
+            
+            const orderBeingPaid = {id: targetedOrderSnap.id, ...targetedOrderSnap.data()} as Order;
+            const customerId = orderBeingPaid.customerId;
+            if (!customerId) {
+                throw new Error(`Order with ID ${orderId} has no customerId.`);
+            }
 
-        const ordersQuery = query(collection(db, 'orders'), where('customerId', '==', customerId));
-        const customerOrdersSnap = await transaction.get(ordersQuery);
-        let customerOrders = customerOrdersSnap.docs.map(d => ({id: d.id, ...d.data()}) as Order);
-        
-        // --- PREPARE WRITES (IN-MEMORY) ---
-        const orderIndex = customerOrders.findIndex(o => o.id === orderId);
-        if (orderIndex === -1) {
-            throw new Error("Order not found in customer's history for payment.");
-        }
-        
-        const orderToUpdate = { ...customerOrders[orderIndex] }; 
-        const existingPayments = orderToUpdate.payments || [];
-        const paymentId = `${orderId}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
-        const newPayment: Payment = { ...payment, id: paymentId };
-        
-        orderToUpdate.payments = [...existingPayments, newPayment];
-        
-        // Replace the old order data with the updated order data in the array
-        customerOrders[orderIndex] = orderToUpdate;
-        
-        const recalculatedOrders = _recalculateBalances(customerOrders);
-        finalOrderState = recalculatedOrders.find(o => o.id === orderId)!;
+            const ordersQuery = query(collection(db, 'orders'), where('customerId', '==', customerId));
+            const customerOrdersSnap = await transaction.get(ordersQuery);
+            let customerOrders = customerOrdersSnap.docs.map(d => ({id: d.id, ...d.data()}) as Order);
+            
+            // --- PREPARE WRITES (IN-MEMORY) ---
+            const orderIndex = customerOrders.findIndex(o => o.id === orderId);
+            if (orderIndex === -1) {
+                throw new Error("Order not found in customer's history for payment.");
+            }
+            
+            const orderToUpdate = customerOrders[orderIndex]; 
+            const existingPayments = orderToUpdate.payments || [];
+            const paymentId = `${orderId}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
+            const newPayment: Payment = { ...payment, id: paymentId };
+            
+            orderToUpdate.payments = [...existingPayments, newPayment];
+            
+            // Replace the old order data with the updated order data in the array
+            customerOrders[orderIndex] = orderToUpdate;
+            
+            const recalculatedOrders = _recalculateBalances(customerOrders);
+            const foundOrder = recalculatedOrders.find(o => o.id === orderId);
+            if (foundOrder) {
+                finalOrderState = foundOrder;
+            }
 
-        // --- WRITES ---
-        for (const order of recalculatedOrders) {
-            const orderRef = doc(db, 'orders', order.id);
-            transaction.set(orderRef, order);
+            // --- WRITES ---
+            for (const order of recalculatedOrders) {
+                if(order.id) {
+                    const orderRef = doc(db, 'orders', order.id);
+                    transaction.set(orderRef, order);
+                }
+            }
+        });
+    } catch(e) {
+        console.error("Add payment transaction failed:", e);
+        if (e instanceof Error) {
+            throw new Error(`A database error occurred: ${e.message}`);
         }
-    });
+        throw new Error("An unknown database error occurred during the transaction.");
+    }
     
     return finalOrderState;
 };
@@ -517,35 +560,43 @@ export const addPurchase = async (purchaseData: Omit<Purchase, 'id' | 'supplierN
     
     let newPurchaseWithId!: Purchase;
 
-    await runTransaction(db, async (transaction) => {
-        // --- READS ---
-        const supplierRef = doc(db, "suppliers", purchaseData.supplierId);
-        const supplierSnap = await transaction.get(supplierRef);
-        const nextIdNumber = await readNextId(transaction, 'purchaseCounter');
+    try {
+        await runTransaction(db, async (transaction) => {
+            // --- READS ---
+            const supplierRef = doc(db, "suppliers", purchaseData.supplierId);
+            const supplierSnap = await transaction.get(supplierRef);
+            const nextIdNumber = await readNextId(transaction, 'purchaseCounter');
 
-        // --- WRITES ---
-        if (!supplierSnap.exists()) throw new Error("Supplier not found");
-        const supplierName = supplierSnap.data()?.name;
-        const purchaseId = `PUR-${String(nextIdNumber).padStart(4, '0')}`;
+            // --- WRITES ---
+            if (!supplierSnap.exists()) throw new Error("Supplier not found");
+            const supplierName = supplierSnap.data()?.name;
+            const purchaseId = `PUR-${String(nextIdNumber).padStart(4, '0')}`;
 
-        newPurchaseWithId = { ...purchaseData, supplierName, id: purchaseId };
-        
-        if (newPurchaseWithId.payments) {
-            newPurchaseWithId.payments = newPurchaseWithId.payments.map((p, i) => ({
-                ...p,
-                id: `${purchaseId}-PAY-${String(i + 1).padStart(2, '0')}`
-            }));
+            newPurchaseWithId = { ...purchaseData, supplierName, id: purchaseId };
+            
+            if (newPurchaseWithId.payments) {
+                newPurchaseWithId.payments = newPurchaseWithId.payments.map((p, i) => ({
+                    ...p,
+                    id: `${purchaseId}-PAY-${String(i + 1).padStart(2, '0')}`
+                }));
+            }
+
+            transaction.set(doc(db, "purchases", purchaseId), newPurchaseWithId);
+
+            writeNextId(transaction, 'purchaseCounter', nextIdNumber);
+
+            for (const item of newPurchaseWithId.items) {
+                const productRef = doc(db, "products", item.productId);
+                transaction.update(productRef, { stock: increment(item.quantity) });
+            }
+        });
+    } catch(e) {
+         console.error("Add purchase transaction failed:", e);
+        if (e instanceof Error) {
+            throw new Error(`A database error occurred: ${e.message}`);
         }
-
-        transaction.set(doc(db, "purchases", purchaseId), newPurchaseWithId);
-
-        writeNextId(transaction, 'purchaseCounter', nextIdNumber);
-
-        for (const item of newPurchaseWithId.items) {
-            const productRef = doc(db, "products", item.productId);
-            transaction.update(productRef, { stock: increment(item.quantity) });
-        }
-    });
+        throw new Error("An unknown database error occurred during the transaction.");
+    }
     return newPurchaseWithId;
 };
 
@@ -553,27 +604,35 @@ export const addPaymentToPurchase = async (purchaseId: string, payment: Omit<Pur
     const purchaseRef = doc(db, "purchases", purchaseId);
     let updatedPurchase!: Purchase;
 
-    await runTransaction(db, async (transaction) => {
-        const purchaseSnap = await transaction.get(purchaseRef);
-        if (!purchaseSnap.exists()) throw new Error("Purchase not found!");
+    try {
+        await runTransaction(db, async (transaction) => {
+            const purchaseSnap = await transaction.get(purchaseRef);
+            if (!purchaseSnap.exists()) throw new Error("Purchase not found!");
 
-        const purchase = { id: purchaseSnap.id, ...purchaseSnap.data() } as Purchase;
-        const existingPayments = purchase.payments || [];
-        const paymentId = `${purchase.id}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
-        const newPayment: PurchasePayment = { ...payment, id: paymentId };
-        const newBalance = purchase.balanceDue - newPayment.amount;
+            const purchase = { id: purchaseSnap.id, ...purchaseSnap.data() } as Purchase;
+            const existingPayments = purchase.payments || [];
+            const paymentId = `${purchase.id}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
+            const newPayment: PurchasePayment = { ...payment, id: paymentId };
+            const newBalance = purchase.balanceDue - newPayment.amount;
 
-        updatedPurchase = {
-            ...purchase,
-            payments: [...existingPayments, newPayment],
-            balanceDue: newBalance,
-        };
+            updatedPurchase = {
+                ...purchase,
+                payments: [...existingPayments, newPayment],
+                balanceDue: newBalance,
+            };
 
-        transaction.update(purchaseRef, {
-            payments: updatedPurchase.payments,
-            balanceDue: updatedPurchase.balanceDue,
+            transaction.update(purchaseRef, {
+                payments: updatedPurchase.payments,
+                balanceDue: updatedPurchase.balanceDue,
+            });
         });
-    });
+    } catch(e) {
+        console.error("Add payment to purchase transaction failed:", e);
+        if (e instanceof Error) {
+            throw new Error(`A database error occurred: ${e.message}`);
+        }
+        throw new Error("An unknown database error occurred during the transaction.");
+    }
     return updatedPurchase;
 };
 
@@ -768,3 +827,6 @@ export const resetDatabaseForFreshStart = async () => {
 
 
 
+
+
+    
