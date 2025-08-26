@@ -1,5 +1,3 @@
-
-'use client';
 import { db } from './firebase';
 import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference, updateDoc, increment, where, orderBy, Transaction } from 'firebase/firestore';
 import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert, LowStockAlert, Supplier, Purchase, PurchasePayment, OrderStatus, PaymentMode } from './types';
@@ -158,13 +156,17 @@ async function runBalanceChainUpdate(customerId: string, workload: Workload) {
 
             // Sort by date to ensure correct calculation sequence
             orders.sort((a, b) => {
-                 try {
-                    const dateA = new Date(a.orderDate).getTime();
-                    const dateB = new Date(b.orderDate).getTime();
+                try {
+                    // Handle both string and Firestore Timestamp dates
+                    const dateA = a.orderDate ? new Date(a.orderDate).getTime() : 0;
+                    const dateB = b.orderDate ? new Date(b.orderDate).getTime() : 0;
+                    
                     if (isNaN(dateA)) return -1;
                     if (isNaN(dateB)) return 1;
+
                     return dateA - dateB;
                 } catch(e) {
+                    console.error("Error parsing dates for sorting:", a.orderDate, b.orderDate);
                     return 0;
                 }
             });
@@ -173,6 +175,7 @@ async function runBalanceChainUpdate(customerId: string, workload: Workload) {
             let runningPreviousBalance = 0;
             for (const order of orders) {
                 const orderRef = doc(db, 'orders', order.id);
+                
                 order.previousBalance = runningPreviousBalance;
                 
                 const currentBillValue = order.total - (order.discount || 0) + (order.deliveryFees || 0);
@@ -180,8 +183,12 @@ async function runBalanceChainUpdate(customerId: string, workload: Workload) {
                 
                 const totalPaid = (order.payments || []).reduce((sum, p) => sum + p.amount, 0);
                 order.balanceDue = order.grandTotal - totalPaid;
-                order.status = order.balanceDue <= 0 ? 'Fulfilled' : (totalPaid > 0 ? 'Part Payment' : 'Pending');
+                
+                if (order.status !== 'Canceled') {
+                    order.status = order.balanceDue <= 0 ? 'Fulfilled' : (totalPaid > 0 ? 'Part Payment' : 'Pending');
+                }
 
+                // The next order's previous balance is the current order's final balance due.
                 runningPreviousBalance = order.balanceDue > 0 ? order.balanceDue : 0;
                 
                 transaction.set(orderRef, order);
@@ -313,7 +320,6 @@ export const deleteOrder = async (orderToDelete: Order): Promise<void> => {
 export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 'id'>): Promise<void> => {
     let customerId = '';
     
-    // First, get the customerId from the order. This is a read outside the main transaction.
     try {
         const orderSnap = await getDoc(doc(db, 'orders', orderId));
         if (orderSnap.exists()) {
@@ -337,7 +343,6 @@ export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 
         await runBalanceChainUpdate(customerId, (orders) => {
             const orderIndex = orders.findIndex(o => o.id === orderId);
             if (orderIndex === -1) {
-                // This should not happen if the initial check passes, but good for safety.
                 throw new Error(`Order ${orderId} not found in customer's order list during transaction.`);
             }
             
@@ -650,7 +655,3 @@ export const resetDatabaseForFreshStart = async () => {
         throw new Error("Failed to reset the database.");
     }
 };
-
-    
-
-      
