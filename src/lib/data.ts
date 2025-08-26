@@ -151,33 +151,32 @@ async function getNextId(transaction: Transaction, counterName: string, prefix: 
     return `${prefix}-${String(nextNumber).padStart(4, '0')}`;
 }
 
-type Workload = (orders: Order[]) => Order[];
-
-async function runBalanceChainUpdate(customerId: string, workload: Workload) {
+async function runBalanceChainUpdate(customerId: string, workload: (orders: Order[]) => Order[]) {
     // Read outside the transaction
     const ordersQuery = query(collection(db, 'orders'), where('customerId', '==', customerId));
-    const customerOrdersSnap = await getDocs(ordersQuery);
-    let orders = customerOrdersSnap.docs.map(d => ({id: d.id, ...d.data()}) as Order);
-
-    // Apply the specific operation (add, update, delete, pay) in memory
-    orders = workload(orders);
-
-    // Sort by date to ensure correct calculation sequence
-    orders.sort((a, b) => {
-        try {
-            const dateA = a.orderDate ? new Date(a.orderDate).getTime() : 0;
-            const dateB = b.orderDate ? new Date(b.orderDate).getTime() : 0;
-            if (isNaN(dateA)) return -1;
-            if (isNaN(dateB)) return 1;
-            return dateA - dateB;
-        } catch(e) {
-            console.error("Error parsing dates for sorting:", a.orderDate, b.orderDate);
-            return 0;
-        }
-    });
-
+    
     try {
         await runTransaction(db, async (transaction) => {
+            const customerOrdersSnap = await getDocs(ordersQuery);
+            let orders = customerOrdersSnap.docs.map(d => ({id: d.id, ...d.data()}) as Order);
+    
+            // Apply the specific operation (add, update, delete, pay) in memory
+            orders = workload(orders);
+    
+            // Sort by date to ensure correct calculation sequence
+            orders.sort((a, b) => {
+                try {
+                    const dateA = a.orderDate ? new Date(a.orderDate).getTime() : 0;
+                    const dateB = b.orderDate ? new Date(b.orderDate).getTime() : 0;
+                    if (isNaN(dateA)) return -1;
+                    if (isNaN(dateB)) return 1;
+                    return dateA - dateB;
+                } catch(e) {
+                    console.error("Error parsing dates for sorting:", a.orderDate, b.orderDate);
+                    return 0;
+                }
+            });
+
             // Recalculate the entire chain
             let runningPreviousBalance = 0;
             for (const order of orders) {
@@ -241,7 +240,7 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
         finalNewOrder = newOrder; // Store for return value
 
         // We call the balance chain update, but it will happen inside this same transaction context
-        runBalanceChainUpdate(orderData.customerId, (orders) => {
+        await runBalanceChainUpdate(orderData.customerId, (orders) => {
             return [...orders, newOrder];
         });
 
@@ -299,7 +298,7 @@ export const updateOrder = async (orderData: Order): Promise<void> => {
         }
         
         // Recalculate the entire balance chain with the updated order
-        runBalanceChainUpdate(orderData.customerId, (orders) => 
+        await runBalanceChainUpdate(orderData.customerId, (orders) => 
             orders.map(o => o.id === orderData.id ? orderData : o)
         );
     });
@@ -312,7 +311,7 @@ export const deleteOrder = async (orderToDelete: Order): Promise<void> => {
      await runTransaction(db, async (transaction) => {
         
         // Recalculate balance chain *without* the deleted order
-        runBalanceChainUpdate(orderToDelete.customerId, (orders) => 
+        await runBalanceChainUpdate(orderToDelete.customerId, (orders) => 
             orders.filter(o => o.id !== orderToDelete.id)
         );
 
@@ -348,7 +347,7 @@ export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 
     }
 
     // Now, run the balance chain update.
-    runBalanceChainUpdate(customerId, (orders) => {
+    await runBalanceChainUpdate(customerId, (orders) => {
         const orderIndex = orders.findIndex(o => o.id === orderId);
         if (orderIndex === -1) {
             // This should not happen if the initial read succeeded, but it's a good safeguard.
@@ -670,348 +669,23 @@ export const resetAllPayments = async () => {
             return;
         }
 
-        const batch = writeBatch(db);
-        snapshot.docs.forEach(docSnapshot => {
-            const orderRef = docSnapshot.ref;
-            const orderData = docSnapshot.data() as Order;
-            
-            const updates: Partial<Order> = {
-                payments: [],
-                balanceDue: orderData.grandTotal,
-                status: 'Pending'
-            };
-            
-            batch.update(orderRef, updates);
-        });
+        const customerIds = new Set(snapshot.docs.map(doc => (doc.data() as Order).customerId));
+
+        for (const customerId of customerIds) {
+            await runBalanceChainUpdate(customerId, (orders) => {
+                return orders.map(order => ({
+                    ...order,
+                    payments: []
+                }));
+            });
+        }
         
-        await batch.commit();
-        console.log(`Reset payments for ${snapshot.size} orders.`);
+        console.log(`Reset payments for all orders across ${customerIds.size} customers.`);
 
     } catch (error) {
         console.error("Error resetting payments:", error);
         throw new Error("Failed to reset payments for all orders.");
     }
-}
-    
-```
-  </change>
-  <change>
-    <file>/src/app/admin/admin-client.tsx</file>
-    <content><![CDATA[
-'use client';
-
-import React, { useState, useRef, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Terminal, UploadCloud, CheckCircle, AlertCircle, Loader2, Image as ImageIcon, Trash, RefreshCcw } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Skeleton } from '@/components/ui/skeleton';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { useToast } from '@/hooks/use-toast';
-
-type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
-
-interface UploadResult {
-    status: UploadStatus;
-    message: string;
-}
-
-const FileUploader = ({ title, description, requiredFilename, acceptedFileType, onUpload, storageKey }: {
-    title: string;
-    description: string;
-    requiredFilename: string;
-    acceptedFileType: string;
-    onUpload: (status: UploadResult) => void;
-    storageKey?: string;
-}) => {
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
-    const [status, setStatus] = useState<UploadStatus>('idle');
-    const [error, setError] = useState<string | null>(null);
-    const [preview, setPreview] = useState<string | null>(null);
-    const [isMounted, setIsMounted] = useState(false);
-
-    useEffect(() => {
-        setIsMounted(true);
-        if(storageKey) {
-            const savedFile = localStorage.getItem(storageKey);
-            if (savedFile) {
-                setPreview(savedFile);
-                setStatus('success');
-            }
-        }
-    }, [storageKey]);
-
-
-    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (file) {
-            if (!file.type.startsWith(acceptedFileType.split('/')[0])) {
-                setError(`Invalid file type. Please select a ${acceptedFileType.split('/')[0]} file.`);
-                setSelectedFile(null);
-                 setPreview(null);
-            } else {
-                setError(null);
-                setSelectedFile(file);
-                if (file.type.startsWith('image/')) {
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                        setPreview(reader.result as string);
-                    };
-                    reader.readAsDataURL(file);
-                }
-            }
-        }
-    };
-
-    const handleUpload = async () => {
-        if (!selectedFile) {
-            setError('Please select a file first.');
-            return;
-        }
-
-        setStatus('uploading');
-        setError(null);
-        onUpload({ status: 'uploading', message: '' });
-        
-        // For logo, we save it to local storage
-        if(storageKey) {
-             const reader = new FileReader();
-             reader.onloadend = () => {
-                localStorage.setItem(storageKey, reader.result as string);
-                setStatus('success');
-                onUpload({ status: 'success', message: `Successfully uploaded ${selectedFile.name}` });
-             };
-             reader.readAsDataURL(selectedFile);
-             return;
-        }
-
-
-        const formData = new FormData();
-        formData.append('file', selectedFile, requiredFilename);
-
-        try {
-            const response = await fetch('/api/upload', {
-                method: 'POST',
-                body: formData,
-            });
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.error || `Upload failed with status: ${response.status}`);
-            }
-
-            setStatus('success');
-            onUpload({ status: 'success', message: `Successfully uploaded ${selectedFile.name}` });
-            if (fileInputRef.current) {
-                fileInputRef.current.value = ""; 
-            }
-            setSelectedFile(null);
-            
-        } catch (e: any) {
-            const errorMessage = e.message || "An unknown error occurred during upload.";
-            setStatus('error');
-            setError(errorMessage);
-            onUpload({ status: 'error', message: errorMessage });
-        }
-    };
-
-    if (!isMounted) {
-        return (
-            <Card>
-                <CardHeader>
-                    <Skeleton className="h-6 w-32" />
-                    <Skeleton className="h-4 w-full" />
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                        <Skeleton className="h-4 w-24" />
-                        <div className="flex gap-2">
-                            <Skeleton className="h-10 flex-grow" />
-                            <Skeleton className="h-10 w-24" />
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-        );
-    }
-
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                    {status === 'success' && <CheckCircle className="h-5 w-5 text-green-500" />}
-                    {title}
-                </CardTitle>
-                <CardDescription>{description}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                {preview && acceptedFileType.startsWith('image/') && (
-                    <div className="flex justify-center p-4 border rounded-md">
-                        <img src={preview} alt="Logo preview" className="max-h-24" />
-                    </div>
-                )}
-                <div className="space-y-2">
-                    <Label htmlFor={`file-upload-${requiredFilename}`}>{requiredFilename}</Label>
-                    <div className="flex gap-2">
-                         <Input
-                            id={`file-upload-${requiredFilename}`}
-                            ref={fileInputRef}
-                            type="file"
-                            accept={acceptedFileType}
-                            onChange={handleFileChange}
-                            className="flex-grow"
-                         />
-                         <Button onClick={handleUpload} disabled={!selectedFile || status === 'uploading'}>
-                            {status === 'uploading' ? (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                                <UploadCloud className="mr-2 h-4 w-4" />
-                            )}
-                            Upload
-                         </Button>
-                    </div>
-                </div>
-                 {error && (
-                    <Alert variant="destructive">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertTitle>Upload Failed</AlertTitle>
-                        <AlertDescription>{error}</AlertDescription>
-                    </Alert>
-                )}
-                 {status === 'success' && (
-                    <Alert variant="default" className="bg-green-50 border-green-200">
-                        <CheckCircle className="h-4 w-4 text-green-600" />
-                        <AlertTitle className="text-green-800">Upload Successful</AlertTitle>
-                        <AlertDescription className="text-green-700">
-                            The file <code className="font-mono bg-green-100 px-1 rounded-sm">{requiredFilename}</code> is now ready for use.
-                        </AlertDescription>
-                    </Alert>
-                )}
-            </CardContent>
-        </Card>
-    );
 };
 
-
-function DataManagementCard() {
-    const [isLoading, setIsLoading] = useState<null | 'db' | 'payments'>(null);
-    const { toast } = useToast();
-
-    const handleReset = async (type: 'db' | 'payments') => {
-        setIsLoading(type);
-        const endpoint = type === 'db' ? '/api/reset-db' : '/api/reset-payments';
-        const successTitle = type === 'db' ? 'Database Reset Successful' : 'Payments Reset Successful';
-        const successDesc = type === 'db' 
-            ? "Your customers, orders, and suppliers have been cleared. Please refresh the page."
-            : "All order payments have been cleared. Invoices are now marked as Pending. Please refresh.";
-
-        try {
-            const response = await fetch(endpoint, { method: 'POST' });
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.message || 'Failed to perform reset operation');
-            }
-            
-            toast({
-                title: successTitle,
-                description: successDesc,
-            });
-        } catch (error: any) {
-            toast({
-                title: "Error During Reset",
-                description: error.message,
-                variant: 'destructive',
-            });
-        } finally {
-            setIsLoading(null);
-        }
-    };
-
-    return (
-        <Card className="border-destructive">
-            <CardHeader>
-                <CardTitle>Data Management</CardTitle>
-                <CardDescription>
-                    Use these options for major data cleanup. These actions are irreversible.
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col sm:flex-row gap-4">
-                 <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                        <Button variant="outline" disabled={!!isLoading}>
-                             {isLoading === 'payments' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
-                            {isLoading === 'payments' ? "Resetting Payments..." : "Reset All Payments"}
-                        </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                               This will permanently remove ALL payment records from every invoice, resetting them to a "Pending" state. This is useful for clearing corrupted payment data. This action cannot be undone.
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleReset('payments')}>Yes, Reset Payments</AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-                 <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                        <Button variant="destructive" disabled={!!isLoading}>
-                             {isLoading === 'db' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash className="mr-2 h-4 w-4" />}
-                            {isLoading === 'db' ? "Resetting Database..." : "Reset All Data"}
-                        </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                This will permanently delete all customer, supplier, order, and purchase data. Your product inventory will remain. This action is irreversible and will start all counters from 1 again.
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleReset('db')}>Yes, Reset All Data</AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-            </CardContent>
-        </Card>
-    );
-}
-
-export function AdminClient() {
-    const [logoStatus, setLogoStatus] = useState<UploadResult>({ status: 'idle', message: '' });
-
-    return (
-        <div className="space-y-6">
-            <h1 className="text-3xl font-bold">Admin Settings</h1>
-            <Card>
-                <CardHeader>
-                    <CardTitle>Company Branding</CardTitle>
-                    <CardDescription>
-                        Upload your company logo to be displayed on invoices.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                     <FileUploader 
-                        title="Company Logo"
-                        description="Recommended format: PNG with transparent background. Max height: 100px."
-                        requiredFilename="company-logo"
-                        acceptedFileType="image/*"
-                        onUpload={setLogoStatus}
-                        storageKey="companyLogo"
-                    />
-                </CardContent>
-            </Card>
-
-            <DataManagementCard />
-        </div>
-    );
-}
+    
