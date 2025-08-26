@@ -22,6 +22,19 @@ interface jsPDFWithAutoTable extends jsPDFType {
 const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol' }).format(value);
 const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('en-IN');
 
+function getStatus(order: Order): { text: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' } {
+    const totalPaid = order.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
+    
+    if ((order.balanceDue ?? 0) <= 0) {
+        return { text: 'Fulfilled', variant: 'default' };
+    }
+    if (totalPaid > 0 && (order.balanceDue ?? 0) > 0) {
+        return { text: 'Part Payment', variant: 'outline' };
+    }
+    return { text: 'Pending', variant: 'secondary' };
+}
+
+
 function InfoCard({ icon: Icon, label, value, className }: { icon: React.ElementType, label: string, value: React.ReactNode, className?: string }) {
     return (
         <div className={`flex items-start gap-3 rounded-lg bg-muted/50 p-3 ${className}`}>
@@ -103,10 +116,11 @@ export function CustomerDetailsClient({ customer, orders }: { customer: Customer
 
         orders.forEach(order => {
             const orderPaid = order.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
+            const statusInfo = getStatus(order);
             const orderRow = [
                 order.id,
                 formatDate(order.orderDate),
-                order.status,
+                statusInfo.text,
                 formatInr(orderPaid),
                 formatInr(order.balanceDue ?? 0),
                 formatInr(order.grandTotal)
@@ -204,13 +218,14 @@ export function CustomerDetailsClient({ customer, orders }: { customer: Customer
                             <TableBody>
                                 {orders.map((order) => {
                                     const orderPaid = order.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
+                                    const statusInfo = getStatus(order);
                                     return (
                                     <TableRow key={order.id}>
                                         <TableCell className="font-medium">{order.id}</TableCell>
                                         <TableCell>{formatDate(order.orderDate)}</TableCell>
                                         <TableCell>
-                                            <Badge variant={order.status === 'Fulfilled' ? 'default' : order.status === 'Pending' ? 'secondary' : 'destructive'} className="capitalize">
-                                                {order.status}
+                                            <Badge variant={statusInfo.variant} className="capitalize">
+                                                {statusInfo.text}
                                             </Badge>
                                         </TableCell>
                                         <TableCell className="text-right font-medium text-green-600">{formatNumber(orderPaid)}</TableCell>
