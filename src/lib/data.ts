@@ -1,5 +1,3 @@
-
-'use client';
 import { db } from './firebase';
 import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference, updateDoc, increment, where, orderBy, Transaction } from 'firebase/firestore';
 import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert, LowStockAlert, Supplier, Purchase, PurchasePayment, OrderStatus, PaymentMode } from './types';
@@ -308,29 +306,52 @@ export const deleteOrder = async (orderToDelete: Order): Promise<void> => {
 };
 
 export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 'id'>): Promise<void> => {
-    const orderRef = doc(db, 'orders', orderId);
-    const orderSnap = await getDoc(orderRef);
-    if (!orderSnap.exists()) {
-        throw new Error(`Order ${orderId} not found.`);
-    }
-    const customerId = orderSnap.data().customerId;
-
-    await runBalanceChainUpdate(customerId, (orders) => {
-        const orderIndex = orders.findIndex(o => o.id === orderId);
-        if (orderIndex === -1) {
-            // This should not happen if the initial check passes, but good for safety.
-            throw new Error(`Order ${orderId} not found in customer's order list during transaction.`);
+    let customerId = '';
+    
+    // First, get the customerId from the order. This is a read outside the main transaction.
+    try {
+        const orderSnap = await getDoc(doc(db, 'orders', orderId));
+        if (orderSnap.exists()) {
+            customerId = orderSnap.data().customerId;
+        } else {
+            throw new Error(`Order ${orderId} not found.`);
         }
-        
-        const orderToUpdate = orders[orderIndex];
-        const existingPayments: Payment[] = orderToUpdate.payments || [];
-        const paymentId = `${orderId}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
-        
-        // This is where we correctly append the new payment to the existing array.
-        orderToUpdate.payments = [...existingPayments, { ...payment, id: paymentId }];
+    } catch(e) {
+        console.error("Failed to fetch order for payment:", e);
+        if (e instanceof Error) {
+            throw new Error(`Failed to read order details for payment: ${e.message}`);
+        }
+        throw new Error("An unknown error occurred while fetching order details.");
+    }
 
-        return orders;
-    });
+    if (!customerId) {
+        throw new Error(`Could not find a customer for order ${orderId}.`);
+    }
+
+    try {
+        await runBalanceChainUpdate(customerId, (orders) => {
+            const orderIndex = orders.findIndex(o => o.id === orderId);
+            if (orderIndex === -1) {
+                // This should not happen if the initial check passes, but good for safety.
+                throw new Error(`Order ${orderId} not found in customer's order list during transaction.`);
+            }
+            
+            const orderToUpdate = orders[orderIndex];
+            const existingPayments: Payment[] = orderToUpdate.payments || [];
+            const paymentId = `${orderId}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
+            
+            // This is where we correctly append the new payment to the existing array.
+            orderToUpdate.payments = [...existingPayments, { ...payment, id: paymentId }];
+
+            return orders;
+        });
+    } catch(e) {
+        console.error("Add payment transaction failed:", e);
+        if (e instanceof Error) {
+            throw new Error(`A database error occurred: ${e.message}`);
+        }
+        throw new Error("An unknown database error occurred during the transaction.");
+    }
 };
 
 
@@ -592,6 +613,7 @@ export const getDashboardData = async () => {
         recentOrders: orders.sort((a,b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()).slice(0, 5),
         paymentAlerts,
         lowStockAlerts,
+        revenueChartData: profitabilityChartData, // Added for mobile view
         // Reporting data
         profitabilityChartData,
         productPerformance: Object.values(productPerformance),
