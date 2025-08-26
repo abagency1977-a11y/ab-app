@@ -531,7 +531,7 @@ function BulkPaymentDialog({ isOpen, onOpenChange, customer, onPaymentSuccess }:
                 paymentMethod,
                 notes,
                 invoicesToPay: invoicesToPay.map(o => ({
-                    id: o.id,
+                    id: o.id, // Use the correct Order ID (ORD-xxxx)
                     orderDate: o.orderDate,
                     balanceDue: o.balanceDue ?? o.grandTotal,
                     grandTotal: o.grandTotal,
@@ -651,5 +651,7 @@ function BulkPaymentDialog({ isOpen, onOpenChange, customer, onPaymentSuccess }:
         </Dialog>
     );
 }
+
+    
 
     
