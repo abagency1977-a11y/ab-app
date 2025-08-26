@@ -1,4 +1,5 @@
 
+
 import { db } from './firebase';
 import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference, updateDoc, increment, where, orderBy, Transaction } from 'firebase/firestore';
 import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert, LowStockAlert, Supplier, Purchase, PurchasePayment, OrderStatus, PaymentMode } from './types';
@@ -426,29 +427,38 @@ export const deleteOrder = async (orderToDelete: Order): Promise<void> => {
 }
 
 export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 'id'>): Promise<Order> => {
-    
-    const initialSnap = await getDoc(doc(db, "orders", orderId));
-    if (!initialSnap.exists()) throw new Error("Order not found!");
-    const customerId = initialSnap.data().customerId;
-    
     let finalOrderState!: Order;
 
     await runTransaction(db, async (transaction) => {
         // --- READS ---
+        const targetedOrderRef = doc(db, "orders", orderId);
+        const targetedOrderSnap = await transaction.get(targetedOrderRef);
+        if (!targetedOrderSnap.exists()) {
+            throw new Error(`Order with ID ${orderId} not found.`);
+        }
+        const customerId = targetedOrderSnap.data().customerId;
+        if (!customerId) {
+            throw new Error(`Order with ID ${orderId} has no customerId.`);
+        }
+
         const ordersQuery = query(collection(db, 'orders'), where('customerId', '==', customerId));
         const customerOrdersSnap = await transaction.get(ordersQuery);
         let customerOrders = customerOrdersSnap.docs.map(d => ({id: d.id, ...d.data()}) as Order);
         
         // --- PREPARE WRITES (IN-MEMORY) ---
         const orderIndex = customerOrders.findIndex(o => o.id === orderId);
-        if (orderIndex === -1) throw new Error("Order not found in customer's history for payment.");
+        if (orderIndex === -1) {
+            throw new Error("Order not found in customer's history for payment.");
+        }
         
         const orderToUpdate = { ...customerOrders[orderIndex] }; 
         const existingPayments = orderToUpdate.payments || [];
         const paymentId = `${orderId}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
         const newPayment: Payment = { ...payment, id: paymentId };
+        
         orderToUpdate.payments = [...existingPayments, newPayment];
         
+        // Replace the old order data with the updated order data in the array
         customerOrders[orderIndex] = orderToUpdate;
         
         const recalculatedOrders = _recalculateBalances(customerOrders);
@@ -754,6 +764,7 @@ export const resetDatabaseForFreshStart = async () => {
 };
 
     
+
 
 
 
