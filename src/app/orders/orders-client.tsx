@@ -717,16 +717,14 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                 const hasOrders = customerOrders.length > 0;
                 setIsFirstOrder(!hasOrders);
 
-                 // For edit mode, we use the stored previousBalance.
                 if (isEditMode && existingOrder) {
                     setPreviousBalance(existingOrder.previousBalance);
                 } else if (hasOrders) {
-                    // If it's a subsequent order, fetch the real balance
                     const balance = await getCustomerBalance(customerId);
                     setPreviousBalance(balance);
                 } else {
-                    // It's a new customer or first order, so balance can be manually set, default to 0
-                    setPreviousBalance(0);
+                    // This is a first order, so we DON'T fetch the balance.
+                    // We let the user manually input it. We don't reset it to 0.
                 }
 
                 const customer = customers.find(c => c.id === customerId);
@@ -743,6 +741,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
           fetchBalance();
         }
     }, [customerId, customers, orders, isOpen, isEditMode, existingOrder]);
+
 
     const handleProductSelect = (productId: string) => {
         const product = products.find(p => p.id === productId);
@@ -846,10 +845,19 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
 
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        if (!customerId || items.length === 0) {
+        if (!customerId) {
+             toast({
+                title: "Validation Error",
+                description: 'Please select a customer.',
+                variant: 'destructive'
+            });
+            return;
+        }
+
+        if (items.length === 0 && (!isFirstOrder || previousBalance <= 0)) {
             toast({
                 title: "Validation Error",
-                description: 'Please select a customer and add at least one item.',
+                description: 'Please add at least one item to the order.',
                 variant: 'destructive'
             });
             return;
@@ -858,7 +866,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
         const customer = customers.find(c => c.id === customerId);
         if (!customer) return;
         
-        const isOpeningBalanceOrder = isFirstOrder && previousBalance > 0 && items.length === 0;
+        const isOpeningBalanceOrder = isFirstOrder && previousBalance > 0;
 
         let orderData: any = {
             id: isEditMode ? existingOrder.id : '',
@@ -946,7 +954,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
 
                                 {/* Order Details */}
                                 <Card>
-                                    <CardContent className="p-4 space-y-4 shadow-sm rounded-lg">
+                                    <CardContent className="p-4 space-y-4 rounded-lg">
                                         <DialogTitle className="text-lg">Order Details</DialogTitle>
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                             <div className="space-y-2 md:col-span-2">
@@ -1034,7 +1042,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
 
                                 {/* Items Table */}
                                 <Card>
-                                    <CardContent className="p-4 shadow-sm rounded-lg">
+                                    <CardContent className="p-4 rounded-lg">
                                         <Table>
                                             <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Qty</TableHead><TableHead>Price</TableHead><TableHead>Cost</TableHead><TableHead>GST</TableHead><TableHead>Total</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
                                             <TableBody>
@@ -1070,7 +1078,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {/* Payment Details */}
                                     <Card>
-                                      <CardContent className="p-4 space-y-4 shadow-sm rounded-lg">
+                                      <CardContent className="p-4 space-y-4 rounded-lg">
                                           <DialogTitle className="text-lg">Payment Details</DialogTitle>
                                           <div className="space-y-2">
                                               <Label>Payment Term</Label>
@@ -1107,7 +1115,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
 
                                     {/* Summary & Delivery */}
                                     <div className="space-y-4">
-                                        <Card><CardContent className="p-4 space-y-2 shadow-sm rounded-lg">
+                                        <Card><CardContent className="p-4 space-y-2 rounded-lg">
                                             <DialogTitle className="text-lg">Order Summary</DialogTitle>
                                             <div className="flex justify-between"><span>Current Items Total:</span> <span className="font-semibold">{formatNumberForDisplay(currentInvoiceTotal)}</span></div>
                                             {previousBalance > 0 && <div className="flex justify-between text-destructive"><span>Previous Due:</span> <span className="font-semibold">{formatNumberForDisplay(previousBalance)}</span></div>}
@@ -1128,7 +1136,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                                 <span className="font-bold text-primary">{formatNumberForDisplay(grandTotal)}</span>
                                             </div>
                                         </CardContent></Card>
-                                        <Card><CardContent className="p-4 space-y-4 shadow-sm rounded-lg">
+                                        <Card><CardContent className="p-4 space-y-4 rounded-lg">
                                             <DialogTitle className="text-lg">Delivery Details</DialogTitle>
                                             <div className="space-y-2"><Label>Delivery Date</Label><Input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} /></div>
                                             <div className="space-y-2"><Label>Delivery Address</Label><Textarea value={deliveryAddress} onChange={e => setDeliveryAddress(e.target.value)} placeholder="Leave blank to use customer's default address" /></div>
@@ -1166,3 +1174,5 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
 }
 
       
+
+    

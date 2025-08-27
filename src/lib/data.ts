@@ -80,6 +80,11 @@ export const getCustomerBalance = async (customerId: string): Promise<number> =>
 
         const latestOrder = orders[orders.length - 1];
 
+        // If the latest order is an opening balance order, its balance due is the correct opening balance.
+        if (latestOrder.isOpeningBalance) {
+            return latestOrder.balanceDue ?? 0;
+        }
+
         return latestOrder.balanceDue ?? 0;
 
     } catch (error) {
@@ -179,8 +184,16 @@ async function runBalanceChainUpdate(customerId: string, workload: (orders: Orde
 
             // Recalculate the entire chain
             let runningPreviousBalance = 0;
-            for (const order of orders) {
+            for (let i = 0; i < orders.length; i++) {
+                const order = orders[i];
                 const orderRef = doc(db, 'orders', order.id);
+
+                // For the very first order in the chain, if it's an opening balance order,
+                // we trust the 'previousBalance' value coming from the form.
+                // Otherwise, we use the calculated running balance.
+                if (i === 0 && order.isOpeningBalance) {
+                    runningPreviousBalance = order.previousBalance;
+                }
                 
                 order.previousBalance = runningPreviousBalance;
                 
@@ -230,10 +243,6 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
             grandTotal: 0,
             status: 'Pending',
         };
-
-        if (!orderData.dueDate) {
-            delete (newOrder as Partial<Order>).dueDate;
-        }
 
         if (newOrder.paymentTerm === 'Full Payment' && newOrder.payments && newOrder.payments.length > 0) {
             newOrder.payments[0].id = `${newOrderId}-PAY-01`;
@@ -689,5 +698,7 @@ export const resetAllPayments = async () => {
         throw new Error("Failed to reset payments for all orders.");
     }
 };
+
+    
 
     
