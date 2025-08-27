@@ -80,7 +80,7 @@ export const getCustomerBalance = async (customerId: string): Promise<number> =>
 
         const latestOrder = orders[orders.length - 1];
 
-        return latestOrder.balanceDue && latestOrder.balanceDue > 0 ? latestOrder.balanceDue : 0;
+        return latestOrder.balanceDue ?? 0;
 
     } catch (error) {
         console.error(`Error fetching balance for customer ${customerId}:`, error);
@@ -226,12 +226,14 @@ export const addOrder = async (orderData: Omit<Order, 'id' | 'customerName'>): P
             ...orderData,
             id: newOrderId!,
             customerName: customerName,
-            isOpeningBalance: orderData.items.some(item => item.productName === 'Opening Balance'),
             balanceDue: 0, 
-            previousBalance: 0,
             grandTotal: 0,
             status: 'Pending',
         };
+
+        if (!orderData.dueDate) {
+            delete (newOrder as Partial<Order>).dueDate;
+        }
 
         if (newOrder.paymentTerm === 'Full Payment' && newOrder.payments && newOrder.payments.length > 0) {
             newOrder.payments[0].id = `${newOrderId}-PAY-01`;

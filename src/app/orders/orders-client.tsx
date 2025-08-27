@@ -435,7 +435,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         }
     }
 
-    const handleAddCustomer = async (newCustomerData: Omit<Customer, 'id' | 'transactionHistory' | 'orders'>) => {
+    const handleAddCustomerSubmit = async (newCustomerData: Omit<Customer, 'id' | 'transactionHistory' | 'orders'>) => {
         try {
             const newCustomerWithHistory = await addCustomer(newCustomerData);
             const newCustomer: Customer = {
@@ -481,7 +481,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
                 <h1 className="text-3xl font-bold">Orders</h1>
                 <div className="flex gap-2">
                     <Button onClick={handleExportToExcel} variant="outline">
@@ -585,7 +585,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 orders={orders}
                 onOrderAdded={handleAddOrder}
                 onOrderUpdated={handleUpdateOrder}
-                onCustomerAdded={handleAddCustomer}
+                onCustomerAdded={handleAddCustomerSubmit}
                 existingOrder={orderToEdit}
             />
 
@@ -714,15 +714,21 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
         const fetchBalance = async () => {
             if (customerId) {
                 const customerOrders = orders.filter(o => o.customerId === customerId);
-                setIsFirstOrder(customerOrders.length === 0);
+                const hasOrders = customerOrders.length > 0;
+                setIsFirstOrder(!hasOrders);
 
                  // For edit mode, we use the stored previousBalance.
                 if (isEditMode && existingOrder) {
                     setPreviousBalance(existingOrder.previousBalance);
-                } else {
+                } else if (hasOrders) {
+                    // If it's a subsequent order, fetch the real balance
                     const balance = await getCustomerBalance(customerId);
                     setPreviousBalance(balance);
+                } else {
+                    // It's a new customer or first order, so balance can be manually set, default to 0
+                    setPreviousBalance(0);
                 }
+
                 const customer = customers.find(c => c.id === customerId);
                 if (customer) {
                     setDeliveryAddress(customer.address);
@@ -851,6 +857,8 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
         
         const customer = customers.find(c => c.id === customerId);
         if (!customer) return;
+        
+        const isOpeningBalanceOrder = isFirstOrder && previousBalance > 0 && items.length === 0;
 
         let orderData: any = {
             id: isEditMode ? existingOrder.id : '',
@@ -876,7 +884,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
             paymentTerm,
             deliveryAddress: deliveryAddress || customer.address,
             isGstInvoice,
-            isOpeningBalance: items.some(item => item.productId === 'OPENING_BALANCE'),
+            isOpeningBalance: isOpeningBalanceOrder,
         };
 
         if (deliveryDate) {
@@ -887,7 +895,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
             orderData.payments = isEditMode ? existingOrder.payments : [];
             orderData.balanceDue = grandTotal;
             orderData.status = 'Pending';
-            if (dueDate) {
+             if (dueDate) {
                 orderData.dueDate = dueDate;
             }
         } else { // Full Payment
@@ -921,9 +929,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
 
     const customerOptions = useMemo(() => customers.map(c => ({ value: c.id, label: c.name })), [customers]);
     const productOptions = useMemo(() => {
-        const standardProducts = products.map(p => ({ value: p.id, label: `${p.name} (SKU: ${p.sku})` }));
-        const openingBalanceOption = { value: 'OPENING_BALANCE', label: 'Opening Balance' };
-        return [openingBalanceOption, ...standardProducts];
+        return products.filter(p => p.name !== 'Outstanding Balance').map(p => ({ value: p.id, label: `${p.name} (SKU: ${p.sku})` }));
     }, [products]);
 
 
@@ -940,7 +946,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
 
                                 {/* Order Details */}
                                 <Card>
-                                    <CardContent className="p-4 space-y-4">
+                                    <CardContent className="p-4 space-y-4 shadow-sm rounded-lg">
                                         <DialogTitle className="text-lg">Order Details</DialogTitle>
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                             <div className="space-y-2 md:col-span-2">
@@ -997,7 +1003,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                             </div>
                                             <div className="space-y-2">
                                                 <Label>Stock Left</Label>
-                                                <Input value={currentItem.productId === 'OPENING_BALANCE' ? 'N/A' : currentItem.stock} readOnly disabled />
+                                                <Input value={currentItem.stock} readOnly disabled />
                                             </div>
                                             <div className="space-y-2">
                                                 <Label>Quantity</Label>
@@ -1028,7 +1034,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
 
                                 {/* Items Table */}
                                 <Card>
-                                    <CardContent className="p-4">
+                                    <CardContent className="p-4 shadow-sm rounded-lg">
                                         <Table>
                                             <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Qty</TableHead><TableHead>Price</TableHead><TableHead>Cost</TableHead><TableHead>GST</TableHead><TableHead>Total</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
                                             <TableBody>
@@ -1043,7 +1049,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                                         : price * quantity;
                                                     return (
                                                         <TableRow key={index}>
-                                                            <TableCell>{item.productId === 'OPENING_BALANCE' ? 'Opening Balance' : product?.name}</TableCell>
+                                                            <TableCell>{product?.name}</TableCell>
                                                             <TableCell>{item.quantity}</TableCell>
                                                             <TableCell>{formatNumberForDisplay(price)}</TableCell>
                                                             <TableCell>{formatNumberForDisplay(cost)}</TableCell>
@@ -1064,7 +1070,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {/* Payment Details */}
                                     <Card>
-                                      <CardContent className="p-4 space-y-4">
+                                      <CardContent className="p-4 space-y-4 shadow-sm rounded-lg">
                                           <DialogTitle className="text-lg">Payment Details</DialogTitle>
                                           <div className="space-y-2">
                                               <Label>Payment Term</Label>
@@ -1101,7 +1107,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
 
                                     {/* Summary & Delivery */}
                                     <div className="space-y-4">
-                                        <Card><CardContent className="p-4 space-y-2">
+                                        <Card><CardContent className="p-4 space-y-2 shadow-sm rounded-lg">
                                             <DialogTitle className="text-lg">Order Summary</DialogTitle>
                                             <div className="flex justify-between"><span>Current Items Total:</span> <span className="font-semibold">{formatNumberForDisplay(currentInvoiceTotal)}</span></div>
                                             {previousBalance > 0 && <div className="flex justify-between text-destructive"><span>Previous Due:</span> <span className="font-semibold">{formatNumberForDisplay(previousBalance)}</span></div>}
@@ -1122,7 +1128,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                                 <span className="font-bold text-primary">{formatNumberForDisplay(grandTotal)}</span>
                                             </div>
                                         </CardContent></Card>
-                                        <Card><CardContent className="p-4 space-y-4">
+                                        <Card><CardContent className="p-4 space-y-4 shadow-sm rounded-lg">
                                             <DialogTitle className="text-lg">Delivery Details</DialogTitle>
                                             <div className="space-y-2"><Label>Delivery Date</Label><Input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} /></div>
                                             <div className="space-y-2"><Label>Delivery Address</Label><Textarea value={deliveryAddress} onChange={e => setDeliveryAddress(e.target.value)} placeholder="Leave blank to use customer's default address" /></div>
