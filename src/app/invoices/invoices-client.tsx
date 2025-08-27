@@ -72,6 +72,7 @@ const InvoiceTable = ({ invoices, onRowClick, onDeleteClick }: { invoices: Order
 export function InvoicesClient({ orders: initialOrders, customers: initialCustomers }: { orders: Order[], customers: Customer[] }) {
     const [allInvoices, setAllInvoices] = useState<Order[]>(initialOrders);
     const [allCustomers, setAllCustomers] = useState<Customer[]>(initialCustomers);
+    const [searchQuery, setSearchQuery] = useState('');
     const [selectedInvoice, setSelectedInvoice] = useState<Order | null>(null);
     const [invoiceToDelete, setInvoiceToDelete] = useState<Order | null>(null);
     const [receiptToPrint, setReceiptToPrint] = useState<{order: Order, payment: Payment, historicalPayments: Payment[]} | null>(null);
@@ -90,10 +91,14 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
     }, []);
 
     const { fullPaidInvoices, creditInvoices } = useMemo(() => {
-        const fullPaid = allInvoices.filter(order => order.status === 'Fulfilled');
-        const credit = allInvoices.filter(order => order.status !== 'Fulfilled' && order.status !== 'Canceled');
+        const filtered = allInvoices.filter(order =>
+            order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            order.customerName.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+        const fullPaid = filtered.filter(order => order.status === 'Fulfilled');
+        const credit = filtered.filter(order => order.status !== 'Fulfilled' && order.status !== 'Canceled');
         return { fullPaidInvoices: fullPaid, creditInvoices: credit };
-    }, [allInvoices]);
+    }, [allInvoices, searchQuery]);
 
     const refreshData = async () => {
         const { orders, customers } = await getAllData();
@@ -229,6 +234,14 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
     return (
         <div className="space-y-4">
             <h1 className="text-3xl font-bold">Invoices</h1>
+             <div className="flex items-center">
+                <Input
+                    placeholder="Search by Invoice ID or Customer Name..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="max-w-sm"
+                />
+            </div>
             <Tabs defaultValue="credit">
                 <TabsList>
                     <TabsTrigger value="credit">Credit Invoices</TabsTrigger>
