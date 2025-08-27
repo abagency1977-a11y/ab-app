@@ -604,7 +604,7 @@ export const getDashboardData = async () => {
             monthlyData[month].profit += profit;
             
             if (!productPerformance[item.productId]) {
-                 productPerformance[item.productId] = { productId: string, productName: item.productName, unitsSold: 0, totalRevenue: 0, estimatedProfit: 0 };
+                 productPerformance[item.productId] = { productId: item.productId, productName: item.productName, unitsSold: 0, totalRevenue: 0, estimatedProfit: 0 };
             }
             productPerformance[item.productId].unitsSold += item.quantity;
             productPerformance[item.productId].totalRevenue += revenue;
@@ -744,3 +744,4 @@ export const resetAllPayments = async () => {
     
 
     
+
