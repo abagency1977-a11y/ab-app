@@ -866,14 +866,21 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
         const customer = customers.find(c => c.id === customerId);
         if (!customer) return;
         
-        const isOpeningBalanceOrder = isFirstOrder && previousBalance > 0;
+        const isOpeningBalanceOrder = isFirstOrder && previousBalance > 0 && items.length === 0;
 
         let orderData: any = {
             id: isEditMode ? existingOrder.id : '',
             customerId,
             orderDate,
             customerName: customer.name,
-            items: items.map(item => {
+            items: isOpeningBalanceOrder ? [{
+                productId: 'OPENING_BALANCE',
+                productName: 'Opening Balance',
+                quantity: 1,
+                price: previousBalance,
+                cost: 0,
+                gst: 0,
+            }] : items.map(item => {
                 const product = products.find(p => p.id === item.productId);
                 return {
                     productId: item.productId,
@@ -884,11 +891,11 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                     gst: parseFloat(item.gst) || 0,
                 };
             }),
-            total: currentInvoiceTotal,
-            previousBalance,
+            total: isOpeningBalanceOrder ? previousBalance : currentInvoiceTotal,
+            previousBalance: isOpeningBalanceOrder ? 0 : previousBalance,
             discount,
             deliveryFees,
-            grandTotal,
+            grandTotal: isOpeningBalanceOrder ? previousBalance : grandTotal,
             paymentTerm,
             deliveryAddress: deliveryAddress || customer.address,
             isGstInvoice,
@@ -901,7 +908,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
 
         if (paymentTerm === 'Credit') {
             orderData.payments = isEditMode ? existingOrder.payments : [];
-            orderData.balanceDue = grandTotal;
+            orderData.balanceDue = orderData.grandTotal;
             orderData.status = 'Pending';
              if (dueDate) {
                 orderData.dueDate = dueDate;
@@ -910,7 +917,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
             orderData.payments = [{
                 id: 'temp-payment-id',
                 paymentDate: orderDate,
-                amount: grandTotal,
+                amount: orderData.grandTotal,
                 method: paymentMode,
                 notes: paymentRemarks,
             }];
@@ -954,7 +961,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
 
                                 {/* Order Details */}
                                 <Card>
-                                    <CardContent className="p-4 space-y-4 rounded-lg">
+                                    <CardContent className="p-4 space-y-4 rounded-lg shadow-sm border-gray-200">
                                         <DialogTitle className="text-lg">Order Details</DialogTitle>
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                             <div className="space-y-2 md:col-span-2">
@@ -1042,7 +1049,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
 
                                 {/* Items Table */}
                                 <Card>
-                                    <CardContent className="p-4 rounded-lg">
+                                    <CardContent className="p-4 rounded-lg shadow-sm border-gray-200">
                                         <Table>
                                             <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Qty</TableHead><TableHead>Price</TableHead><TableHead>Cost</TableHead><TableHead>GST</TableHead><TableHead>Total</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
                                             <TableBody>
@@ -1078,7 +1085,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {/* Payment Details */}
                                     <Card>
-                                      <CardContent className="p-4 space-y-4 rounded-lg">
+                                      <CardContent className="p-4 space-y-4 rounded-lg shadow-sm border-gray-200">
                                           <DialogTitle className="text-lg">Payment Details</DialogTitle>
                                           <div className="space-y-2">
                                               <Label>Payment Term</Label>
@@ -1115,7 +1122,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
 
                                     {/* Summary & Delivery */}
                                     <div className="space-y-4">
-                                        <Card><CardContent className="p-4 space-y-2 rounded-lg">
+                                        <Card><CardContent className="p-4 space-y-2 rounded-lg shadow-sm border-gray-200">
                                             <DialogTitle className="text-lg">Order Summary</DialogTitle>
                                             <div className="flex justify-between"><span>Current Items Total:</span> <span className="font-semibold">{formatNumberForDisplay(currentInvoiceTotal)}</span></div>
                                             {previousBalance > 0 && <div className="flex justify-between text-destructive"><span>Previous Due:</span> <span className="font-semibold">{formatNumberForDisplay(previousBalance)}</span></div>}
@@ -1136,7 +1143,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                                 <span className="font-bold text-primary">{formatNumberForDisplay(grandTotal)}</span>
                                             </div>
                                         </CardContent></Card>
-                                        <Card><CardContent className="p-4 space-y-4 rounded-lg">
+                                        <Card><CardContent className="p-4 space-y-4 rounded-lg shadow-sm border-gray-200">
                                             <DialogTitle className="text-lg">Delivery Details</DialogTitle>
                                             <div className="space-y-2"><Label>Delivery Date</Label><Input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} /></div>
                                             <div className="space-y-2"><Label>Delivery Address</Label><Textarea value={deliveryAddress} onChange={e => setDeliveryAddress(e.target.value)} placeholder="Leave blank to use customer's default address" /></div>
@@ -1172,7 +1179,3 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
         </>
     );
 }
-
-      
-
-    
