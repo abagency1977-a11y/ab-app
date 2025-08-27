@@ -192,7 +192,12 @@ async function runBalanceChainUpdate(customerId: string, workload: (orders: Orde
                 // we trust the 'previousBalance' value coming from the form.
                 // Otherwise, we use the calculated running balance.
                 if (i === 0 && order.isOpeningBalance) {
+                    // This is the key change: trust the incoming value for the first order if it's an OB.
                     runningPreviousBalance = order.previousBalance;
+                } else if (i > 0) {
+                     runningPreviousBalance = orders[i - 1].balanceDue ?? 0;
+                } else {
+                     runningPreviousBalance = 0;
                 }
                 
                 order.previousBalance = runningPreviousBalance;
@@ -207,9 +212,6 @@ async function runBalanceChainUpdate(customerId: string, workload: (orders: Orde
                     order.status = order.balanceDue <= 0 ? 'Fulfilled' : (totalPaid > 0 ? 'Part Payment' : 'Pending');
                 }
 
-                // The next order's previous balance is the current order's final balance due.
-                runningPreviousBalance = order.balanceDue > 0 ? order.balanceDue : 0;
-                
                 // Write the updated order back to the database
                 transaction.set(orderRef, order);
             }
@@ -374,6 +376,46 @@ export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 
 
         // Return the modified list of orders for recalculation
         return orders;
+    });
+};
+
+interface BulkPaymentData {
+    customerId: string;
+    paymentDate: string;
+    paymentMethod: PaymentMode;
+    notes?: string;
+    allocations: { orderId: string, amount: number }[];
+}
+
+export const addBulkPayment = async (data: BulkPaymentData): Promise<void> => {
+    await runBalanceChainUpdate(data.customerId, (orders) => {
+        // Create a map for quick lookup of orders
+        const ordersMap = new Map(orders.map(o => [o.id, o]));
+
+        // Apply each allocation to its corresponding order in memory
+        for (const allocation of data.allocations) {
+            const orderToUpdate = ordersMap.get(allocation.orderId);
+            if (orderToUpdate) {
+                const existingPayments: Payment[] = orderToUpdate.payments || [];
+                const paymentId = `${allocation.orderId}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
+                
+                const newPayment: Payment = {
+                    id: paymentId,
+                    amount: allocation.amount,
+                    paymentDate: data.paymentDate,
+                    method: data.paymentMethod,
+                    notes: `Part of bulk payment. ${data.notes || ''}`.trim(),
+                };
+
+                orderToUpdate.payments = [...existingPayments, newPayment];
+            } else {
+                 // This case should ideally be handled, but for now we log it.
+                 console.warn(`Could not find order ${allocation.orderId} during bulk payment application.`);
+            }
+        }
+        
+        // Return the modified list of all orders for the customer
+        return Array.from(ordersMap.values());
     });
 };
 
@@ -562,7 +604,7 @@ export const getDashboardData = async () => {
             monthlyData[month].profit += profit;
             
             if (!productPerformance[item.productId]) {
-                 productPerformance[item.productId] = { productId: item.productId, productName: item.productName, unitsSold: 0, totalRevenue: 0, estimatedProfit: 0 };
+                 productPerformance[item.productId] = { productId: string, productName: item.productName, unitsSold: 0, totalRevenue: 0, estimatedProfit: 0 };
             }
             productPerformance[item.productId].unitsSold += item.quantity;
             productPerformance[item.productId].totalRevenue += revenue;

@@ -11,9 +11,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { addPaymentToOrder, getOrders, updateOrder } from '@/lib/data';
-import { runTransaction } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { addBulkPayment } from '@/lib/data';
 
 const OutstandingInvoiceSchema = z.object({
   id: z.string().describe("The ID of the invoice to apply payment to."),
@@ -49,24 +47,16 @@ export async function allocateBulkPayment(input: AllocateBulkPaymentInput): Prom
   const allocationResult = await allocateBulkPaymentFlow(input);
   
   if (allocationResult.allocations.length > 0) {
-      await Promise.all(allocationResult.allocations.map(allocation => {
-          if (allocation.amountAllocated > 0) {
-            // Find the original invoice from the input to get the correct Order ID
-            const originalInvoice = input.invoicesToPay.find(inv => inv.id.replace('ORD', 'INV') === allocation.invoiceId);
-            if (!originalInvoice) {
-                // This case should ideally not happen if the AI is behaving
-                console.error(`Could not find original order for invoice ID ${allocation.invoiceId}`);
-                return Promise.resolve();
-            }
-            return addPaymentToOrder(originalInvoice.id, {
-                amount: allocation.amountAllocated,
-                paymentDate: input.paymentDate,
-                method: input.paymentMethod,
-                notes: `Part of bulk payment. ${input.notes || ''}`.trim(),
-            });
-          }
-          return Promise.resolve();
-      }));
+      await addBulkPayment({
+          customerId: input.customerId,
+          paymentDate: input.paymentDate,
+          paymentMethod: input.paymentMethod,
+          notes: input.notes,
+          allocations: allocationResult.allocations.map(alloc => ({
+              orderId: alloc.invoiceId.replace('INV', 'ORD'),
+              amount: alloc.amountAllocated,
+          }))
+      });
   }
 
   return allocationResult;
@@ -92,7 +82,7 @@ Your task is to determine how to apply the payment amount to these selected invo
 2.  Do not apply more to an invoice than its current balance due.
 3.  If the payment clears the first invoice and there's still money left, move to the next invoice in the list and apply the remaining amount.
 4.  Continue this process until the payment is fully used or all selected invoices are paid.
-5.  Keep track of how much of the payment is allocated to each invoice. The 'invoiceId' in your output must be the same as the 'id' from the input list (e.g., 'ORD-0036' becomes 'INV-0036'). Make sure to transform ORD to INV in the output.
+5.  Keep track of how much of the payment is allocated to each invoice. The 'invoiceId' in your output must be the same as the 'id' from the input list (e.g., 'ORD-0036' becomes 'INV-0036').
 6.  Any payment amount left over after all selected invoices are cleared is considered remaining credit.
 7.  Provide a clear, human-readable summary of the allocations.
 
@@ -117,8 +107,6 @@ const allocateBulkPaymentFlow = ai.defineFlow(
         }
     }
     
-    // The AI needs to see 'INV-xxxx', but the system needs 'ORD-xxxx'
-    // Let's create a temporary input for the AI with the correct display IDs
     const inputForAI = {
         ...input,
         invoicesToPay: input.invoicesToPay.map(inv => ({
@@ -131,4 +119,3 @@ const allocateBulkPaymentFlow = ai.defineFlow(
     return output!;
   }
 );
-
