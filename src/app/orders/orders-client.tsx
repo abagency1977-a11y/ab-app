@@ -582,6 +582,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 }}
                 customers={customers}
                 products={products}
+                orders={orders}
                 onOrderAdded={handleAddOrder}
                 onOrderUpdated={handleUpdateOrder}
                 onCustomerAdded={handleAddCustomer}
@@ -610,11 +611,12 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
 const initialItemState = { productId: '', quantity: '', price: '', cost: '', gst: '', stock: 0 };
 type OrderItemState = { productId: string, quantity: string, price: string, cost: string, gst: string, stock: number };
 
-function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdded, onOrderUpdated, onCustomerAdded, existingOrder }: {
+function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onOrderAdded, onOrderUpdated, onCustomerAdded, existingOrder }: {
     isOpen: boolean,
     onOpenChange: (open: boolean) => void,
     customers: Customer[],
     products: Product[],
+    orders: Order[],
     onOrderAdded: (order: Omit<Order, 'id' | 'customerName'>) => Promise<Order>,
     onOrderUpdated: (order: Order) => Promise<void>,
     onCustomerAdded: (customer: Omit<Customer, 'id'|'transactionHistory' | 'orders'>) => Promise<Customer | null>,
@@ -638,6 +640,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     const [discount, setDiscount] = useState(0);
     const [deliveryFees, setDeliveryFees] = useState(0);
     const [previousBalance, setPreviousBalance] = useState(0);
+    const [isFirstOrder, setIsFirstOrder] = useState(false);
 
     const { toast } = useToast();
     
@@ -660,6 +663,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
         setDiscount(0);
         setDeliveryFees(0);
         setPreviousBalance(0);
+        setIsFirstOrder(false);
         onOpenChange(false);
     }, [onOpenChange]);
     
@@ -709,6 +713,9 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
     useEffect(() => {
         const fetchBalance = async () => {
             if (customerId) {
+                const customerOrders = orders.filter(o => o.customerId === customerId);
+                setIsFirstOrder(customerOrders.length === 0);
+
                  // For edit mode, we use the stored previousBalance.
                 if (isEditMode && existingOrder) {
                     setPreviousBalance(existingOrder.previousBalance);
@@ -723,12 +730,13 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
             } else {
                 setPreviousBalance(0);
                 setDeliveryAddress('');
+                setIsFirstOrder(false);
             }
         };
         if (isOpen) {
           fetchBalance();
         }
-    }, [customerId, customers, isOpen, isEditMode, existingOrder]);
+    }, [customerId, customers, orders, isOpen, isEditMode, existingOrder]);
 
     const handleProductSelect = (productId: string) => {
         const product = products.find(p => p.id === productId);
@@ -954,8 +962,14 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                                 <Input id="orderDate" type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} />
                                             </div>
                                         </div>
-                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                             {previousBalance > 0 && (
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                             {isFirstOrder && !isEditMode && (
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="previous_balance">Opening Balance (Optional)</Label>
+                                                    <Input id="previous_balance" type="number" placeholder="0.00" value={String(previousBalance)} onChange={e => setPreviousBalance(parseFloat(e.target.value) || 0)} />
+                                                </div>
+                                            )}
+                                            {previousBalance > 0 && !isFirstOrder && (
                                                 <div className="flex items-center justify-start">
                                                     <div className="text-right p-2 bg-amber-100 border border-amber-200 rounded-md">
                                                         <div className="text-sm font-medium text-amber-800">Previous Balance</div>
@@ -963,7 +977,12 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                                     </div>
                                                 </div>
                                             )}
-                                         </div>
+                                        </div>
+                                         <div className="flex items-center space-x-2 pt-2">
+                                            <Checkbox id="is_gst_invoice" checked={isGstInvoice} onCheckedChange={c => setIsGstInvoice(c as boolean)} />
+                                            <Label htmlFor="is_gst_invoice">Generate GST Invoice?</Label>
+                                        </div>
+                                        <Separator />
                                         <div className="grid grid-cols-1 md:grid-cols-7 gap-4 items-end">
                                             <div className="space-y-2 col-span-2">
                                                 <Label>Item Name</Label>
@@ -1101,11 +1120,6 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, onOrderAdde
                                             <div className="flex justify-between text-lg">
                                                 <span className="font-bold">Grand Total:</span>
                                                 <span className="font-bold text-primary">{formatNumberForDisplay(grandTotal)}</span>
-                                            </div>
-                                            
-                                             <div className="flex items-center space-x-2 pt-2">
-                                                <Checkbox id="is_gst_invoice" checked={isGstInvoice} onCheckedChange={c => setIsGstInvoice(c as boolean)} />
-                                                <Label htmlFor="is_gst_invoice">Generate GST Invoice?</Label>
                                             </div>
                                         </CardContent></Card>
                                         <Card><CardContent className="p-4 space-y-4">
