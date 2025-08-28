@@ -159,7 +159,8 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
         }
 
         const sanitizedPhone = customer.phone.replace(/\D/g, '');
-        const message = `Hello ${customer.name}, here is the receipt for your payment of ${formatNumber(payment.amount)} towards invoice ${selectedInvoice.id.replace('ORD', 'INV')}. Thank you!`;
+        const formattedAmount = formatNumber(payment.amount).replace(/\u00A0/g, ' ');
+        const message = `Hello ${customer.name}, here is the receipt for your payment of ${formattedAmount} towards invoice ${selectedInvoice.id.replace('ORD', 'INV')}. Thank you!`;
         const whatsappUrl = `https://wa.me/${sanitizedPhone}?text=${encodeURIComponent(message)}`;
         
         window.open(whatsappUrl, '_blank');
@@ -434,6 +435,8 @@ function PaymentForm({ balanceDue, onAddPayment }: { balanceDue: number; onAddPa
         </Card>
     );
 }
+
+    
 
     
 

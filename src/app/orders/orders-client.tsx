@@ -129,7 +129,8 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         }
         
         const sanitizedPhone = customer.phone.replace(/\D/g, '');
-        const message = `Hello ${customer.name}, here is your invoice ${order.id.replace('ORD', 'INV')}. Total amount: ${formatNumberForDisplay(order.grandTotal)}. Thank you for your business!`;
+        const formattedAmount = formatNumberForDisplay(order.grandTotal).replace(/\u00A0/g, ' ');
+        const message = `Hello ${customer.name}, here is your invoice ${order.id.replace('ORD', 'INV')}. Total amount: ${formattedAmount}. Thank you for your business!`;
         const whatsappUrl = `https://wa.me/${sanitizedPhone}?text=${encodeURIComponent(message)}`;
         
         window.open(whatsappUrl, '_blank');
@@ -1180,6 +1181,8 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
         </>
     );
 }
+
+    
 
     
 
