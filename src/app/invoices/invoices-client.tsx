@@ -71,7 +71,7 @@ const InvoiceTable = ({ invoices, onRowClick, onDeleteClick }: { invoices: Order
 
 export function InvoicesClient({ orders: initialOrders, customers: initialCustomers }: { orders: Order[], customers: Customer[] }) {
     const [allInvoices, setAllInvoices] = useState<Order[]>(initialOrders);
-    const [allCustomers, setAllCustomers] = useState<Customer[]>(initialCustomers);
+    const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedInvoice, setSelectedInvoice] = useState<Order | null>(null);
     const [invoiceToDelete, setInvoiceToDelete] = useState<Order | null>(null);
@@ -101,9 +101,9 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
     }, [allInvoices, searchQuery]);
 
     const refreshData = async () => {
-        const { orders, customers } = await getAllData();
+        const { orders, customers: refreshedCustomers } = await getAllData();
         setAllInvoices(orders);
-        setAllCustomers(customers);
+        setCustomers(refreshedCustomers);
         // After refresh, find and update the selectedInvoice to show new data in the sheet
         if (selectedInvoice) {
             const updatedSelectedInvoice = orders.find(o => o.id === selectedInvoice.id);
@@ -152,7 +152,7 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
 
     const handleWhatsAppShare = (payment: Payment) => {
         if (!selectedInvoice) return;
-        const customer = allCustomers.find(c => c.id === selectedInvoice.customerId);
+        const customer = customers.find(c => c.id === selectedInvoice.customerId);
         if (!customer || !customer.phone) {
             toast({ title: 'Error', description: "Customer's phone number is not available.", variant: 'destructive'});
             return;
@@ -164,7 +164,6 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
         const whatsappUrl = `https://wa.me/${sanitizedPhone}?text=${encodedMessage}`;
         
         window.open(whatsappUrl, '_blank');
-        toast({ title: 'Success', description: 'WhatsApp chat opened. Please attach the downloaded receipt.' });
     };
 
 
@@ -215,8 +214,8 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
     
     const customerForReceipt = useMemo(() => {
         if (!receiptToPrint) return null;
-        return allCustomers.find(c => c.id === receiptToPrint.order.customerId) || null;
-    }, [receiptToPrint, allCustomers]);
+        return customers.find(c => c.id === receiptToPrint.order.customerId) || null;
+    }, [receiptToPrint, customers]);
 
     if (!isMounted) {
         return (
