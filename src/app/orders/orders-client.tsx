@@ -127,9 +127,10 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             toast({ title: 'Error', description: "Customer's phone number is not available.", variant: 'destructive'});
             return;
         }
-
+        
+        const sanitizedPhone = customer.phone.replace(/[^0-9]/g, '');
         const message = `Hello ${customer.name}, here is your invoice ${order.id.replace('ORD', 'INV')}. Total amount: ${formatNumberForDisplay(order.grandTotal)}. Thank you for your business!`;
-        const whatsappUrl = `https://wa.me/${customer.phone}?text=${encodeURIComponent(message)}`;
+        const whatsappUrl = `https://wa.me/${sanitizedPhone}?text=${encodeURIComponent(message)}`;
         
         window.open(whatsappUrl, '_blank');
         toast({ title: 'Success', description: 'WhatsApp chat opened. Please attach the downloaded invoice.' });
