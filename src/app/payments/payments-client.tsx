@@ -149,8 +149,7 @@ export function PaymentsClient({ orders: initialOrders, customers: initialCustom
 
         const sanitizedPhone = customer.phone.replace(/\D/g, '');
         const message = `Hello ${customer.name}, here is the receipt for your payment of ${formatNumber(payment.amount)} towards invoice ${selectedInvoice.id.replace('ORD', 'INV')}. Thank you!`;
-        const encodedMessage = encodeURIComponent(message);
-        const whatsappUrl = `https://wa.me/${sanitizedPhone}?text=${encodedMessage}`;
+        const whatsappUrl = `https://wa.me/${sanitizedPhone}?text=${encodeURIComponent(message)}`;
         
         window.open(whatsappUrl, '_blank');
     };
@@ -380,5 +379,7 @@ function PaymentForm({ balanceDue, onAddPayment }: { balanceDue: number; onAddPa
         </Card>
     );
 }
+
+    
 
     

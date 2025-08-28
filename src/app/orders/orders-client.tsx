@@ -130,8 +130,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         
         const sanitizedPhone = customer.phone.replace(/\D/g, '');
         const message = `Hello ${customer.name}, here is your invoice ${order.id.replace('ORD', 'INV')}. Total amount: ${formatNumberForDisplay(order.grandTotal)}. Thank you for your business!`;
-        const encodedMessage = encodeURIComponent(message);
-        const whatsappUrl = `https://wa.me/${sanitizedPhone}?text=${encodedMessage}`;
+        const whatsappUrl = `https://wa.me/${sanitizedPhone}?text=${encodeURIComponent(message)}`;
         
         window.open(whatsappUrl, '_blank');
         toast({ title: 'Success', description: 'WhatsApp chat opened. Please attach the downloaded invoice.' });
@@ -1181,5 +1180,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
         </>
     );
 }
+
+    
 
     
