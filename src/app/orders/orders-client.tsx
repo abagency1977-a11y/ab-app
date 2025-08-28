@@ -128,7 +128,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             return;
         }
         
-        const sanitizedPhone = customer.phone.replace(/[^0-9]/g, '');
+        const sanitizedPhone = customer.phone.replace(/\D/g, '');
         const message = `Hello ${customer.name}, here is your invoice ${order.id.replace('ORD', 'INV')}. Total amount: ${formatNumberForDisplay(order.grandTotal)}. Thank you for your business!`;
         const whatsappUrl = `https://wa.me/${sanitizedPhone}?text=${encodeURIComponent(message)}`;
         

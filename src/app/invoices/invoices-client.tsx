@@ -158,7 +158,7 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
             return;
         }
 
-        const sanitizedPhone = customer.phone.replace(/[^0-9]/g, '');
+        const sanitizedPhone = customer.phone.replace(/\D/g, '');
         const message = `Hello ${customer.name}, here is the receipt for your payment of ${formatNumber(payment.amount)} towards invoice ${selectedInvoice.id.replace('ORD', 'INV')}. Thank you!`;
         const whatsappUrl = `https://wa.me/${sanitizedPhone}?text=${encodeURIComponent(message)}`;
         
