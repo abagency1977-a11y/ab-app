@@ -113,7 +113,6 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                     return sortConfig.direction === 'ascending' ? aValue - bValue : bValue - aValue;
                 }
                 
-                // Default string comparison
                 const strA = String(aValue).toLowerCase();
                 const strB = String(bValue).toLowerCase();
 
@@ -1008,8 +1007,8 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
 
                                 {/* Order Details */}
                                 <Card>
-                                    <CardContent className="p-4 space-y-4 rounded-lg shadow-sm border-gray-200">
-                                        <DialogTitle className="text-lg">Order Details</DialogTitle>
+                                    <CardContent className="p-4 space-y-4 rounded-lg">
+                                        <DialogTitle className="text-lg mb-4">Order Details</DialogTitle>
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                             <div className="space-y-2 md:col-span-2">
                                                 <Label htmlFor="customer">Customer Name</Label>
@@ -1046,8 +1045,10 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                                 </div>
                                             )}
                                         </div>
+                                        
+                                        <Separator className="my-4" />
 
-                                        <div className="flex items-center space-x-2 pt-2">
+                                        <div className="flex items-center space-x-2">
                                             <Checkbox id="is_gst_invoice" checked={isGstInvoice} onCheckedChange={c => setIsGstInvoice(c as boolean)} />
                                             <Label htmlFor="is_gst_invoice">Generate GST Invoice?</Label>
                                         </div>
@@ -1082,8 +1083,12 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                               <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
                                           </div>
                                         )}
+                                    </CardContent>
+                                </Card>
 
-                                        <Separator />
+                                <Card>
+                                    <CardContent className="p-4 space-y-4">
+                                        <DialogTitle className="text-lg mb-4">Add Items</DialogTitle>
                                         <div className="grid grid-cols-1 md:grid-cols-7 gap-4 items-end">
                                             <div className="space-y-2 col-span-2">
                                                 <Label>Item Name</Label>
@@ -1127,9 +1132,11 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                     </CardContent>
                                 </Card>
 
+
                                 {/* Items Table */}
                                 <Card>
-                                    <CardContent className="p-4 rounded-lg shadow-sm border-gray-200">
+                                    <CardContent className="p-4">
+                                        <DialogTitle className="text-lg mb-4">Order Items</DialogTitle>
                                         <Table>
                                             <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Qty</TableHead><TableHead>Price</TableHead><TableHead>Cost</TableHead><TableHead>GST</TableHead><TableHead>Total</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
                                             <TableBody>
@@ -1165,7 +1172,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {/* Delivery Details */}
                                     <Card>
-                                        <CardContent className="p-4 space-y-4 rounded-lg shadow-sm border-gray-200">
+                                        <CardContent className="p-4 space-y-4">
                                             <DialogTitle className="text-lg">Delivery Details</DialogTitle>
                                             <div className="space-y-2"><Label>Delivery Date</Label><Input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} /></div>
                                             <div className="space-y-2"><Label>Delivery Address</Label><Textarea value={deliveryAddress} onChange={e => setDeliveryAddress(e.target.value)} placeholder="Leave blank to use customer's default address" /></div>
@@ -1174,7 +1181,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
 
                                     {/* Order Summary */}
                                     <Card>
-                                        <CardContent className="p-4 space-y-2 rounded-lg shadow-sm border-gray-200">
+                                        <CardContent className="p-4 space-y-2">
                                             <DialogTitle className="text-lg">Order Summary</DialogTitle>
                                             <div className="flex justify-between"><span>Current Items Total:</span> <span className="font-semibold">{formatNumberForDisplay(currentInvoiceTotal)}</span></div>
                                             {previousBalance > 0 && <div className="flex justify-between text-destructive"><span>Previous Due:</span> <span className="font-semibold">{formatNumberForDisplay(previousBalance)}</span></div>}
