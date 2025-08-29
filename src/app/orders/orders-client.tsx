@@ -284,7 +284,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
 
             (doc as any).autoTable({
                 startY: tableStartY,
-                head: [['Item Description', 'Qty', 'Rate', 'GST', 'Total']],
+                head: [['Item Description', 'Quantity/WT.(kg)', 'Rate', 'GST', 'Total']],
                 body: tableBody,
                 theme: 'grid',
                 headStyles: {
@@ -1020,8 +1020,6 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                     <form onSubmit={handleSubmit}>
                         <ScrollArea className="h-[70vh]">
                             <div className="space-y-4 p-4">
-
-                                {/* Order Details */}
                                 <Card>
                                     <CardContent className="p-4 space-y-4 rounded-lg">
                                         <DialogTitle className="text-lg mb-4">Order Details</DialogTitle>
@@ -1156,7 +1154,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                     <CardContent className="p-4">
                                         <DialogTitle className="text-lg mb-4">Order Items</DialogTitle>
                                         <Table>
-                                            <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Qty / Wt</TableHead><TableHead>Price</TableHead><TableHead>Cost</TableHead><TableHead>GST</TableHead><TableHead>Total</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+                                            <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Quantity/WT.(kg)</TableHead><TableHead>Price</TableHead><TableHead>Cost</TableHead><TableHead>GST</TableHead><TableHead>Total</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
                                             <TableBody>
                                                 {items.map((item, index) => {
                                                     const product = products.find(p => p.id === item.productId);
