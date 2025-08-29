@@ -1,4 +1,6 @@
 
+export type CalculationType = 'Per Unit' | 'Per Kg';
+
 export interface Customer {
   id: string;
   name: string;
@@ -30,10 +32,11 @@ export interface Product {
   cost: number; // Cost of Goods Sold
   gst: number;
   reorderPoint?: number;
+  calculationType?: CalculationType;
   historicalData?: { date: string; quantity: number }[];
 }
 
-export type OrderStatus = 'Pending' | 'Fulfilled' | 'Canceled';
+export type OrderStatus = 'Pending' | 'Part Payment' | 'Fulfilled' | 'Canceled';
 export type PaymentTerm = 'Full Payment' | 'Credit';
 export type PaymentMode = 'Cash' | 'Card' | 'UPI' | 'Cheque' | 'Online Transfer';
 
@@ -53,6 +56,7 @@ export interface OrderItem {
   price: number;
   cost: number; // Snapshot of cost at time of sale
   gst: number;
+  calculationType: CalculationType;
 }
 
 export interface PurchaseItem {

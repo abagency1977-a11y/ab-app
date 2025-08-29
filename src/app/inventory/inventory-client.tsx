@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import type { Product } from '@/lib/types';
+import type { Product, CalculationType } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,6 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { addProduct, deleteProduct as deleteProductFromDB, getProducts, updateProduct } from '@/lib/data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol' }).format(value);
 
@@ -34,6 +35,7 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
     const costRef = useRef<HTMLInputElement>(null);
     const gstRef = useRef<HTMLInputElement>(null);
     const reorderPointRef = useRef<HTMLInputElement>(null);
+    const [calculationType, setCalculationType] = useState<CalculationType>('Per Unit');
     const { toast } = useToast();
 
     const handleAddProduct = async () => {
@@ -45,6 +47,7 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
             cost: Number(costRef.current?.value || 0),
             gst: Number(gstRef.current?.value || 0),
             reorderPoint: Number(reorderPointRef.current?.value || 0),
+            calculationType: calculationType
         };
 
         if (!newProductData.name || !newProductData.sku) {
@@ -80,7 +83,7 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent>
+            <DialogContent className="max-w-2xl">
                 <DialogHeader>
                     <DialogTitle>Add New Product</DialogTitle>
                     <DialogDescription>
@@ -115,6 +118,18 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="reorderPoint" className="text-right">Reorder Point</Label>
                         <Input id="reorderPoint" name="reorderPoint" ref={reorderPointRef} type="number" className="col-span-3" defaultValue="0" />
+                    </div>
+                     <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="calculationType" className="text-right">Calculation Type</Label>
+                         <Select value={calculationType} onValueChange={(v) => setCalculationType(v as CalculationType)}>
+                            <SelectTrigger className="col-span-3">
+                                <SelectValue placeholder="Select calculation type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Per Unit">Per Unit</SelectItem>
+                                <SelectItem value="Per Kg">Per Kg</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
                 </div>
                 <DialogFooter>
@@ -206,6 +221,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             cost: Number(formData.get('cost')),
             gst: Number(formData.get('gst')),
             reorderPoint: Number(formData.get('reorderPoint')),
+            calculationType: formData.get('calculationType') as CalculationType || 'Per Unit',
         };
 
         try {
@@ -310,6 +326,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                 <TableRow>
                                     <TableHead>Product</TableHead>
                                     <TableHead>SKU</TableHead>
+                                    <TableHead>Calc. Type</TableHead>
                                     <TableHead>Stock</TableHead>
                                     <TableHead>Reorder Point</TableHead>
                                     <TableHead className="text-right">Sale Price</TableHead>
@@ -325,6 +342,9 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                         <TableRow key={product.id}>
                                             <TableCell className="font-medium">{product.name}</TableCell>
                                             <TableCell>{product.sku}</TableCell>
+                                            <TableCell>
+                                                <Badge variant="outline">{product.calculationType === 'Per Kg' ? 'Per Kg' : 'Per Unit'}</Badge>
+                                            </TableCell>
                                             <TableCell className={cn(isLowStock && "text-destructive font-bold")}>
                                                 <div className="flex items-center gap-2">
                                                     {isLowStock && <AlertTriangle className="h-4 w-4 text-destructive" />}
@@ -386,26 +406,32 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                             </DropdownMenu>
                                         </div>
                                     </CardHeader>
-                                    <CardContent className="grid grid-cols-3 gap-4">
-                                        <div>
-                                            <p className="text-xs text-muted-foreground">Stock</p>
-                                            <p className={cn("font-bold", isLowStock && "text-destructive")}>{product.stock}</p>
+                                    <CardContent className="space-y-4">
+                                        <div className="grid grid-cols-3 gap-4">
+                                            <div>
+                                                <p className="text-xs text-muted-foreground">Stock</p>
+                                                <p className={cn("font-bold", isLowStock && "text-destructive")}>{product.stock}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-muted-foreground">Reorder</p>
+                                                <p className="font-bold">{product.reorderPoint ?? 'N/A'}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-muted-foreground">Sale Price</p>
+                                                <p className="font-bold">{formatNumber(product.price)}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-muted-foreground">Cost Price</p>
+                                                <p className="font-bold">{formatNumber(product.cost)}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-muted-foreground">GST</p>
+                                                <p className="font-bold">{product.gst}%</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p className="text-xs text-muted-foreground">Reorder</p>
-                                            <p className="font-bold">{product.reorderPoint ?? 'N/A'}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-muted-foreground">Sale Price</p>
-                                            <p className="font-bold">{formatNumber(product.price)}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-muted-foreground">Cost Price</p>
-                                            <p className="font-bold">{formatNumber(product.cost)}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-muted-foreground">GST</p>
-                                            <p className="font-bold">{product.gst}%</p>
+                                         <div>
+                                            <p className="text-xs text-muted-foreground">Calculation Type</p>
+                                            <p className="font-bold">{product.calculationType === 'Per Kg' ? 'Per Kilogram' : 'Per Unit'}</p>
                                         </div>
                                     </CardContent>
                                 </Card>
@@ -460,7 +486,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             />
 
              <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-                <DialogContent>
+                <DialogContent className="max-w-2xl">
                     <DialogHeader>
                         <DialogTitle>Edit Product</DialogTitle>
                         <DialogDescription>
@@ -496,6 +522,18 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                             <div className="grid grid-cols-4 items-center gap-4">
                                 <Label htmlFor="gst" className="text-right">GST %</Label>
                                 <Input id="gst" name="gst" type="number" step="0.01" className="col-span-3" defaultValue={productToEdit?.gst} required />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="calculationTypeEdit" className="text-right">Calculation Type</Label>
+                                <Select name="calculationType" defaultValue={productToEdit?.calculationType || 'Per Unit'}>
+                                    <SelectTrigger id="calculationTypeEdit" className="col-span-3">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Per Unit">Per Unit</SelectItem>
+                                        <SelectItem value="Per Kg">Per Kg</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
                         </div>
                         <DialogFooter>
