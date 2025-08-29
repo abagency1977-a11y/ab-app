@@ -129,21 +129,25 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
                 if (aValue === undefined || aValue === null) return 1;
                 if (bValue === undefined || bValue === null) return -1;
                 
-                if (typeof aValue === 'number' && typeof bValue === 'number') {
-                    return sortConfig.direction === 'ascending' ? aValue - bValue : bValue - aValue;
-                }
-                
                 if (sortConfig.key === 'orderDate') {
                     const dateA = new Date(aValue as string).getTime();
                     const dateB = new Date(bValue as string).getTime();
                     return sortConfig.direction === 'ascending' ? dateA - dateB : dateB - dateA;
                 }
-
-                // Default string comparison
+                
+                if (typeof aValue === 'number' && typeof bValue === 'number') {
+                    return sortConfig.direction === 'ascending' ? aValue - bValue : bValue - aValue;
+                }
+                
                 const strA = String(aValue).toLowerCase();
                 const strB = String(bValue).toLowerCase();
-                if (strA < strB) return sortConfig.direction === 'ascending' ? -1 : 1;
-                if (strA > strB) return sortConfig.direction === 'ascending' ? 1 : -1;
+
+                if (strA < strB) {
+                    return sortConfig.direction === 'ascending' ? -1 : 1;
+                }
+                if (strA > strB) {
+                    return sortConfig.direction === 'ascending' ? 1 : -1;
+                }
                 return 0;
             });
         }
@@ -164,7 +168,6 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
         const { orders, customers: refreshedCustomers } = await getAllData();
         setAllInvoices(orders);
         setCustomers(refreshedCustomers);
-        // After refresh, find and update the selectedInvoice to show new data in the sheet
         if (selectedInvoice) {
             const updatedSelectedInvoice = orders.find(o => o.id === selectedInvoice.id);
             setSelectedInvoice(updatedSelectedInvoice || null);
@@ -219,7 +222,7 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
         }
 
         const sanitizedPhone = customer.phone.replace(/\D/g, '');
-        const formattedAmount = formatNumber(payment.amount).replace(/\u00A0/g, ' '); // Replace non-breaking space
+        const formattedAmount = formatNumber(payment.amount).replace(/\u00A0/g, ' ');
         const message = `Hello ${customer.name}, here is the receipt for your payment of ${formattedAmount} towards invoice ${selectedInvoice.id.replace('ORD', 'INV')}. Thank you!`;
         const whatsappUrl = `https://wa.me/${sanitizedPhone}?text=${encodeURIComponent(message)}`;
         

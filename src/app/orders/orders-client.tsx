@@ -102,10 +102,6 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
 
                 if (aValue === undefined || aValue === null) return 1;
                 if (bValue === undefined || bValue === null) return -1;
-
-                if (typeof aValue === 'number' && typeof bValue === 'number') {
-                    return sortConfig.direction === 'ascending' ? aValue - bValue : bValue - aValue;
-                }
                 
                 if (sortConfig.key === 'orderDate') {
                     const dateA = new Date(aValue as string).getTime();
@@ -113,11 +109,20 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                     return sortConfig.direction === 'ascending' ? dateA - dateB : dateB - dateA;
                 }
 
+                if (typeof aValue === 'number' && typeof bValue === 'number') {
+                    return sortConfig.direction === 'ascending' ? aValue - bValue : bValue - aValue;
+                }
+                
                 // Default string comparison
                 const strA = String(aValue).toLowerCase();
                 const strB = String(bValue).toLowerCase();
-                if (strA < strB) return sortConfig.direction === 'ascending' ? -1 : 1;
-                if (strA > strB) return sortConfig.direction === 'ascending' ? 1 : -1;
+
+                if (strA < strB) {
+                    return sortConfig.direction === 'ascending' ? -1 : 1;
+                }
+                if (strA > strB) {
+                    return sortConfig.direction === 'ascending' ? 1 : -1;
+                }
                 return 0;
             });
         }
@@ -149,7 +154,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             });
         }
         
-        return filtered.sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
+        return filtered;
     }, [sortedOrders, searchQuery, dateFilter]);
 
     const handleGenerateInvoice = (order: Order) => {
@@ -170,7 +175,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         }
         
         const sanitizedPhone = customer.phone.replace(/\D/g, '');
-        const formattedAmount = formatNumberForDisplay(order.grandTotal).replace(/\u00A0/g, ' '); // Replace non-breaking space
+        const formattedAmount = formatNumberForDisplay(order.grandTotal).replace(/\u00A0/g, ' '); 
         const message = `Hello ${customer.name}, here is your invoice ${order.id.replace('ORD', 'INV')}. Total amount: ${formattedAmount}. Thank you for your business!`;
         const whatsappUrl = `https://wa.me/${sanitizedPhone}?text=${encodeURIComponent(message)}`;
         
@@ -189,13 +194,11 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             const pageWidth = doc.internal.pageSize.getWidth();
             const margin = 14;
 
-            // --- Utility for currency formatting ---
             const formatNumber = (value: number | undefined) => {
                 if (value === undefined || isNaN(value)) return `INR 0.00`;
                 return `INR ${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
             };
 
-            // --- Header ---
             if (logoUrl) {
                 const logoWidth = 25; 
                 const logoHeight = 20;
@@ -209,9 +212,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             
             doc.setDrawColor(200, 200, 200);
             doc.line(margin, 48, pageWidth - margin, 48);
-            // --- End Header ---
 
-            // --- Customer and Invoice Details ---
             let yPos = 58;
             const rightColX = pageWidth - margin;
 
@@ -235,10 +236,10 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             
             doc.setFontSize(11);
             if (orderToPrint.paymentTerm === 'Credit') {
-                doc.setTextColor(255, 0, 0); // Red for credit
+                doc.setTextColor(255, 0, 0); 
                 doc.text('CREDIT INVOICE', rightColX, rightYPos, { align: 'right' });
             } else {
-                doc.setTextColor(0, 128, 0); // Green for full payment
+                doc.setTextColor(0, 128, 0); 
                 doc.text('INVOICE', rightColX, rightYPos, { align: 'right' });
             }
             doc.setTextColor(0, 0, 0);
@@ -258,9 +259,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
              if (orderToPrint.deliveryDate) {
                 doc.text(`Delivery Date: ${new Date(orderToPrint.deliveryDate).toLocaleDateString('en-IN')}`, rightColX, rightYPos, { align: 'right' });
             }
-            // --- End Customer and Invoice Details ---
 
-            // --- Items Table ---
             const tableStartY = Math.max(yPos, rightYPos) + 10;
             const tableBody = orderToPrint.items.map(item => {
                  const totalValue = orderToPrint.isGstInvoice
@@ -281,8 +280,8 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 body: tableBody,
                 theme: 'grid',
                 headStyles: {
-                    fillColor: [222, 247, 236], // Light Green
-                    textColor: [3, 7, 6], // Dark text
+                    fillColor: [222, 247, 236], 
+                    textColor: [3, 7, 6], 
                     fontStyle: 'bold',
                 },
                 styles: {
@@ -290,16 +289,14 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                     fontSize: 9,
                 },
                 columnStyles: {
-                    0: { cellWidth: 70 }, // Description
-                    1: { halign: 'center' }, // Qty
-                    2: { halign: 'right' }, // Rate
-                    3: { halign: 'center' }, // GST
-                    4: { halign: 'right' }, // Total
+                    0: { cellWidth: 70 }, 
+                    1: { halign: 'center' },
+                    2: { halign: 'right' },
+                    3: { halign: 'center' },
+                    4: { halign: 'right' },
                 }
             });
-            // --- End Items Table ---
 
-            // --- Totals Section ---
             let finalY = (doc as any).previousAutoTable.finalY + 10;
             const totalsRightColX = pageWidth - margin;
             const totalsLeftColX = totalsRightColX - 50; 
@@ -317,15 +314,14 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             if(orderToPrint.discount > 0) addTotalRow("Discount:", -orderToPrint.discount);
             if(orderToPrint.previousBalance > 0) addTotalRow("Previous Balance:", orderToPrint.previousBalance);
 
-            // Grand Total with colored background
-            finalY += 12; // 2 lines lower
+            finalY += 12; 
             
             const grandTotalText = `Grand Total: ${formatNumber(orderToPrint.grandTotal)}`;
             doc.setFont('helvetica', 'bold');
             
             const isCredit = orderToPrint.paymentTerm === 'Credit' && (orderToPrint.balanceDue ?? 0) > 0;
-            const boxColor = isCredit ? [255, 235, 238] : [222, 247, 236]; // Light Red or Light Green
-            const textColor = isCredit ? [220, 38, 38] : [22, 101, 52]; // Red-600 or Green-800
+            const boxColor = isCredit ? [255, 235, 238] : [222, 247, 236]; 
+            const textColor = isCredit ? [220, 38, 38] : [22, 101, 52]; 
             
             doc.setFillColor(...boxColor);
             doc.setDrawColor(...boxColor);
@@ -334,7 +330,6 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             doc.setTextColor(...textColor);
             doc.text(grandTotalText, pageWidth/2, finalY, { align: 'center' });
             
-            // --- End Totals Section ---
             doc.setTextColor(0,0,0);
             doc.setFont('helvetica', 'normal');
             doc.setFontSize(8);
