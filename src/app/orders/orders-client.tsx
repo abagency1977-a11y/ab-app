@@ -1046,10 +1046,43 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                                 </div>
                                             )}
                                         </div>
-                                         <div className="flex items-center space-x-2 pt-2">
+
+                                        <div className="flex items-center space-x-2 pt-2">
                                             <Checkbox id="is_gst_invoice" checked={isGstInvoice} onCheckedChange={c => setIsGstInvoice(c as boolean)} />
                                             <Label htmlFor="is_gst_invoice">Generate GST Invoice?</Label>
                                         </div>
+                                        
+                                        <div className="space-y-2 pt-4">
+                                            <Label>Payment Term</Label>
+                                            <RadioGroup value={paymentTerm} onValueChange={(v) => setPaymentTerm(v as PaymentTerm)} className="flex gap-4">
+                                                <div className="flex items-center space-x-2"><RadioGroupItem value="Full Payment" id="full_payment" /><Label htmlFor="full_payment">Full Payment</Label></div>
+                                                <div className="flex items-center space-x-2"><RadioGroupItem value="Credit" id="credit" /><Label htmlFor="credit">Credit</Label></div>
+                                            </RadioGroup>
+                                        </div>
+                                        {paymentTerm === 'Full Payment' && (
+                                          <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <Label>Payment Mode</Label>
+                                                <Select value={paymentMode} onValueChange={v => setPaymentMode(v as PaymentMode)}>
+                                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                                    <SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="Card">Card</SelectItem><SelectItem value="UPI">UPI</SelectItem><SelectItem value="Cheque">Cheque</SelectItem><SelectItem value="Online Transfer">Online Transfer</SelectItem></SelectContent>
+                                                </Select>
+                                            </div>
+                                            {(paymentMode === 'Card' || paymentMode === 'Cheque') && (
+                                                <div className="space-y-2">
+                                                    <Label>Payment Remarks</Label>
+                                                    <Input value={paymentRemarks} onChange={e => setPaymentRemarks(e.target.value)} placeholder="Enter card/cheque details"/>
+                                                </div>
+                                            )}
+                                          </div>
+                                        )}
+                                        {paymentTerm === 'Credit' && (
+                                          <div className="space-y-2">
+                                              <Label>Due Date</Label>
+                                              <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+                                          </div>
+                                        )}
+
                                         <Separator />
                                         <div className="grid grid-cols-1 md:grid-cols-7 gap-4 items-end">
                                             <div className="space-y-2 col-span-2">
@@ -1130,46 +1163,18 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                 </Card>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {/* Payment Details */}
+                                    {/* Delivery Details */}
                                     <Card>
-                                      <CardContent className="p-4 space-y-4 rounded-lg shadow-sm border-gray-200">
-                                          <DialogTitle className="text-lg">Payment Details</DialogTitle>
-                                          <div className="space-y-2">
-                                              <Label>Payment Term</Label>
-                                              <RadioGroup value={paymentTerm} onValueChange={(v) => setPaymentTerm(v as PaymentTerm)} className="flex gap-4">
-                                                  <div className="flex items-center space-x-2"><RadioGroupItem value="Full Payment" id="full_payment" /><Label htmlFor="full_payment">Full Payment</Label></div>
-                                                  <div className="flex items-center space-x-2"><RadioGroupItem value="Credit" id="credit" /><Label htmlFor="credit">Credit</Label></div>
-                                              </RadioGroup>
-                                          </div>
-                                          {paymentTerm === 'Full Payment' && (
-                                            <>
-                                              <div className="space-y-2">
-                                                  <Label>Payment Mode</Label>
-                                                  <Select value={paymentMode} onValueChange={v => setPaymentMode(v as PaymentMode)}>
-                                                      <SelectTrigger><SelectValue /></SelectTrigger>
-                                                      <SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="Card">Card</SelectItem><SelectItem value="UPI">UPI</SelectItem><SelectItem value="Cheque">Cheque</SelectItem><SelectItem value="Online Transfer">Online Transfer</SelectItem></SelectContent>
-                                                  </Select>
-                                              </div>
-                                              {(paymentMode === 'Card' || paymentMode === 'Cheque') && (
-                                                  <div className="space-y-2">
-                                                      <Label>Payment Remarks</Label>
-                                                      <Input value={paymentRemarks} onChange={e => setPaymentRemarks(e.target.value)} placeholder="Enter card/cheque details"/>
-                                                  </div>
-                                              )}
-                                            </>
-                                          )}
-                                          {paymentTerm === 'Credit' && (
-                                            <div className="space-y-2">
-                                                <Label>Due Date</Label>
-                                                <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
-                                            </div>
-                                          )}
-                                      </CardContent>
+                                        <CardContent className="p-4 space-y-4 rounded-lg shadow-sm border-gray-200">
+                                            <DialogTitle className="text-lg">Delivery Details</DialogTitle>
+                                            <div className="space-y-2"><Label>Delivery Date</Label><Input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} /></div>
+                                            <div className="space-y-2"><Label>Delivery Address</Label><Textarea value={deliveryAddress} onChange={e => setDeliveryAddress(e.target.value)} placeholder="Leave blank to use customer's default address" /></div>
+                                        </CardContent>
                                     </Card>
 
-                                    {/* Summary & Delivery */}
-                                    <div className="space-y-4">
-                                        <Card><CardContent className="p-4 space-y-2 rounded-lg shadow-sm border-gray-200">
+                                    {/* Order Summary */}
+                                    <Card>
+                                        <CardContent className="p-4 space-y-2 rounded-lg shadow-sm border-gray-200">
                                             <DialogTitle className="text-lg">Order Summary</DialogTitle>
                                             <div className="flex justify-between"><span>Current Items Total:</span> <span className="font-semibold">{formatNumberForDisplay(currentInvoiceTotal)}</span></div>
                                             {previousBalance > 0 && <div className="flex justify-between text-destructive"><span>Previous Due:</span> <span className="font-semibold">{formatNumberForDisplay(previousBalance)}</span></div>}
@@ -1189,13 +1194,8 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                                 <span className="font-bold">Grand Total:</span>
                                                 <span className="font-bold text-primary">{formatNumberForDisplay(grandTotal)}</span>
                                             </div>
-                                        </CardContent></Card>
-                                        <Card><CardContent className="p-4 space-y-4 rounded-lg shadow-sm border-gray-200">
-                                            <DialogTitle className="text-lg">Delivery Details</DialogTitle>
-                                            <div className="space-y-2"><Label>Delivery Date</Label><Input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} /></div>
-                                            <div className="space-y-2"><Label>Delivery Address</Label><Textarea value={deliveryAddress} onChange={e => setDeliveryAddress(e.target.value)} placeholder="Leave blank to use customer's default address" /></div>
-                                        </CardContent></Card>
-                                    </div>
+                                        </CardContent>
+                                    </Card>
                                 </div>
                             </div>
                         </ScrollArea>
