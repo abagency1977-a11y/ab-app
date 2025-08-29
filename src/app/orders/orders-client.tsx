@@ -6,7 +6,7 @@ import type { Order, Customer, Product, PaymentTerm, PaymentMode, OrderStatus } 
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, FileText, Receipt, Loader2, PlusCircle, Trash2, Download, Edit, Share2, FileSpreadsheet } from 'lucide-react';
+import { MoreHorizontal, FileText, Receipt, Loader2, PlusCircle, Trash2, Download, Edit, Share2, FileSpreadsheet, ArrowUpDown } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
@@ -28,6 +28,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Combobox } from '@/components/ui/combobox';
 import * as XLSX from 'xlsx';
 
+type SortKey = keyof Order | 'id' | 'customerName' | 'orderDate' | 'status' | 'grandTotal';
 
 const formatNumberForDisplay = (value: number | undefined) => {
     if (value === undefined || isNaN(value)) return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(0);
@@ -48,6 +49,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     const [searchQuery, setSearchQuery] = useState('');
     const [dateFilter, setDateFilter] = useState('All');
     const [isMounted, setIsMounted] = useState(false);
+    const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'ascending' | 'descending' } | null>(null);
     
     useEffect(() => {
         setIsMounted(true);
@@ -83,10 +85,36 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         }
     }
 
+    const requestSort = (key: SortKey) => {
+        let direction: 'ascending' | 'descending' = 'ascending';
+        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+            direction = 'descending';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const sortedOrders = useMemo(() => {
+        let sortableItems = [...orders];
+        if (sortConfig !== null) {
+            sortableItems.sort((a, b) => {
+                const aValue = a[sortConfig.key];
+                const bValue = b[sortConfig.key];
+                if (aValue < bValue) {
+                    return sortConfig.direction === 'ascending' ? -1 : 1;
+                }
+                if (aValue > bValue) {
+                    return sortConfig.direction === 'ascending' ? 1 : -1;
+                }
+                return 0;
+            });
+        }
+        return sortableItems;
+    }, [orders, sortConfig]);
+
 
     const filteredOrders = useMemo(() => {
         const now = new Date();
-        let filtered = orders.filter(order =>
+        let filtered = sortedOrders.filter(order =>
             order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
             order.customerName.toLowerCase().includes(searchQuery.toLowerCase())
         );
@@ -109,7 +137,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         }
         
         return filtered.sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
-    }, [orders, searchQuery, dateFilter]);
+    }, [sortedOrders, searchQuery, dateFilter]);
 
     const handleGenerateInvoice = (order: Order) => {
         setOrderToPrint(order);
@@ -134,7 +162,6 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         const whatsappUrl = `https://wa.me/${sanitizedPhone}?text=${encodeURIComponent(message)}`;
         
         window.open(whatsappUrl, '_blank');
-        toast({ title: 'Success', description: 'WhatsApp chat opened. Please attach the downloaded invoice.' });
     };
 
     const handlePrint = async () => {
@@ -519,11 +546,21 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Order ID</TableHead>
-                            <TableHead>Customer</TableHead>
-                            <TableHead>Date</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="text-right">Total</TableHead>
+                            <TableHead>
+                                <Button variant="ghost" onClick={() => requestSort('id')}>Order ID <ArrowUpDown className="ml-2 h-4 w-4" /></Button>
+                            </TableHead>
+                            <TableHead>
+                                <Button variant="ghost" onClick={() => requestSort('customerName')}>Customer <ArrowUpDown className="ml-2 h-4 w-4" /></Button>
+                            </TableHead>
+                            <TableHead>
+                                <Button variant="ghost" onClick={() => requestSort('orderDate')}>Date <ArrowUpDown className="ml-2 h-4 w-4" /></Button>
+                            </TableHead>
+                            <TableHead>
+                                <Button variant="ghost" onClick={() => requestSort('status')}>Status <ArrowUpDown className="ml-2 h-4 w-4" /></Button>
+                            </TableHead>
+                            <TableHead className="text-right">
+                                <Button variant="ghost" onClick={() => requestSort('grandTotal')}>Total <ArrowUpDown className="ml-2 h-4 w-4" /></Button>
+                            </TableHead>
                             <TableHead className="text-center">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -1181,9 +1218,3 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
         </>
     );
 }
-
-    
-
-    
-
-    

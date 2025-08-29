@@ -5,7 +5,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import type { Purchase, Supplier, Product, PurchaseItem, PaymentMode, PurchasePayment } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, Loader2, Edit, Trash2, MoreHorizontal, Receipt } from 'lucide-react';
+import { PlusCircle, Loader2, Edit, Trash2, MoreHorizontal, Receipt, ArrowUpDown } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +19,8 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Combobox } from '@/components/ui/combobox';
+
+type SortKey = keyof Purchase | 'id' | 'supplierName' | 'purchaseDate' | 'balanceDue' | 'total';
 
 const formatNumberForDisplay = (value: number | undefined) => {
     if (value === undefined || isNaN(value)) return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(0);
@@ -40,6 +42,7 @@ export function PurchasesClient({ initialPurchases, initialSuppliers, initialPro
     const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState('');
     const [isMounted, setIsMounted] = useState(false);
+    const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'ascending' | 'descending' } | null>(null);
     
     useEffect(() => {
         setIsMounted(true);
@@ -58,12 +61,39 @@ export function PurchasesClient({ initialPurchases, initialSuppliers, initialPro
         }
     }
 
+    const requestSort = (key: SortKey) => {
+        let direction: 'ascending' | 'descending' = 'ascending';
+        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+            direction = 'descending';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const sortedPurchases = useMemo(() => {
+        let sortableItems = [...purchases];
+        if (sortConfig !== null) {
+            sortableItems.sort((a, b) => {
+                const aValue = a[sortConfig.key];
+                const bValue = b[sortConfig.key];
+                
+                if (aValue < bValue) {
+                    return sortConfig.direction === 'ascending' ? -1 : 1;
+                }
+                if (aValue > bValue) {
+                    return sortConfig.direction === 'ascending' ? 1 : -1;
+                }
+                return 0;
+            });
+        }
+        return sortableItems;
+    }, [purchases, sortConfig]);
+
     const filteredPurchases = useMemo(() => {
-        return purchases.filter(p =>
+        return sortedPurchases.filter(p =>
             p.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
             p.supplierName.toLowerCase().includes(searchQuery.toLowerCase())
         ).sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime());
-    }, [purchases, searchQuery]);
+    }, [sortedPurchases, searchQuery]);
 
     const handleAddPurchase = async (newPurchaseData: Omit<Purchase, 'id' | 'supplierName'>) => {
        try {
@@ -142,12 +172,12 @@ export function PurchasesClient({ initialPurchases, initialSuppliers, initialPro
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Purchase ID</TableHead>
-                            <TableHead>Supplier</TableHead>
-                            <TableHead>Date</TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('id')}>Purchase ID <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('supplierName')}>Supplier <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('purchaseDate')}>Date <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
                             <TableHead>Status</TableHead>
-                            <TableHead className="text-right">Balance Due</TableHead>
-                            <TableHead className="text-right">Total</TableHead>
+                            <TableHead className="text-right"><Button variant="ghost" onClick={() => requestSort('balanceDue')}>Balance Due <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                            <TableHead className="text-right"><Button variant="ghost" onClick={() => requestSort('total')}>Total <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
                             <TableHead className="text-center">Actions</TableHead>
                         </TableRow>
                     </TableHeader>

@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Receipt, Trash2, Share2 } from 'lucide-react';
+import { Loader2, Receipt, Trash2, Share2, ArrowUpDown } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -22,22 +22,41 @@ import { ReceiptTemplate } from '@/components/receipt-template';
 import { addPaymentToOrder, deleteOrder, getAllData } from '@/lib/data';
 import { Skeleton } from '@/components/ui/skeleton';
 
+type SortKey = keyof Order | 'id' | 'customerName' | 'orderDate' | 'status' | 'balanceDue' | 'grandTotal';
+
 const formatNumber = (value: number | undefined) => {
     if (value === undefined || isNaN(value)) return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(0);
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol' }).format(value);
 };
 
-const PaymentsTable = ({ invoices, onRowClick, onDeleteClick }: { invoices: Order[], onRowClick?: (invoice: Order) => void, onDeleteClick?: (invoice: Order) => void }) => (
+const PaymentsTable = ({ invoices, onRowClick, sortConfig, requestSort }: { 
+    invoices: Order[], 
+    onRowClick?: (invoice: Order) => void,
+    sortConfig: { key: SortKey; direction: 'ascending' | 'descending' } | null,
+    requestSort: (key: SortKey) => void
+}) => (
     <div className="rounded-lg border shadow-sm">
         <Table>
             <TableHeader>
                 <TableRow>
-                    <TableHead>Invoice ID</TableHead>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Balance Due</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
+                     <TableHead>
+                        <Button variant="ghost" onClick={() => requestSort('id')}>Invoice ID <ArrowUpDown className="ml-2 h-4 w-4" /></Button>
+                    </TableHead>
+                    <TableHead>
+                        <Button variant="ghost" onClick={() => requestSort('customerName')}>Customer <ArrowUpDown className="ml-2 h-4 w-4" /></Button>
+                    </TableHead>
+                    <TableHead>
+                        <Button variant="ghost" onClick={() => requestSort('orderDate')}>Date <ArrowUpDown className="ml-2 h-4 w-4" /></Button>
+                    </TableHead>
+                    <TableHead>
+                        <Button variant="ghost" onClick={() => requestSort('status')}>Status <ArrowUpDown className="ml-2 h-4 w-4" /></Button>
+                    </TableHead>
+                    <TableHead className="text-right">
+                        <Button variant="ghost" onClick={() => requestSort('balanceDue')}>Balance Due <ArrowUpDown className="ml-2 h-4 w-4" /></Button>
+                    </TableHead>
+                    <TableHead className="text-right">
+                        <Button variant="ghost" onClick={() => requestSort('grandTotal')}>Total <ArrowUpDown className="ml-2 h-4 w-4" /></Button>
+                    </TableHead>
                 </TableRow>
             </TableHeader>
             <TableBody>
@@ -73,6 +92,8 @@ export function PaymentsClient({ orders: initialOrders, customers: initialCustom
     const receiptRef = useRef<HTMLDivElement>(null);
     const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
     const [isMounted, setIsMounted] = useState(false);
+    const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'ascending' | 'descending' } | null>(null);
+
 
     useEffect(() => {
         setIsMounted(true);
@@ -82,12 +103,42 @@ export function PaymentsClient({ orders: initialOrders, customers: initialCustom
         }
     }, []);
 
+    const requestSort = (key: SortKey) => {
+        let direction: 'ascending' | 'descending' = 'ascending';
+        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+            direction = 'descending';
+        }
+        setSortConfig({ key, direction });
+    };
+
+     const sortedInvoices = useMemo(() => {
+        let sortableItems = [...allInvoices];
+        if (sortConfig !== null) {
+            sortableItems.sort((a, b) => {
+                const aValue = a[sortConfig.key];
+                const bValue = b[sortConfig.key];
+
+                if (aValue === undefined || aValue === null) return 1;
+                if (bValue === undefined || bValue === null) return -1;
+                
+                if (aValue < bValue) {
+                    return sortConfig.direction === 'ascending' ? -1 : 1;
+                }
+                if (aValue > bValue) {
+                    return sortConfig.direction === 'ascending' ? 1 : -1;
+                }
+                return 0;
+            });
+        }
+        return sortableItems;
+    }, [allInvoices, sortConfig]);
+
     const { fullPaidInvoices, creditInvoices } = useMemo(() => {
-        const fullPaid = allInvoices.filter(order => order.status === 'Fulfilled');
+        const fullPaid = sortedInvoices.filter(order => order.status === 'Fulfilled');
         // Only show orders that have a partial payment
-        const credit = allInvoices.filter(order => order.status === 'Part Payment');
+        const credit = sortedInvoices.filter(order => order.status === 'Part Payment');
         return { fullPaidInvoices: fullPaid, creditInvoices: credit };
-    }, [allInvoices]);
+    }, [sortedInvoices]);
 
     const refreshData = async () => {
         const { orders, customers: refreshedCustomers } = await getAllData();
@@ -210,10 +261,10 @@ export function PaymentsClient({ orders: initialOrders, customers: initialCustom
                     <TabsTrigger value="full-paid">Full Payment</TabsTrigger>
                 </TabsList>
                 <TabsContent value="full-paid">
-                    <PaymentsTable invoices={fullPaidInvoices} onRowClick={setSelectedInvoice} />
+                    <PaymentsTable invoices={fullPaidInvoices} onRowClick={setSelectedInvoice} sortConfig={sortConfig} requestSort={requestSort} />
                 </TabsContent>
                 <TabsContent value="credit">
-                    <PaymentsTable invoices={creditInvoices} onRowClick={setSelectedInvoice} />
+                    <PaymentsTable invoices={creditInvoices} onRowClick={setSelectedInvoice} sortConfig={sortConfig} requestSort={requestSort} />
                 </TabsContent>
             </Tabs>
 
@@ -380,9 +431,3 @@ function PaymentForm({ balanceDue, onAddPayment }: { balanceDue: number; onAddPa
         </Card>
     );
 }
-
-    
-
-    
-
-    
