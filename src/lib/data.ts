@@ -1,7 +1,7 @@
 
 import { db } from './firebase';
 import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc, query, limit, runTransaction, DocumentReference, updateDoc, increment, where, orderBy, Transaction } from 'firebase/firestore';
-import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert, LowStockAlert, Supplier, Purchase, PurchasePayment, OrderStatus, PaymentMode, CalculationType } from './types';
+import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert, LowStockAlert, Supplier, Purchase, PurchasePayment, OrderStatus, PaymentMode, CalculationType, PurchasePaymentTerm } from './types';
 import { differenceInDays, addDays, startOfToday, subMonths } from 'date-fns';
 
 // GET ALL DATA
@@ -347,7 +347,6 @@ export const deleteOrder = async (orderToDelete: Order): Promise<void> => {
 export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 'id'>): Promise<void> => {
     let customerId = '';
     
-    // First, get the customerId from the order document. This read can be outside the transaction.
     const orderSnap = await getDoc(doc(db, 'orders', orderId));
     if (orderSnap.exists()) {
         customerId = orderSnap.data().customerId;
@@ -359,33 +358,17 @@ export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 
         throw new Error(`Could not find a customer for order ${orderId}.`);
     }
 
-    // Now, run the balance chain update.
     await runBalanceChainUpdate(customerId, (orders) => {
-        // The core logic is to apply the payment to the customer's account, oldest debts first.
-        let remainingPayment = payment.amount;
+        const orderToPay = orders.find(o => o.id === orderId);
 
-        for (const order of orders) {
-            if (remainingPayment <= 0) break;
-            
-            const balanceOnThisOrder = (order.balanceDue ?? order.grandTotal) - (order.payments || []).reduce((sum, p) => sum + p.amount, 0);
+        if (!orderToPay) throw new Error("Could not find order to apply payment to during transaction.");
 
-            if (balanceOnThisOrder > 0) {
-                const paymentForThisOrder = Math.min(remainingPayment, balanceOnThisOrder);
-                
-                const existingPayments: Payment[] = order.payments || [];
-                const paymentId = `${order.id}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
-                
-                order.payments = [...existingPayments, { 
-                    ...payment, 
-                    id: paymentId, 
-                    amount: paymentForThisOrder 
-                }];
-                
-                remainingPayment -= paymentForThisOrder;
-            }
-        }
+        const existingPayments: Payment[] = orderToPay.payments || [];
+        const paymentId = `${orderId}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
+        const newPayment: Payment = { ...payment, id: paymentId };
+
+        orderToPay.payments = [...existingPayments, newPayment];
         
-        // Return the modified list of orders for the chain recalculation
         return orders;
     });
 };
@@ -481,7 +464,7 @@ export const addPurchase = async (purchaseData: Omit<Purchase, 'id' | 'supplierN
 
         newPurchaseWithId = { ...purchaseData, supplierName: supplierSnap.data()?.name, id: purchaseId };
         
-        if (newPurchaseWithId.payments) {
+        if (newPurchaseWithId.payments && newPurchaseWithId.payments.length > 0) {
             newPurchaseWithId.payments = newPurchaseWithId.payments.map((p, i) => ({
                 ...p,
                 id: `${purchaseId}-PAY-${String(i + 1).padStart(2, '0')}`

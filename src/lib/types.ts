@@ -38,6 +38,7 @@ export interface Product {
 
 export type OrderStatus = 'Pending' | 'Part Payment' | 'Fulfilled' | 'Canceled';
 export type PaymentTerm = 'Full Payment' | 'Credit';
+export type PurchasePaymentTerm = 'Paid' | 'Credit';
 export type PaymentMode = 'Cash' | 'Card' | 'UPI' | 'Cheque' | 'Online Transfer';
 
 export interface Payment {
@@ -85,6 +86,8 @@ export interface Purchase {
     total: number;
     payments: PurchasePayment[];
     balanceDue: number;
+    paymentTerm: PurchasePaymentTerm;
+    dueDate?: string;
 }
 
 

@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import type { Purchase, Supplier, Product, PurchaseItem, PaymentMode, PurchasePayment } from '@/lib/types';
+import type { Purchase, Supplier, Product, PurchaseItem, PaymentMode, PurchasePayment, PurchasePaymentTerm } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PlusCircle, Loader2, Edit, Trash2, MoreHorizontal, Receipt, ArrowUpDown } from 'lucide-react';
@@ -20,6 +20,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Combobox } from '@/components/ui/combobox';
 import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 type SortKey = keyof Purchase | 'id' | 'supplierName' | 'purchaseDate' | 'balanceDue' | 'total';
 
@@ -297,6 +298,8 @@ function AddPurchaseDialog({ isOpen, onOpenChange, suppliers, products, onPurcha
     const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
     const [items, setItems] = useState<PurchaseItemState[]>([]);
     const [currentItem, setCurrentItem] = useState<PurchaseItemState>(initialItemState);
+    const [paymentTerm, setPaymentTerm] = useState<PurchasePaymentTerm>('Paid');
+    const [dueDate, setDueDate] = useState('');
     const [paymentAmount, setPaymentAmount] = useState('');
     const [paymentMethod, setPaymentMethod] = useState<PaymentMode>('Cash');
     const [paymentNotes, setPaymentNotes] = useState('');
@@ -310,6 +313,8 @@ function AddPurchaseDialog({ isOpen, onOpenChange, suppliers, products, onPurcha
         setPurchaseDate(new Date().toISOString().split('T')[0]);
         setItems([]);
         setCurrentItem(initialItemState);
+        setPaymentTerm('Paid');
+        setDueDate('');
         setPaymentAmount('');
         setPaymentMethod('Cash');
         setPaymentNotes('');
@@ -361,11 +366,28 @@ function AddPurchaseDialog({ isOpen, onOpenChange, suppliers, products, onPurcha
             return;
         }
         
-        const paidAmount = parseFloat(paymentAmount) || 0;
-        if (paidAmount > total) {
-             toast({ title: "Error", description: 'Paid amount cannot be greater than the total purchase amount.', variant: 'destructive' });
-            return;
+        let paidAmount = 0;
+        let payments: PurchasePayment[] = [];
+        let balanceDue = total;
+
+        if (paymentTerm === 'Paid') {
+            paidAmount = parseFloat(paymentAmount) || 0;
+            if (paidAmount > total) {
+                toast({ title: "Error", description: 'Paid amount cannot be greater than the total purchase amount.', variant: 'destructive' });
+                return;
+            }
+            if (paidAmount > 0) {
+                payments.push({
+                    id: 'temp-payment',
+                    paymentDate: purchaseDate,
+                    amount: paidAmount,
+                    method: paymentMethod,
+                    notes: paymentNotes
+                });
+            }
+            balanceDue = total - paidAmount;
         }
+
 
         const purchaseData: Omit<Purchase, 'id' | 'supplierName'> = {
             supplierId,
@@ -382,14 +404,10 @@ function AddPurchaseDialog({ isOpen, onOpenChange, suppliers, products, onPurcha
             }),
             isGstPurchase,
             total,
-            balanceDue: total - paidAmount,
-            payments: paidAmount > 0 ? [{
-                id: 'temp-payment',
-                paymentDate: purchaseDate,
-                amount: paidAmount,
-                method: paymentMethod,
-                notes: paymentNotes
-            }] : [],
+            balanceDue,
+            payments,
+            paymentTerm,
+            dueDate: paymentTerm === 'Credit' ? dueDate : undefined,
         };
         
         try {
@@ -489,28 +507,45 @@ function AddPurchaseDialog({ isOpen, onOpenChange, suppliers, products, onPurcha
                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <Card>
                                   <CardContent className="p-4 space-y-4">
-                                      <DialogTitle className="text-lg">Payment Details</DialogTitle>
-                                      <div className="space-y-2">
-                                          <Label>Amount Paid</Label>
-                                          <Input type="number" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} placeholder="0.00" max={total}/>
-                                      </div>
-                                      <div className="space-y-2">
-                                          <Label>Payment Method</Label>
-                                          <Select value={paymentMethod} onValueChange={v => setPaymentMethod(v as PaymentMode)}>
-                                              <SelectTrigger><SelectValue /></SelectTrigger>
-                                              <SelectContent>
-                                                  <SelectItem value="Cash">Cash</SelectItem>
-                                                  <SelectItem value="Card">Card</SelectItem>
-                                                  <SelectItem value="UPI">UPI</SelectItem>
-                                                  <SelectItem value="Cheque">Cheque</SelectItem>
-                                                  <SelectItem value="Online Transfer">Online Transfer</SelectItem>
-                                              </SelectContent>
-                                          </Select>
-                                      </div>
-                                      <div className="space-y-2">
-                                        <Label>Notes</Label>
-                                        <Input value={paymentNotes} onChange={e => setPaymentNotes(e.target.value)} placeholder="e.g. Transaction ID"/>
-                                      </div>
+                                      <DialogTitle className="text-lg mb-2">Payment Details</DialogTitle>
+                                       <div className="space-y-2">
+                                            <Label>Payment Term</Label>
+                                            <RadioGroup value={paymentTerm} onValueChange={(v) => setPaymentTerm(v as PurchasePaymentTerm)} className="flex gap-4">
+                                                <div className="flex items-center space-x-2"><RadioGroupItem value="Paid" id="paid" /><Label htmlFor="paid">Paid</Label></div>
+                                                <div className="flex items-center space-x-2"><RadioGroupItem value="Credit" id="credit" /><Label htmlFor="credit">Credit</Label></div>
+                                            </RadioGroup>
+                                        </div>
+
+                                       {paymentTerm === 'Paid' ? (
+                                           <>
+                                                <div className="space-y-2">
+                                                    <Label>Amount Paid</Label>
+                                                    <Input type="number" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} placeholder="0.00" max={total}/>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label>Payment Method</Label>
+                                                    <Select value={paymentMethod} onValueChange={v => setPaymentMethod(v as PaymentMode)}>
+                                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="Cash">Cash</SelectItem>
+                                                            <SelectItem value="Card">Card</SelectItem>
+                                                            <SelectItem value="UPI">UPI</SelectItem>
+                                                            <SelectItem value="Cheque">Cheque</SelectItem>
+                                                            <SelectItem value="Online Transfer">Online Transfer</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label>Notes</Label>
+                                                    <Input value={paymentNotes} onChange={e => setPaymentNotes(e.target.value)} placeholder="e.g. Transaction ID"/>
+                                                </div>
+                                           </>
+                                       ) : (
+                                            <div className="space-y-2">
+                                                <Label>Due Date</Label>
+                                                <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+                                            </div>
+                                       )}
                                   </CardContent>
                                 </Card>
 
@@ -526,7 +561,7 @@ function AddPurchaseDialog({ isOpen, onOpenChange, suppliers, products, onPurcha
                                         </div>
                                          <div className="flex justify-between text-destructive">
                                             <span className="font-bold">Balance Due:</span>
-                                            <span className="font-bold">{formatNumberForDisplay(total - (parseFloat(paymentAmount) || 0))}</span>
+                                            <span className="font-bold">{formatNumberForDisplay(total - (paymentTerm === 'Paid' ? parseFloat(paymentAmount) || 0 : 0))}</span>
                                         </div>
                                     </CardContent>
                                 </Card>
