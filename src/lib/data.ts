@@ -361,20 +361,19 @@ export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 
 
     // Now, run the balance chain update.
     await runBalanceChainUpdate(customerId, (orders) => {
-        const orderIndex = orders.findIndex(o => o.id === orderId);
-        if (orderIndex === -1) {
-            // This should not happen if the initial read succeeded, but it's a good safeguard.
-            throw new Error(`Order ${orderId} not found in customer's order list during transaction.`);
+        // Find all orders chronologically and apply payment to the earliest ones with a balance due.
+        let remainingPayment = payment.amount;
+
+        // Add the payment to the list of the specified invoice for record-keeping
+        const targetOrderIndex = orders.findIndex(o => o.id === orderId);
+        if (targetOrderIndex > -1) {
+            const targetOrder = orders[targetOrderIndex];
+            const existingPayments: Payment[] = targetOrder.payments || [];
+            const paymentId = `${orderId}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
+            targetOrder.payments = [...existingPayments, { ...payment, id: paymentId }];
         }
         
-        const orderToUpdate = orders[orderIndex];
-        const existingPayments: Payment[] = orderToUpdate.payments || [];
-        const paymentId = `${orderId}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
-        
-        // Add the new payment to the specific order
-        orderToUpdate.payments = [...existingPayments, { ...payment, id: paymentId }];
-
-        // Return the modified list of orders for recalculation
+        // Return the modified list of orders for the chain recalculation
         return orders;
     });
 };

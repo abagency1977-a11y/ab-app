@@ -19,6 +19,7 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Combobox } from '@/components/ui/combobox';
+import { Checkbox } from '@/components/ui/checkbox';
 
 type SortKey = keyof Purchase | 'id' | 'supplierName' | 'purchaseDate' | 'balanceDue' | 'total';
 
@@ -299,6 +300,7 @@ function AddPurchaseDialog({ isOpen, onOpenChange, suppliers, products, onPurcha
     const [paymentAmount, setPaymentAmount] = useState('');
     const [paymentMethod, setPaymentMethod] = useState<PaymentMode>('Cash');
     const [paymentNotes, setPaymentNotes] = useState('');
+    const [isGstPurchase, setIsGstPurchase] = useState(true);
     
     const { toast } = useToast();
     const isEditMode = !!existingPurchase;
@@ -311,6 +313,7 @@ function AddPurchaseDialog({ isOpen, onOpenChange, suppliers, products, onPurcha
         setPaymentAmount('');
         setPaymentMethod('Cash');
         setPaymentNotes('');
+        setIsGstPurchase(true);
         onOpenChange(false);
     }, [onOpenChange]);
     
@@ -341,9 +344,11 @@ function AddPurchaseDialog({ isOpen, onOpenChange, suppliers, products, onPurcha
 
     const { subTotal, totalGst, total } = useMemo(() => {
         const subTotal = items.reduce((sum, item) => sum + (parseFloat(item.cost) || 0) * (parseInt(item.quantity) || 0), 0);
-        const totalGst = items.reduce((sum, item) => sum + ((parseFloat(item.cost) || 0) * (parseInt(item.quantity) || 0) * ((parseFloat(item.gst) || 0) / 100)), 0);
+        const totalGst = isGstPurchase
+            ? items.reduce((sum, item) => sum + ((parseFloat(item.cost) || 0) * (parseInt(item.quantity) || 0) * ((parseFloat(item.gst) || 0) / 100)), 0)
+            : 0;
         return { subTotal, totalGst, total: subTotal + totalGst };
-    }, [items]);
+    }, [items, isGstPurchase]);
 
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -375,6 +380,7 @@ function AddPurchaseDialog({ isOpen, onOpenChange, suppliers, products, onPurcha
                     gst: parseFloat(item.gst),
                 };
             }),
+            isGstPurchase,
             total,
             balanceDue: total - paidAmount,
             payments: paidAmount > 0 ? [{
@@ -409,14 +415,20 @@ function AddPurchaseDialog({ isOpen, onOpenChange, suppliers, products, onPurcha
                     <ScrollArea className="h-[70vh]">
                         <div className="space-y-4 p-4">
                             <Card>
-                                <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label>Supplier</Label>
-                                        <Combobox options={supplierOptions} value={supplierId} onValueChange={setSupplierId} placeholder="Select a supplier" searchPlaceholder="Search suppliers..." emptyPlaceholder="No supplier found." />
+                                <CardContent className="p-4 space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label>Supplier</Label>
+                                            <Combobox options={supplierOptions} value={supplierId} onValueChange={setSupplierId} placeholder="Select a supplier" searchPlaceholder="Search suppliers..." emptyPlaceholder="No supplier found." />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Purchase Date</Label>
+                                            <Input type="date" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)} required />
+                                        </div>
                                     </div>
-                                    <div className="space-y-2">
-                                        <Label>Purchase Date</Label>
-                                        <Input type="date" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)} required />
+                                    <div className="flex items-center space-x-2 pt-2">
+                                        <Checkbox id="is_gst_purchase" checked={isGstPurchase} onCheckedChange={c => setIsGstPurchase(c as boolean)} />
+                                        <Label htmlFor="is_gst_purchase">Is this a GST Purchase?</Label>
                                     </div>
                                 </CardContent>
                             </Card>
@@ -438,7 +450,7 @@ function AddPurchaseDialog({ isOpen, onOpenChange, suppliers, products, onPurcha
                                         </div>
                                         <div className="space-y-2 col-span-2">
                                             <Label>GST %</Label>
-                                            <Input type="number" value={currentItem.gst} onChange={e => setCurrentItem(s => ({ ...s, gst: e.target.value }))} />
+                                            <Input type="number" value={currentItem.gst} onChange={e => setCurrentItem(s => ({ ...s, gst: e.target.value }))} disabled={!isGstPurchase} />
                                         </div>
                                         <div className="col-span-1">
                                             <Button type="button" onClick={handleAddItem} className="w-full">Add</Button>
@@ -457,13 +469,13 @@ function AddPurchaseDialog({ isOpen, onOpenChange, suppliers, products, onPurcha
                                                 const cost = parseFloat(item.cost) || 0;
                                                 const quantity = parseInt(item.quantity) || 0;
                                                 const gst = parseFloat(item.gst) || 0;
-                                                const itemTotal = cost * quantity * (1 + gst / 100);
+                                                const itemTotal = isGstPurchase ? cost * quantity * (1 + gst / 100) : cost * quantity;
                                                 return (
                                                     <TableRow key={index}>
                                                         <TableCell>{product?.name}</TableCell>
                                                         <TableCell>{quantity}</TableCell>
                                                         <TableCell>{formatNumberForDisplay(cost)}</TableCell>
-                                                        <TableCell>{`${gst}%`}</TableCell>
+                                                        <TableCell>{isGstPurchase ? `${gst}%` : 'N/A'}</TableCell>
                                                         <TableCell>{formatNumberForDisplay(itemTotal)}</TableCell>
                                                         <TableCell><Button type="button" size="sm" variant="destructive" onClick={() => handleRemoveItem(index)}>Delete</Button></TableCell>
                                                     </TableRow>
@@ -506,7 +518,7 @@ function AddPurchaseDialog({ isOpen, onOpenChange, suppliers, products, onPurcha
                                     <CardContent className="p-4 space-y-2">
                                         <DialogTitle className="text-lg">Summary</DialogTitle>
                                         <div className="flex justify-between"><span>Subtotal:</span> <span className="font-semibold">{formatNumberForDisplay(subTotal)}</span></div>
-                                        <div className="flex justify-between"><span>Total GST:</span> <span className="font-semibold">{formatNumberForDisplay(totalGst)}</span></div>
+                                        {isGstPurchase && <div className="flex justify-between"><span>Total GST:</span> <span className="font-semibold">{formatNumberForDisplay(totalGst)}</span></div>}
                                         <Separator />
                                         <div className="flex justify-between text-lg">
                                             <span className="font-bold">Total Bill Value:</span>

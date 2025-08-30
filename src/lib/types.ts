@@ -81,6 +81,7 @@ export interface Purchase {
     supplierName: string;
     purchaseDate: string;
     items: PurchaseItem[];
+    isGstPurchase: boolean;
     total: number;
     payments: PurchasePayment[];
     balanceDue: number;
