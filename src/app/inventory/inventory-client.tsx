@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import type { Product, CalculationType } from '@/lib/types';
+import type { Product, CalculationType, ProductCategory } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -35,11 +35,13 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
     const costRef = useRef<HTMLInputElement>(null);
     const gstRef = useRef<HTMLInputElement>(null);
     const reorderPointRef = useRef<HTMLInputElement>(null);
+    const brandRef = useRef<HTMLInputElement>(null);
     const [calculationType, setCalculationType] = useState<CalculationType>('Per Unit');
+    const [category, setCategory] = useState<ProductCategory>('General');
     const { toast } = useToast();
 
     const handleAddProduct = async () => {
-        const newProductData = {
+        const newProductData: Omit<Product, 'id' | 'historicalData'> = {
             name: nameRef.current?.value || '',
             sku: skuRef.current?.value || '',
             stock: Number(stockRef.current?.value || 0),
@@ -47,7 +49,9 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
             cost: Number(costRef.current?.value || 0),
             gst: Number(gstRef.current?.value || 0),
             reorderPoint: Number(reorderPointRef.current?.value || 0),
-            calculationType: calculationType
+            calculationType: calculationType,
+            category: category,
+            brand: category === 'Red Bricks' ? brandRef.current?.value : undefined,
         };
 
         if (!newProductData.name || !newProductData.sku) {
@@ -131,6 +135,25 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
                             </SelectContent>
                         </Select>
                     </div>
+                     <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="category" className="text-right">Category</Label>
+                         <Select value={category} onValueChange={(v) => setCategory(v as ProductCategory)}>
+                            <SelectTrigger className="col-span-3">
+                                <SelectValue placeholder="Select category" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="General">General</SelectItem>
+                                <SelectItem value="Red Bricks">Red Bricks</SelectItem>
+                                <SelectItem value="Rods & Rings">Rods & Rings</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    {category === 'Red Bricks' && (
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="brand" className="text-right">Brand</Label>
+                            <Input id="brand" name="brand" ref={brandRef} className="col-span-3" placeholder="e.g., KKP, ABC" />
+                        </div>
+                    )}
                 </div>
                 <DialogFooter>
                     <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
@@ -222,6 +245,8 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             gst: Number(formData.get('gst')),
             reorderPoint: Number(formData.get('reorderPoint')),
             calculationType: formData.get('calculationType') as CalculationType || 'Per Unit',
+            category: formData.get('category') as ProductCategory || 'General',
+            brand: formData.get('category') === 'Red Bricks' ? formData.get('brand') as string : undefined,
         };
 
         try {
@@ -326,7 +351,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                 <TableRow>
                                     <TableHead>Product</TableHead>
                                     <TableHead>SKU</TableHead>
-                                    <TableHead>Calc. Type</TableHead>
+                                    <TableHead>Category</TableHead>
                                     <TableHead>Stock</TableHead>
                                     <TableHead>Reorder Point</TableHead>
                                     <TableHead className="text-right">Sale Price</TableHead>
@@ -340,11 +365,9 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                     const isLowStock = product.stock <= (product.reorderPoint ?? 0);
                                     return (
                                         <TableRow key={product.id}>
-                                            <TableCell className="font-medium">{product.name}</TableCell>
+                                            <TableCell className="font-medium">{product.name} {product.brand && <span className="text-muted-foreground text-xs">({product.brand})</span>}</TableCell>
                                             <TableCell>{product.sku}</TableCell>
-                                            <TableCell>
-                                                <Badge variant="outline">{product.calculationType === 'Per Kg' ? 'Per Kg' : 'Per Unit'}</Badge>
-                                            </TableCell>
+                                            <TableCell><Badge variant="secondary">{product.category || 'General'}</Badge></TableCell>
                                             <TableCell className={cn(isLowStock && "text-destructive font-bold")}>
                                                 <div className="flex items-center gap-2">
                                                     {isLowStock && <AlertTriangle className="h-4 w-4 text-destructive" />}
@@ -389,7 +412,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                     <CardHeader>
                                         <div className="flex justify-between items-start">
                                             <div>
-                                                <CardTitle>{product.name}</CardTitle>
+                                                <CardTitle>{product.name} {product.brand && <span className="text-muted-foreground text-sm">({product.brand})</span>}</CardTitle>
                                                 <CardDescription>SKU: {product.sku}</CardDescription>
                                             </div>
                                             <DropdownMenu>
@@ -427,6 +450,10 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                             <div>
                                                 <p className="text-xs text-muted-foreground">GST</p>
                                                 <p className="font-bold">{product.gst}%</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-muted-foreground">Category</p>
+                                                <p className="font-bold">{product.category || 'General'}</p>
                                             </div>
                                         </div>
                                          <div>
@@ -535,6 +562,25 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                     </SelectContent>
                                 </Select>
                             </div>
+                             <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="categoryEdit" className="text-right">Category</Label>
+                                <Select name="category" defaultValue={productToEdit?.category || 'General'}>
+                                    <SelectTrigger id="categoryEdit" className="col-span-3">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="General">General</SelectItem>
+                                        <SelectItem value="Red Bricks">Red Bricks</SelectItem>
+                                        <SelectItem value="Rods & Rings">Rods & Rings</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                             {productToEdit?.category === 'Red Bricks' && (
+                                <div className="grid grid-cols-4 items-center gap-4">
+                                    <Label htmlFor="brandEdit" className="text-right">Brand</Label>
+                                    <Input id="brandEdit" name="brand" className="col-span-3" defaultValue={productToEdit?.brand} />
+                                </div>
+                            )}
                         </div>
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => { setIsEditDialogOpen(false); setProductToEdit(null);}}>Cancel</Button>

@@ -23,6 +23,8 @@ export interface Supplier {
   gstin?: string;
 }
 
+export type ProductCategory = 'General' | 'Red Bricks' | 'Rods & Rings';
+
 export interface Product {
   id: string;
   name: string;
@@ -33,6 +35,8 @@ export interface Product {
   gst: number;
   reorderPoint?: number;
   calculationType?: CalculationType;
+  category?: ProductCategory;
+  brand?: string;
   historicalData?: { date: string; quantity: number }[];
 }
 
@@ -58,6 +62,8 @@ export interface OrderItem {
   cost: number; // Snapshot of cost at time of sale
   gst: number;
   calculationType: CalculationType;
+  nos?: number; // Numbers/pieces for items like rods
+  brand?: string; // Brand for items like bricks
 }
 
 export interface PurchaseItem {

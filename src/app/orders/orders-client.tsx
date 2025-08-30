@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import type { Order, Customer, Product, PaymentTerm, PaymentMode, OrderStatus, CalculationType } from '@/lib/types';
+import type { Order, Customer, Product, PaymentTerm, PaymentMode, OrderStatus, CalculationType, ProductCategory } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -273,8 +273,17 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                  const totalValue = orderToPrint.isGstInvoice
                     ? item.price * item.quantity * (1 + item.gst / 100)
                     : item.price * item.quantity;
+                
+                let description = item.productName;
+                if (item.brand) {
+                    description += ` (Brand: ${item.brand})`;
+                }
+                if (item.nos) {
+                    description += ` (${item.nos} nos)`;
+                }
+
                 return [
-                    item.productName,
+                    description,
                     formatQuantity(item.quantity, item.calculationType || 'Per Unit'),
                     formatNumber(item.price) + (item.calculationType === 'Per Kg' ? '/kg' : ''),
                     orderToPrint.isGstInvoice ? `${item.gst}%` : 'N/A',
@@ -663,8 +672,8 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     );
 }
 
-const initialItemState = { productId: '', quantity: '', price: '', cost: '', gst: '', stock: 0, calculationType: 'Per Unit' as CalculationType };
-type OrderItemState = { productId: string, quantity: string, price: string, cost: string, gst: string, stock: number, calculationType: CalculationType };
+const initialItemState = { productId: '', quantity: '', price: '', cost: '', gst: '', stock: 0, calculationType: 'Per Unit' as CalculationType, category: 'General' as ProductCategory, nos: '' };
+type OrderItemState = { productId: string, quantity: string, price: string, cost: string, gst: string, stock: number, calculationType: CalculationType, category: ProductCategory, nos: string };
 
 function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onOrderAdded, onOrderUpdated, onCustomerAdded, existingOrder }: {
     isOpen: boolean,
@@ -736,6 +745,8 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                     gst: String(item.gst),
                     stock: (product?.stock ?? 0) + (isEditMode ? item.quantity : 0), // Add back current item quantity to stock for validation
                     calculationType: item.calculationType || 'Per Unit',
+                    category: product?.category || 'General',
+                    nos: String(item.nos || ''),
                 }
             }));
             setPaymentTerm(existingOrder.paymentTerm);
@@ -813,6 +824,8 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                 gst: String(product.gst),
                 stock: product.stock,
                 calculationType: product.calculationType || 'Per Unit',
+                category: product.category || 'General',
+                nos: '',
             });
         }
     };
@@ -951,6 +964,8 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                     cost: parseFloat(item.cost) || 0,
                     gst: parseFloat(item.gst) || 0,
                     calculationType: product?.calculationType || 'Per Unit',
+                    brand: product?.brand,
+                    nos: parseInt(item.nos) || undefined,
                 };
             }),
             total: isOpeningBalanceOrder ? previousBalance : currentInvoiceTotal,
@@ -1105,8 +1120,8 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                 <Card>
                                     <CardContent className="p-4 space-y-4">
                                         <DialogTitle className="text-lg mb-4">Add Items</DialogTitle>
-                                        <div className="grid grid-cols-1 md:grid-cols-7 gap-4 items-end">
-                                            <div className="space-y-2 col-span-2">
+                                        <div className="grid grid-cols-1 md:grid-cols-9 gap-4 items-end">
+                                            <div className="space-y-2 col-span-3">
                                                 <Label>Item Name</Label>
                                                  <Combobox 
                                                     options={productOptions}
@@ -1121,6 +1136,12 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                                 <Label>Stock Left</Label>
                                                 <Input value={currentItem.stock} readOnly disabled />
                                             </div>
+                                            {currentItem.category === 'Rods & Rings' && (
+                                                <div className="space-y-2">
+                                                    <Label>No.s</Label>
+                                                    <Input type="number" placeholder="0" value={currentItem.nos} onChange={e => setCurrentItem(s => ({ ...s, nos: e.target.value }))} min="0" />
+                                                </div>
+                                            )}
                                             <div className="space-y-2">
                                                 <Label>{currentItem.calculationType === 'Per Kg' ? 'Weight (kg)' : 'Quantity'}</Label>
                                                 <Input type="number" placeholder="0" value={currentItem.quantity} onChange={e => setCurrentItem(s => ({ ...s, quantity: e.target.value }))} min="0" step="any" />
@@ -1137,13 +1158,13 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                                 <Label>GST %</Label>
                                                 <Input type="number" value={currentItem.gst} onChange={e => setCurrentItem(s => ({ ...s, gst: e.target.value }))} />
                                             </div>
-                                        </div>
-                                        <div className="flex justify-end">
-                                            {editingItemIndex !== null ? (
-                                                <Button type="button" onClick={handleUpdateItem}>Update Item</Button>
-                                            ) : (
-                                                <Button type="button" onClick={handleAddItem}>Add Item</Button>
-                                            )}
+                                            <div className="flex justify-end mt-4">
+                                                {editingItemIndex !== null ? (
+                                                    <Button type="button" onClick={handleUpdateItem}>Update Item</Button>
+                                                ) : (
+                                                    <Button type="button" onClick={handleAddItem}>Add Item</Button>
+                                                )}
+                                            </div>
                                         </div>
                                     </CardContent>
                                 </Card>
@@ -1165,9 +1186,14 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                                     const itemTotal = isGstInvoice
                                                         ? price * quantity * (1 + gst / 100)
                                                         : price * quantity;
+                                                    
+                                                    let productName = product?.name || 'Unknown';
+                                                    if (product?.brand) productName += ` (${product.brand})`;
+                                                    if (item.nos) productName += ` (${item.nos} nos)`;
+
                                                     return (
                                                         <TableRow key={index}>
-                                                            <TableCell>{product?.name}</TableCell>
+                                                            <TableCell>{productName}</TableCell>
                                                             <TableCell>{quantity} {item.calculationType === 'Per Kg' ? 'kg' : ''}</TableCell>
                                                             <TableCell>{formatNumberForDisplay(price)}</TableCell>
                                                             <TableCell>{formatNumberForDisplay(cost)}</TableCell>
