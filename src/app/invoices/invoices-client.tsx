@@ -52,27 +52,30 @@ const InvoiceTable = ({ invoices, onRowClick, onDeleteClick, sortConfig, request
                 </TableRow>
             </TableHeader>
             <TableBody>
-                {invoices.map((invoice) => (
-                    <TableRow key={invoice.id}>
-                        <TableCell onClick={() => onRowClick?.(invoice)} className="font-medium cursor-pointer">{invoice.id.replace('ORD', 'INV')}</TableCell>
-                        <TableCell onClick={() => onRowClick?.(invoice)} className="cursor-pointer">{invoice.customerName}</TableCell>
-                        <TableCell onClick={() => onRowClick?.(invoice)} className="cursor-pointer">{new Date(invoice.orderDate).toLocaleDateString('en-IN')}</TableCell>
-                        <TableCell onClick={() => onRowClick?.(invoice)} className="cursor-pointer">
-                            <Badge variant={invoice.status === 'Fulfilled' ? 'default' : invoice.status === 'Pending' ? 'secondary' : invoice.status === 'Part Payment' ? 'outline' : 'destructive'} className="capitalize">{invoice.status}</Badge>
-                        </TableCell>
-                        <TableCell onClick={() => onRowClick?.(invoice)} className="text-right cursor-pointer">{formatNumber(invoice.total)}</TableCell>
-                        <TableCell onClick={() => onRowClick?.(invoice)} className="text-right cursor-pointer">{formatNumber(invoice.previousBalance)}</TableCell>
-                        <TableCell onClick={() => onRowClick?.(invoice)} className="text-right font-bold cursor-pointer">{formatNumber(invoice.grandTotal)}</TableCell>
-                         <TableCell onClick={() => onRowClick?.(invoice)} className={`text-right font-medium cursor-pointer ${invoice.balanceDue && invoice.balanceDue > 0 ? 'text-red-600' : ''}`}>
-                            {formatNumber(invoice.balanceDue)}
-                        </TableCell>
-                         <TableCell className="text-center">
-                            <Button variant="ghost" size="icon" onClick={(e) => {e.stopPropagation(); onDeleteClick?.(invoice);}}>
-                                <Trash2 className="h-4 w-4 text-red-600" />
-                            </Button>
-                        </TableCell>
-                    </TableRow>
-                ))}
+                {invoices.map((invoice) => {
+                    const invoiceAmount = (invoice.total || 0) + (invoice.deliveryFees || 0) - (invoice.discount || 0);
+                    return (
+                        <TableRow key={invoice.id}>
+                            <TableCell onClick={() => onRowClick?.(invoice)} className="font-medium cursor-pointer">{invoice.id.replace('ORD', 'INV')}</TableCell>
+                            <TableCell onClick={() => onRowClick?.(invoice)} className="cursor-pointer">{invoice.customerName}</TableCell>
+                            <TableCell onClick={() => onRowClick?.(invoice)} className="cursor-pointer">{new Date(invoice.orderDate).toLocaleDateString('en-IN')}</TableCell>
+                            <TableCell onClick={() => onRowClick?.(invoice)} className="cursor-pointer">
+                                <Badge variant={invoice.status === 'Fulfilled' ? 'default' : invoice.status === 'Pending' ? 'secondary' : invoice.status === 'Part Payment' ? 'outline' : 'destructive'} className="capitalize">{invoice.status}</Badge>
+                            </TableCell>
+                            <TableCell onClick={() => onRowClick?.(invoice)} className="text-right cursor-pointer">{formatNumber(invoiceAmount)}</TableCell>
+                            <TableCell onClick={() => onRowClick?.(invoice)} className="text-right cursor-pointer">{formatNumber(invoice.previousBalance)}</TableCell>
+                            <TableCell onClick={() => onRowClick?.(invoice)} className="text-right font-bold cursor-pointer">{formatNumber(invoice.grandTotal)}</TableCell>
+                             <TableCell onClick={() => onRowClick?.(invoice)} className={`text-right font-medium cursor-pointer ${invoice.balanceDue && invoice.balanceDue > 0 ? 'text-red-600' : ''}`}>
+                                {formatNumber(invoice.balanceDue)}
+                            </TableCell>
+                             <TableCell className="text-center">
+                                <Button variant="ghost" size="icon" onClick={(e) => {e.stopPropagation(); onDeleteClick?.(invoice);}}>
+                                    <Trash2 className="h-4 w-4 text-red-600" />
+                                </Button>
+                            </TableCell>
+                        </TableRow>
+                    );
+                })}
             </TableBody>
         </Table>
     </div>
@@ -488,5 +491,7 @@ function PaymentForm({ balanceDue, onAddPayment }: { balanceDue: number; onAddPa
         </Card>
     );
 }
+
+    
 
     
