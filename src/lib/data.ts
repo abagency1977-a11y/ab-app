@@ -361,16 +361,28 @@ export const addPaymentToOrder = async (orderId: string, payment: Omit<Payment, 
 
     // Now, run the balance chain update.
     await runBalanceChainUpdate(customerId, (orders) => {
-        // Find all orders chronologically and apply payment to the earliest ones with a balance due.
+        // The core logic is to apply the payment to the customer's account, oldest debts first.
         let remainingPayment = payment.amount;
 
-        // Add the payment to the list of the specified invoice for record-keeping
-        const targetOrderIndex = orders.findIndex(o => o.id === orderId);
-        if (targetOrderIndex > -1) {
-            const targetOrder = orders[targetOrderIndex];
-            const existingPayments: Payment[] = targetOrder.payments || [];
-            const paymentId = `${orderId}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
-            targetOrder.payments = [...existingPayments, { ...payment, id: paymentId }];
+        for (const order of orders) {
+            if (remainingPayment <= 0) break;
+            
+            const balanceOnThisOrder = (order.balanceDue ?? order.grandTotal) - (order.payments || []).reduce((sum, p) => sum + p.amount, 0);
+
+            if (balanceOnThisOrder > 0) {
+                const paymentForThisOrder = Math.min(remainingPayment, balanceOnThisOrder);
+                
+                const existingPayments: Payment[] = order.payments || [];
+                const paymentId = `${order.id}-PAY-${String(existingPayments.length + 1).padStart(2, '0')}`;
+                
+                order.payments = [...existingPayments, { 
+                    ...payment, 
+                    id: paymentId, 
+                    amount: paymentForThisOrder 
+                }];
+                
+                remainingPayment -= paymentForThisOrder;
+            }
         }
         
         // Return the modified list of orders for the chain recalculation
