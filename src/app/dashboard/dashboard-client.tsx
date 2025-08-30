@@ -165,7 +165,7 @@ export function DashboardClient({ data }: { data: any }) {
             </div>
             
             {/* Desktop Layout: Side-by-side */}
-            <div className="hidden lg:grid grid-cols-2 gap-6 items-start">
+            <div className="hidden md:grid grid-cols-2 gap-6 items-start">
                  <Card className="col-span-1">
                     <CardHeader>
                         <CardTitle>Revenue Overview</CardTitle>
@@ -241,7 +241,7 @@ export function DashboardClient({ data }: { data: any }) {
             </div>
 
             {/* Mobile Layout: Stacked */}
-            <div className="lg:hidden flex flex-col gap-6">
+            <div className="md:hidden flex flex-col gap-6">
                 <Card>
                     <CardHeader>
                         <CardTitle>Recent Orders</CardTitle>

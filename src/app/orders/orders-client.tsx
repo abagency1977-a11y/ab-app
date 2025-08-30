@@ -18,7 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { addOrder, addCustomer, deleteOrder as deleteOrderFromDB, getCustomerBalance, getProducts, updateOrder, getAllData } from '@/lib/data';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import jsPDF from 'jspdf';
@@ -567,7 +567,8 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                     </SelectContent>
                 </Select>
             </div>
-            <div className="rounded-lg border shadow-sm">
+            {/* Desktop Table View */}
+            <div className="hidden md:block rounded-lg border shadow-sm">
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -634,6 +635,62 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                         ))}
                     </TableBody>
                 </Table>
+            </div>
+             {/* Mobile Card View */}
+            <div className="grid gap-4 md:hidden">
+                {filteredOrders.map((order) => (
+                     <Card key={order.id}>
+                        <CardHeader>
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <CardTitle>{order.id}</CardTitle>
+                                    <CardDescription>{order.customerName}</CardDescription>
+                                </div>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" className="h-8 w-8 p-0 -mt-2 -mr-2">
+                                            <span className="sr-only">Open menu</span>
+                                            <MoreHorizontal className="h-4 w-4" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        <DropdownMenuItem onClick={() => openEditDialog(order)} disabled={order.status === 'Canceled' || isLoading}>
+                                            <Edit className="mr-2 h-4 w-4" />
+                                            Edit
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleGenerateInvoice(order)} disabled={isLoading || order.status === 'Canceled'}>
+                                            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> :<FileText className="mr-2 h-4 w-4" />}
+                                            Generate Invoice
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleWhatsAppShare(order)} disabled={order.status === 'Canceled'}>
+                                            <Share2 className="mr-2 h-4 w-4" />
+                                            Share via WhatsApp
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem onClick={() => setOrderToDelete(order)} className="text-red-600">
+                                            <Trash2 className="mr-2 h-4 w-4" />
+                                            Delete
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                            <div className="flex justify-between items-center text-sm">
+                                <span className="text-muted-foreground">Date</span>
+                                <span>{new Date(order.orderDate).toLocaleDateString('en-IN')}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-sm">
+                                <span className="text-muted-foreground">Status</span>
+                                 <Badge variant={order.status === 'Fulfilled' ? 'default' : order.status === 'Pending' ? 'secondary' : order.status === 'Part Payment' ? 'outline' : 'destructive'} className="capitalize">{order.status}</Badge>
+                            </div>
+                            <div className="flex justify-between items-center text-sm pt-2">
+                                <span className="font-bold">Total</span>
+                                <span className="font-bold">{formatNumberForDisplay(order.grandTotal)}</span>
+                            </div>
+                        </CardContent>
+                    </Card>
+                ))}
             </div>
             
             <AddOrderDialog

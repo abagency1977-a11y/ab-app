@@ -298,15 +298,15 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                     <Skeleton className="h-10 w-48" />
                     <Skeleton className="h-10 w-32" />
                 </div>
-                <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-3">
-                    <div className="lg:col-span-2 space-y-4">
+                <div className="grid gap-6 md:grid-cols-3">
+                    <div className="md:col-span-2 space-y-4">
                         <div className="rounded-lg border shadow-sm p-4">
                             <Skeleton className="h-8 w-full mb-4" />
                             <Skeleton className="h-8 w-full mb-2" />
                             <Skeleton className="h-8 w-full" />
                         </div>
                     </div>
-                    <div className="lg:col-span-1">
+                    <div className="md:col-span-1">
                         <Card>
                             <CardHeader>
                                 <Skeleton className="h-6 w-3/4" />
@@ -334,8 +334,8 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                 </Button>
             </div>
             
-            <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-3">
-                <div className="lg:col-span-2 space-y-4">
+            <div className="grid gap-6 md:grid-cols-3">
+                <div className="md:col-span-2 space-y-4">
                     <div className="flex items-center">
                         <Input
                             placeholder="Search by product name or SKU..."
@@ -467,7 +467,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                     </div>
 
                 </div>
-                <div className="lg:col-span-1">
+                <div className="md:col-span-1">
                      <Card className="sticky top-20">
                         <CardHeader>
                             <CardTitle>Predict Product Demand</CardTitle>
