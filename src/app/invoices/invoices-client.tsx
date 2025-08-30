@@ -22,7 +22,7 @@ import { ReceiptTemplate } from '@/components/receipt-template';
 import { addPaymentToOrder, deleteOrder, getAllData } from '@/lib/data';
 import { Skeleton } from '@/components/ui/skeleton';
 
-type SortKey = keyof Order | 'id' | 'customerName' | 'orderDate' | 'status' | 'balanceDue' | 'grandTotal';
+type SortKey = keyof Order | 'id' | 'customerName' | 'orderDate' | 'status' | 'balanceDue' | 'grandTotal' | 'total' | 'previousBalance';
 
 const formatNumber = (value: number | undefined) => {
     if (value === undefined || isNaN(value)) return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(0);
@@ -40,24 +40,14 @@ const InvoiceTable = ({ invoices, onRowClick, onDeleteClick, sortConfig, request
         <Table>
             <TableHeader>
                 <TableRow>
-                    <TableHead>
-                        <Button variant="ghost" onClick={() => requestSort('id')}>Invoice ID <ArrowUpDown className="ml-2 h-4 w-4" /></Button>
-                    </TableHead>
-                    <TableHead>
-                        <Button variant="ghost" onClick={() => requestSort('customerName')}>Customer <ArrowUpDown className="ml-2 h-4 w-4" /></Button>
-                    </TableHead>
-                    <TableHead>
-                        <Button variant="ghost" onClick={() => requestSort('orderDate')}>Date <ArrowUpDown className="ml-2 h-4 w-4" /></Button>
-                    </TableHead>
-                    <TableHead>
-                        <Button variant="ghost" onClick={() => requestSort('status')}>Status <ArrowUpDown className="ml-2 h-4 w-4" /></Button>
-                    </TableHead>
-                    <TableHead className="text-right">
-                        <Button variant="ghost" onClick={() => requestSort('balanceDue')}>Balance Due <ArrowUpDown className="ml-2 h-4 w-4" /></Button>
-                    </TableHead>
-                    <TableHead className="text-right">
-                        <Button variant="ghost" onClick={() => requestSort('grandTotal')}>Total <ArrowUpDown className="ml-2 h-4 w-4" /></Button>
-                    </TableHead>
+                    <TableHead><Button variant="ghost" onClick={() => requestSort('id')}>Invoice ID <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                    <TableHead><Button variant="ghost" onClick={() => requestSort('customerName')}>Customer <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                    <TableHead><Button variant="ghost" onClick={() => requestSort('orderDate')}>Date <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                    <TableHead><Button variant="ghost" onClick={() => requestSort('status')}>Status <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                    <TableHead className="text-right"><Button variant="ghost" onClick={() => requestSort('total')}>Invoice Amount <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                    <TableHead className="text-right"><Button variant="ghost" onClick={() => requestSort('previousBalance')}>Previous Balance <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                    <TableHead className="text-right"><Button variant="ghost" onClick={() => requestSort('grandTotal')}>Total <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                    <TableHead className="text-right"><Button variant="ghost" onClick={() => requestSort('balanceDue')}>Balance Due <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
                     <TableHead className="text-center">Actions</TableHead>
                 </TableRow>
             </TableHeader>
@@ -70,11 +60,11 @@ const InvoiceTable = ({ invoices, onRowClick, onDeleteClick, sortConfig, request
                         <TableCell onClick={() => onRowClick?.(invoice)} className="cursor-pointer">
                             <Badge variant={invoice.status === 'Fulfilled' ? 'default' : invoice.status === 'Pending' ? 'secondary' : invoice.status === 'Part Payment' ? 'outline' : 'destructive'} className="capitalize">{invoice.status}</Badge>
                         </TableCell>
-                        <TableCell onClick={() => onRowClick?.(invoice)} className={`text-right font-medium cursor-pointer ${invoice.balanceDue && invoice.balanceDue > 0 ? 'text-red-600' : ''}`}>
+                        <TableCell onClick={() => onRowClick?.(invoice)} className="text-right cursor-pointer">{formatNumber(invoice.total)}</TableCell>
+                        <TableCell onClick={() => onRowClick?.(invoice)} className="text-right cursor-pointer">{formatNumber(invoice.previousBalance)}</TableCell>
+                        <TableCell onClick={() => onRowClick?.(invoice)} className="text-right font-bold cursor-pointer">{formatNumber(invoice.grandTotal)}</TableCell>
+                         <TableCell onClick={() => onRowClick?.(invoice)} className={`text-right font-medium cursor-pointer ${invoice.balanceDue && invoice.balanceDue > 0 ? 'text-red-600' : ''}`}>
                             {formatNumber(invoice.balanceDue)}
-                        </TableCell>
-                        <TableCell onClick={() => onRowClick?.(invoice)} className="text-right cursor-pointer">
-                            {formatNumber(invoice.grandTotal)}
                         </TableCell>
                          <TableCell className="text-center">
                             <Button variant="ghost" size="icon" onClick={(e) => {e.stopPropagation(); onDeleteClick?.(invoice);}}>
