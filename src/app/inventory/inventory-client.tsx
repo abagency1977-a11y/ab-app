@@ -178,10 +178,19 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
     const [isMounted, setIsMounted] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const { toast } = useToast();
+    
+    // State for the edit dialog's category to dynamically show fields
+    const [editCategory, setEditCategory] = useState<ProductCategory>('General');
 
     useEffect(() => {
         setIsMounted(true);
     }, []);
+
+    useEffect(() => {
+        if (productToEdit) {
+            setEditCategory(productToEdit.category || 'General');
+        }
+    }, [productToEdit]);
 
     const filteredProducts = useMemo(() => {
         return products.filter(product => 
@@ -564,7 +573,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                             </div>
                              <div className="grid grid-cols-4 items-center gap-4">
                                 <Label htmlFor="categoryEdit" className="text-right">Category</Label>
-                                <Select name="category" defaultValue={productToEdit?.category || 'General'}>
+                                <Select name="category" defaultValue={editCategory} onValueChange={(v) => setEditCategory(v as ProductCategory)}>
                                     <SelectTrigger id="categoryEdit" className="col-span-3">
                                         <SelectValue />
                                     </SelectTrigger>
@@ -575,10 +584,10 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                     </SelectContent>
                                 </Select>
                             </div>
-                             {productToEdit?.category === 'Red Bricks' && (
+                             {editCategory === 'Red Bricks' && (
                                 <div className="grid grid-cols-4 items-center gap-4">
                                     <Label htmlFor="brandEdit" className="text-right">Brand</Label>
-                                    <Input id="brandEdit" name="brand" className="col-span-3" defaultValue={productToEdit?.brand} />
+                                    <Input id="brandEdit" name="brand" className="col-span-3" defaultValue={productToEdit?.brand} placeholder="e.g., KKP, ABC"/>
                                 </div>
                             )}
                         </div>
