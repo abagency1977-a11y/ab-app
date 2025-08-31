@@ -244,8 +244,9 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
         if (!productToEdit) return;
 
         const formData = new FormData(event.currentTarget);
-        const updatedProduct: Product = {
-            ...productToEdit,
+        const category = formData.get('category') as ProductCategory || 'General';
+        
+        const updatedProductData: Omit<Product, 'id'> = {
             name: formData.get('name') as string,
             sku: formData.get('sku') as string,
             stock: Number(formData.get('stock')),
@@ -254,8 +255,14 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             gst: Number(formData.get('gst')),
             reorderPoint: Number(formData.get('reorderPoint')),
             calculationType: formData.get('calculationType') as CalculationType || 'Per Unit',
-            category: formData.get('category') as ProductCategory || 'General',
-            brand: formData.get('category') === 'Red Bricks' ? formData.get('brand') as string : undefined,
+            category: category,
+            brand: category === 'Red Bricks' ? (formData.get('brand') as string) : undefined,
+            historicalData: productToEdit.historicalData || []
+        };
+        
+        const updatedProduct: Product = {
+            ...productToEdit,
+            ...updatedProductData
         };
 
         try {
@@ -307,7 +314,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                     <Skeleton className="h-10 w-48" />
                     <Skeleton className="h-10 w-32" />
                 </div>
-                <div className="grid gap-6 md:grid-cols-3">
+                <div className="md:grid md:grid-cols-3 gap-6">
                     <div className="md:col-span-2 space-y-4">
                         <div className="rounded-lg border shadow-sm p-4">
                             <Skeleton className="h-8 w-full mb-4" />
@@ -343,7 +350,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                 </Button>
             </div>
             
-            <div className="grid gap-6 md:grid-cols-3">
+            <div className="md:grid md:grid-cols-3 gap-6">
                 <div className="md:col-span-2 space-y-4">
                     <div className="flex items-center">
                         <Input
