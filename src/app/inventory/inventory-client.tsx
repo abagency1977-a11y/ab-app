@@ -242,11 +242,11 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
     const handleEditProduct = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (!productToEdit) return;
-
+    
         const formData = new FormData(event.currentTarget);
         const category = formData.get('category') as ProductCategory || 'General';
         
-        const updatedProductData: Omit<Product, 'id'> = {
+        const updatedProductData: Omit<Product, 'id' | 'brand'> & { brand?: string } = {
             name: formData.get('name') as string,
             sku: formData.get('sku') as string,
             stock: Number(formData.get('stock')),
@@ -256,15 +256,19 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             reorderPoint: Number(formData.get('reorderPoint')),
             calculationType: formData.get('calculationType') as CalculationType || 'Per Unit',
             category: category,
-            brand: category === 'Red Bricks' ? (formData.get('brand') as string) : undefined,
             historicalData: productToEdit.historicalData || []
         };
-        
+    
+        // Only include the brand if the category is "Red Bricks"
+        if (category === 'Red Bricks') {
+            updatedProductData.brand = formData.get('brand') as string;
+        }
+    
         const updatedProduct: Product = {
             ...productToEdit,
             ...updatedProductData
         };
-
+    
         try {
             await updateProduct(updatedProduct);
             const newProducts = products.map(p => p.id === updatedProduct.id ? updatedProduct : p);
@@ -276,7 +280,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                 title: "Product Updated",
                 description: `${updatedProduct.name} has been successfully updated.`,
             });
-
+    
         } catch (e) {
              toast({
                 title: "Error Updating Product",
