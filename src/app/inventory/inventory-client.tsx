@@ -31,6 +31,7 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
     const nameRef = useRef<HTMLInputElement>(null);
     const skuRef = useRef<HTMLInputElement>(null);
     const stockRef = useRef<HTMLInputElement>(null);
+    const stockInNosRef = useRef<HTMLInputElement>(null);
     const priceRef = useRef<HTMLInputElement>(null);
     const costRef = useRef<HTMLInputElement>(null);
     const gstRef = useRef<HTMLInputElement>(null);
@@ -52,6 +53,7 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
             calculationType: calculationType,
             category: category,
             brand: category === 'Red Bricks' ? brandRef.current?.value : undefined,
+            stockInNos: category === 'Rods & Rings' ? Number(stockInNosRef.current?.value || 0) : undefined,
         };
 
         if (!newProductData.name || !newProductData.sku) {
@@ -103,10 +105,29 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
                         <Label htmlFor="sku" className="text-right">SKU</Label>
                         <Input id="sku" name="sku" ref={skuRef} className="col-span-3" required />
                     </div>
+                     <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="category" className="text-right">Category</Label>
+                         <Select value={category} onValueChange={(v) => setCategory(v as ProductCategory)}>
+                            <SelectTrigger className="col-span-3">
+                                <SelectValue placeholder="Select category" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="General">General</SelectItem>
+                                <SelectItem value="Red Bricks">Red Bricks</SelectItem>
+                                <SelectItem value="Rods & Rings">Rods & Rings</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="stock" className="text-right">Stock</Label>
+                        <Label htmlFor="stock" className="text-right">{category === 'Rods & Rings' ? 'Stock in Kg' : 'Stock'}</Label>
                         <Input id="stock" name="stock" ref={stockRef} type="number" className="col-span-3" required />
                     </div>
+                    {category === 'Rods & Rings' && (
+                         <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="stockInNos" className="text-right">Stock in Nos</Label>
+                            <Input id="stockInNos" name="stockInNos" ref={stockInNosRef} type="number" className="col-span-3" placeholder="Number of pieces"/>
+                        </div>
+                    )}
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="price" className="text-right">Sale Price</Label>
                         <Input id="price" name="price" ref={priceRef} type="number" step="0.01" className="col-span-3" required />
@@ -132,19 +153,6 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
                             <SelectContent>
                                 <SelectItem value="Per Unit">Per Unit</SelectItem>
                                 <SelectItem value="Per Kg">Per Kg</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="category" className="text-right">Category</Label>
-                         <Select value={category} onValueChange={(v) => setCategory(v as ProductCategory)}>
-                            <SelectTrigger className="col-span-3">
-                                <SelectValue placeholder="Select category" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="General">General</SelectItem>
-                                <SelectItem value="Red Bricks">Red Bricks</SelectItem>
-                                <SelectItem value="Rods & Rings">Rods & Rings</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -179,7 +187,6 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
     const [searchQuery, setSearchQuery] = useState('');
     const { toast } = useToast();
     
-    // State for the edit dialog's category to dynamically show fields
     const [editCategory, setEditCategory] = useState<ProductCategory>('General');
 
     useEffect(() => {
@@ -246,7 +253,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
         const formData = new FormData(event.currentTarget);
         const category = formData.get('category') as ProductCategory || 'General';
         
-        const updatedProductData: Omit<Product, 'id' | 'brand'> & { brand?: string } = {
+        const updatedProductData: Partial<Product> = {
             name: formData.get('name') as string,
             sku: formData.get('sku') as string,
             stock: Number(formData.get('stock')),
@@ -259,9 +266,16 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             historicalData: productToEdit.historicalData || []
         };
     
-        // Only include the brand if the category is "Red Bricks"
         if (category === 'Red Bricks') {
             updatedProductData.brand = formData.get('brand') as string;
+        } else {
+            updatedProductData.brand = undefined;
+        }
+
+        if (category === 'Rods & Rings') {
+            updatedProductData.stockInNos = Number(formData.get('stockInNos'));
+        } else {
+            updatedProductData.stockInNos = undefined;
         }
     
         const updatedProduct: Product = {
@@ -391,7 +405,10 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                             <TableCell className={cn(isLowStock && "text-destructive font-bold")}>
                                                 <div className="flex items-center gap-2">
                                                     {isLowStock && <AlertTriangle className="h-4 w-4 text-destructive" />}
-                                                    {product.stock}
+                                                    {product.category === 'Rods & Rings' 
+                                                        ? `${product.stock} kg / ${product.stockInNos || 0} nos`
+                                                        : product.stock
+                                                    }
                                                 </div>
                                             </TableCell>
                                             <TableCell>{product.reorderPoint ?? 'N/A'}</TableCell>
@@ -453,7 +470,12 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                         <div className="grid grid-cols-3 gap-4">
                                             <div>
                                                 <p className="text-xs text-muted-foreground">Stock</p>
-                                                <p className={cn("font-bold", isLowStock && "text-destructive")}>{product.stock}</p>
+                                                <p className={cn("font-bold", isLowStock && "text-destructive")}>
+                                                    {product.category === 'Rods & Rings' 
+                                                        ? `${product.stock} kg / ${product.stockInNos || 0} nos`
+                                                        : product.stock
+                                                    }
+                                                </p>
                                             </div>
                                             <div>
                                                 <p className="text-xs text-muted-foreground">Reorder</p>
@@ -550,10 +572,29 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                 <Label htmlFor="sku" className="text-right">SKU</Label>
                                 <Input id="sku" name="sku" className="col-span-3" defaultValue={productToEdit?.sku} required />
                             </div>
+                             <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="categoryEdit" className="text-right">Category</Label>
+                                <Select name="category" defaultValue={editCategory} onValueChange={(v) => setEditCategory(v as ProductCategory)}>
+                                    <SelectTrigger id="categoryEdit" className="col-span-3">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="General">General</SelectItem>
+                                        <SelectItem value="Red Bricks">Red Bricks</SelectItem>
+                                        <SelectItem value="Rods & Rings">Rods & Rings</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
                             <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="stock" className="text-right">Stock</Label>
+                                <Label htmlFor="stock" className="text-right">{editCategory === 'Rods & Rings' ? 'Stock in Kg' : 'Stock'}</Label>
                                 <Input id="stock" name="stock" type="number" className="col-span-3" defaultValue={productToEdit?.stock} required />
                             </div>
+                             {editCategory === 'Rods & Rings' && (
+                                <div className="grid grid-cols-4 items-center gap-4">
+                                    <Label htmlFor="stockInNos" className="text-right">Stock in Nos</Label>
+                                    <Input id="stockInNos" name="stockInNos" type="number" className="col-span-3" defaultValue={productToEdit?.stockInNos} placeholder="Number of pieces"/>
+                                </div>
+                            )}
                              <div className="grid grid-cols-4 items-center gap-4">
                                 <Label htmlFor="reorderPoint" className="text-right">Reorder Point</Label>
                                 <Input id="reorderPoint" name="reorderPoint" type="number" className="col-span-3" defaultValue={productToEdit?.reorderPoint} />
@@ -579,19 +620,6 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                     <SelectContent>
                                         <SelectItem value="Per Unit">Per Unit</SelectItem>
                                         <SelectItem value="Per Kg">Per Kg</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                             <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="categoryEdit" className="text-right">Category</Label>
-                                <Select name="category" defaultValue={editCategory} onValueChange={(v) => setEditCategory(v as ProductCategory)}>
-                                    <SelectTrigger id="categoryEdit" className="col-span-3">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="General">General</SelectItem>
-                                        <SelectItem value="Red Bricks">Red Bricks</SelectItem>
-                                        <SelectItem value="Rods & Rings">Rods & Rings</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>

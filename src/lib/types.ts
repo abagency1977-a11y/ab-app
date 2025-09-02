@@ -29,7 +29,8 @@ export interface Product {
   id: string;
   name: string;
   sku: string;
-  stock: number;
+  stock: number; // For General/Bricks this is units. For Rods/Rings this is Kg.
+  stockInNos?: number; // For Rods & Rings, this is the number of pieces.
   price: number;
   cost: number; // Cost of Goods Sold
   gst: number;
