@@ -31,7 +31,6 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
     const nameRef = useRef<HTMLInputElement>(null);
     const skuRef = useRef<HTMLInputElement>(null);
     const stockRef = useRef<HTMLInputElement>(null);
-    const stockInNosRef = useRef<HTMLInputElement>(null);
     const priceRef = useRef<HTMLInputElement>(null);
     const costRef = useRef<HTMLInputElement>(null);
     const gstRef = useRef<HTMLInputElement>(null);
@@ -53,7 +52,6 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
             calculationType: calculationType,
             category: category,
             brand: category === 'Red Bricks' ? brandRef.current?.value : undefined,
-            stockInNos: category === 'Rods & Rings' ? Number(stockInNosRef.current?.value || 0) : undefined,
         };
 
         if (!newProductData.name || !newProductData.sku) {
@@ -119,15 +117,9 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
                         </Select>
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="stock" className="text-right">{category === 'Rods & Rings' ? 'Stock in Kg' : 'Stock'}</Label>
+                        <Label htmlFor="stock" className="text-right">{category === 'Rods & Rings' ? 'Stock in Nos' : 'Stock'}</Label>
                         <Input id="stock" name="stock" ref={stockRef} type="number" className="col-span-3" required />
                     </div>
-                    {category === 'Rods & Rings' && (
-                         <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="stockInNos" className="text-right">Stock in Nos</Label>
-                            <Input id="stockInNos" name="stockInNos" ref={stockInNosRef} type="number" className="col-span-3" placeholder="Number of pieces"/>
-                        </div>
-                    )}
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="price" className="text-right">Sale Price</Label>
                         <Input id="price" name="price" ref={priceRef} type="number" step="0.01" className="col-span-3" required />
@@ -271,12 +263,6 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
         } else {
             updatedProductData.brand = undefined;
         }
-
-        if (category === 'Rods & Rings') {
-            updatedProductData.stockInNos = Number(formData.get('stockInNos'));
-        } else {
-            updatedProductData.stockInNos = undefined;
-        }
     
         const updatedProduct: Product = {
             ...productToEdit,
@@ -406,7 +392,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                                 <div className="flex items-center gap-2">
                                                     {isLowStock && <AlertTriangle className="h-4 w-4 text-destructive" />}
                                                     {product.category === 'Rods & Rings' 
-                                                        ? `${product.stock} kg / ${product.stockInNos || 0} nos`
+                                                        ? `${product.stock} nos`
                                                         : product.stock
                                                     }
                                                 </div>
@@ -472,7 +458,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                                 <p className="text-xs text-muted-foreground">Stock</p>
                                                 <p className={cn("font-bold", isLowStock && "text-destructive")}>
                                                     {product.category === 'Rods & Rings' 
-                                                        ? `${product.stock} kg / ${product.stockInNos || 0} nos`
+                                                        ? `${product.stock} nos`
                                                         : product.stock
                                                     }
                                                 </p>
@@ -586,15 +572,9 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                 </Select>
                             </div>
                             <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="stock" className="text-right">{editCategory === 'Rods & Rings' ? 'Stock in Kg' : 'Stock'}</Label>
+                                <Label htmlFor="stock" className="text-right">{editCategory === 'Rods & Rings' ? 'Stock in Nos' : 'Stock'}</Label>
                                 <Input id="stock" name="stock" type="number" className="col-span-3" defaultValue={productToEdit?.stock} required />
                             </div>
-                             {editCategory === 'Rods & Rings' && (
-                                <div className="grid grid-cols-4 items-center gap-4">
-                                    <Label htmlFor="stockInNos" className="text-right">Stock in Nos</Label>
-                                    <Input id="stockInNos" name="stockInNos" type="number" className="col-span-3" defaultValue={productToEdit?.stockInNos} placeholder="Number of pieces"/>
-                                </div>
-                            )}
                              <div className="grid grid-cols-4 items-center gap-4">
                                 <Label htmlFor="reorderPoint" className="text-right">Reorder Point</Label>
                                 <Input id="reorderPoint" name="reorderPoint" type="number" className="col-span-3" defaultValue={productToEdit?.reorderPoint} />

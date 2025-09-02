@@ -29,8 +29,7 @@ export interface Product {
   id: string;
   name: string;
   sku: string;
-  stock: number; // For General/Bricks this is units. For Rods/Rings this is Kg.
-  stockInNos?: number; // For Rods & Rings, this is the number of pieces.
+  stock: number; // For General/Bricks this is units. For Rods/Rings this is numbers/pieces.
   price: number;
   cost: number; // Cost of Goods Sold
   gst: number;
@@ -63,7 +62,7 @@ export interface OrderItem {
   cost: number; // Snapshot of cost at time of sale
   gst: number;
   calculationType: CalculationType;
-  nos?: number; // Numbers/pieces for items like rods
+  category: ProductCategory;
   brand?: string; // Brand for items like bricks
 }
 
