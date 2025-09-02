@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { addOrder, addCustomer, deleteOrder as deleteOrderFromDB, getCustomerBalance, getProducts, updateOrder, getAllData } from '@/lib/data';
+import { addOrder, addCustomer, deleteOrder as deleteOrderFromDB, getCustomerBalance, getProducts, updateOrder, getCoreOrderData } from '@/lib/data';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -425,7 +425,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     };
 
     const refreshData = async () => {
-        const { orders: refreshedOrders, customers: refreshedCustomers } = await getAllData();
+        const { orders: refreshedOrders, customers: refreshedCustomers } = await getCoreOrderData();
         setOrders(refreshedOrders);
         setCustomers(refreshedCustomers);
     }

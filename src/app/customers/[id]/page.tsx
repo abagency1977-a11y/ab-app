@@ -1,6 +1,6 @@
 
 import AppLayout from "@/components/app-layout";
-import { getCustomerById, getAllData } from "@/lib/data";
+import { getCustomerById, getOrdersByCustomerId } from "@/lib/data";
 import { CustomerDetailsClient } from "./customer-details-client";
 import { notFound } from "next/navigation";
 
@@ -10,8 +10,7 @@ export default async function CustomerDetailsPage({ params }: { params: { id: st
         notFound();
     }
     
-    const { orders: allOrders } = await getAllData();
-    const customerOrders = allOrders.filter(order => order.customerId === params.id);
+    const customerOrders = await getOrdersByCustomerId(params.id);
 
     return (
         <AppLayout>

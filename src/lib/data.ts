@@ -4,23 +4,19 @@ import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, writeBatch, getDoc
 import type { Customer, Product, Order, Payment, OrderItem, PaymentAlert, LowStockAlert, Supplier, Purchase, PurchasePayment, OrderStatus, PaymentMode, CalculationType, PurchasePaymentTerm } from './types';
 import { differenceInDays, addDays, startOfToday, subMonths } from 'date-fns';
 
-// GET ALL DATA
-export async function getAllData() {
+// GET ALL DATA - Used only for components that truly need access to multiple data types, e.g., the order dialog.
+export async function getCoreOrderData() {
     const customersPromise = getCustomers();
-    const ordersPromise = getDocs(collection(db, 'orders')).then(snapshot => snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order)));
     const productsPromise = getProducts();
-    const suppliersPromise = getSuppliers();
-    const purchasesPromise = getPurchases();
+    const ordersPromise = getOrders();
 
-    const [customers, orders, products, suppliers, purchases] = await Promise.all([
+    const [customers, products, orders] = await Promise.all([
         customersPromise,
-        ordersPromise,
         productsPromise,
-        suppliersPromise,
-        purchasesPromise
+        ordersPromise
     ]);
     
-    return { customers, orders, products, suppliers, purchases };
+    return { customers, products, orders };
 }
 
 
@@ -144,6 +140,29 @@ export const deleteProduct = async(id: string) => {
 
 
 // ORDER & PAYMENT FUNCTIONS
+
+export const getOrders = async (): Promise<Order[]> => {
+    try {
+        const snapshot = await getDocs(collection(db, 'orders'));
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+    } catch (error) {
+        console.error("Error fetching orders: ", error);
+        return [];
+    }
+};
+
+export const getOrdersByCustomerId = async (customerId: string): Promise<Order[]> => {
+    if (!customerId) return [];
+    try {
+        const q = query(collection(db, 'orders'), where('customerId', '==', customerId));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+    } catch (error) {
+        console.error(`Error fetching orders for customer ${customerId}:`, error);
+        return [];
+    }
+};
+
 
 async function getNextId(transaction: Transaction, counterName: string, prefix: string): Promise<string> {
     const counterRef = doc(db, "counters", counterName);
@@ -518,7 +537,12 @@ export const addPaymentToPurchase = async (purchaseId: string, payment: Omit<Pur
 
 // DASHBOARD & REPORTING DATA
 export const getDashboardData = async () => {
-    const {orders, customers, products} = await getAllData();
+    const ordersPromise = getOrders();
+    const customersPromise = getCustomers();
+    const productsPromise = getProducts();
+
+    const [orders, customers, products] = await Promise.all([ordersPromise, customersPromise, productsPromise]);
+    
     const today = startOfToday();
 
     // Basic Dashboard Stats
