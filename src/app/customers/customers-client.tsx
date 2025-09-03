@@ -13,7 +13,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { addCustomer, deleteCustomer as deleteCustomerFromDB, updateCustomer, updateOrder, getAllData } from '@/lib/data';
+import { addCustomer, deleteCustomer as deleteCustomerFromDB, updateCustomer, getCustomers, getOrders } from '@/lib/data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { allocateBulkPayment, AllocateBulkPaymentOutput } from '@/ai/flows/allocate-bulk-payment';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -197,7 +197,7 @@ export function CustomersClient({ customers: initialCustomers, orders: initialOr
     }, []);
 
     const refreshData = async () => {
-        const { customers: refreshedCustomers, orders: refreshedOrders } = await getAllData();
+        const [refreshedCustomers, refreshedOrders] = await Promise.all([getCustomers(), getOrders()]);
         setCustomers(refreshedCustomers);
         setOrders(refreshedOrders);
     };
@@ -651,7 +651,3 @@ function BulkPaymentDialog({ isOpen, onOpenChange, customer, onPaymentSuccess }:
         </Dialog>
     );
 }
-
-    
-
-    
