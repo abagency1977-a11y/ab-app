@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { addPurchase, getProducts, addPaymentToPurchase, getAllData } from '@/lib/data';
+import { addPurchase, getProducts, addPaymentToPurchase, getPurchases } from '@/lib/data';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -53,7 +53,7 @@ export function PurchasesClient({ initialPurchases, initialSuppliers, initialPro
     const openPurchaseDialog = async () => {
         setIsLoading(true);
         try {
-            const { products: freshProducts } = await getAllData();
+            const freshProducts = await getProducts();
             setProducts(freshProducts);
             setIsAddPurchaseOpen(true);
         } catch(e) {
@@ -100,7 +100,7 @@ export function PurchasesClient({ initialPurchases, initialSuppliers, initialPro
     const handleAddPurchase = async (newPurchaseData: Omit<Purchase, 'id' | 'supplierName'>) => {
        try {
            const newPurchase = await addPurchase(newPurchaseData);
-           const { purchases: allPurchases } = await getAllData();
+           const allPurchases = await getPurchases();
            setPurchases(allPurchases);
            toast({
                title: "Purchase Recorded",
@@ -121,7 +121,7 @@ export function PurchasesClient({ initialPurchases, initialSuppliers, initialPro
         
         try {
             const updatedPurchase = await addPaymentToPurchase(selectedPurchase.id, payment);
-            const { purchases: allPurchases } = await getAllData();
+            const allPurchases = await getPurchases();
             setPurchases(allPurchases);
 
             const newlyUpdatedPurchase = allPurchases.find(p => p.id === updatedPurchase.id);
