@@ -41,7 +41,7 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
     const { toast } = useToast();
 
     const handleAddProduct = async () => {
-        const newProductData: Omit<Product, 'id' | 'historicalData'> = {
+        const productData: Omit<Product, 'id' | 'historicalData'> & { brand?: string } = {
             name: nameRef.current?.value || '',
             sku: skuRef.current?.value || '',
             stock: Number(stockRef.current?.value || 0),
@@ -51,10 +51,13 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
             reorderPoint: Number(reorderPointRef.current?.value || 0),
             calculationType: calculationType,
             category: category,
-            brand: category === 'Red Bricks' ? brandRef.current?.value : undefined,
         };
 
-        if (!newProductData.name || !newProductData.sku) {
+        if (category === 'Red Bricks' && brandRef.current?.value) {
+            productData.brand = brandRef.current.value;
+        }
+
+        if (!productData.name || !productData.sku) {
              toast({
                 title: "Validation Error",
                 description: "Product name and SKU are required.",
@@ -64,7 +67,7 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
         }
 
         try {
-            const newProductFromDB = await addProduct(newProductData);
+            const newProductFromDB = await addProduct(productData);
             const completeNewProduct: Product = {
                 ...newProductFromDB,
                 historicalData: []
@@ -245,7 +248,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
         const formData = new FormData(event.currentTarget);
         const category = formData.get('category') as ProductCategory || 'General';
         
-        const updatedProductData: Partial<Product> = {
+        const updatedProductData: Partial<Product> & { brand?: string } = {
             name: formData.get('name') as string,
             sku: formData.get('sku') as string,
             stock: Number(formData.get('stock')),
@@ -258,10 +261,8 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             historicalData: productToEdit.historicalData || []
         };
     
-        if (category === 'Red Bricks') {
+        if (category === 'Red Bricks' && formData.get('brand')) {
             updatedProductData.brand = formData.get('brand') as string;
-        } else {
-            updatedProductData.brand = undefined;
         }
     
         const updatedProduct: Product = {
@@ -634,4 +635,5 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             </AlertDialog>
         </div>
     );
-}
+
+    
