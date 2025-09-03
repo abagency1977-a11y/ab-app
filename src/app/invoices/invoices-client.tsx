@@ -19,7 +19,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { ReceiptTemplate } from '@/components/receipt-template';
-import { addPaymentToOrder, deleteOrder, getAllData } from '@/lib/data';
+import { addPaymentToOrder, deleteOrder, getOrders, getCustomers } from '@/lib/data';
 import { Skeleton } from '@/components/ui/skeleton';
 
 type SortKey = keyof Order | 'id' | 'customerName' | 'orderDate' | 'status' | 'balanceDue' | 'grandTotal' | 'total' | 'previousBalance';
@@ -158,7 +158,7 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
     }, [sortedInvoices, searchQuery]);
 
     const refreshData = async () => {
-        const { orders, customers: refreshedCustomers } = await getAllData();
+        const [orders, refreshedCustomers] = await Promise.all([getOrders(), getCustomers()]);
         setAllInvoices(orders);
         setCustomers(refreshedCustomers);
         if (selectedInvoice) {
@@ -491,7 +491,3 @@ function PaymentForm({ balanceDue, onAddPayment }: { balanceDue: number; onAddPa
         </Card>
     );
 }
-
-    
-
-    

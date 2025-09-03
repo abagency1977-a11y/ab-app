@@ -19,7 +19,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { ReceiptTemplate } from '@/components/receipt-template';
-import { addPaymentToOrder, deleteOrder, getAllData } from '@/lib/data';
+import { addPaymentToOrder, getOrders, getCustomers } from '@/lib/data';
 import { Skeleton } from '@/components/ui/skeleton';
 
 type SortKey = keyof Order | 'id' | 'customerName' | 'orderDate' | 'status' | 'balanceDue' | 'grandTotal';
@@ -154,7 +154,7 @@ export function PaymentsClient({ orders: initialOrders, customers: initialCustom
     }, [sortedInvoices]);
 
     const refreshData = async () => {
-        const { orders, customers: refreshedCustomers } = await getAllData();
+        const [orders, refreshedCustomers] = await Promise.all([getOrders(), getCustomers()]);
         setAllInvoices(orders);
         setCustomers(refreshedCustomers);
         // After refresh, find and update the selectedInvoice to show new data in the sheet
