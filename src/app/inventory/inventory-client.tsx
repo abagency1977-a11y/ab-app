@@ -36,12 +36,13 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
     const gstRef = useRef<HTMLInputElement>(null);
     const reorderPointRef = useRef<HTMLInputElement>(null);
     const brandRef = useRef<HTMLInputElement>(null);
+    const weightPerUnitRef = useRef<HTMLInputElement>(null);
     const [calculationType, setCalculationType] = useState<CalculationType>('Per Unit');
     const [category, setCategory] = useState<ProductCategory>('General');
     const { toast } = useToast();
 
     const handleAddProduct = async () => {
-        const productData: Omit<Product, 'id' | 'historicalData'> & { brand?: string } = {
+        const productData: Omit<Product, 'id' | 'historicalData'> = {
             name: nameRef.current?.value || '',
             sku: skuRef.current?.value || '',
             stock: Number(stockRef.current?.value || 0),
@@ -53,10 +54,6 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
             category: category,
         };
 
-        if (category === 'Red Bricks' && brandRef.current?.value) {
-            productData.brand = brandRef.current.value;
-        }
-
         if (!productData.name || !productData.sku) {
              toast({
                 title: "Validation Error",
@@ -64,6 +61,15 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
                 variant: 'destructive',
             });
             return;
+        }
+
+        if (category === 'Red Bricks' && brandRef.current?.value) {
+            productData.brand = brandRef.current.value;
+        }
+        
+        if (category === 'Rods & Rings' && weightPerUnitRef.current?.value) {
+            productData.weightPerUnit = Number(weightPerUnitRef.current.value);
+            productData.calculationType = 'Per Kg';
         }
 
         try {
@@ -141,7 +147,7 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
                     </div>
                      <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="calculationType" className="text-right">Calculation Type</Label>
-                         <Select value={calculationType} onValueChange={(v) => setCalculationType(v as CalculationType)}>
+                         <Select value={calculationType} onValueChange={(v) => setCalculationType(v as CalculationType)} disabled={category === 'Rods & Rings'}>
                             <SelectTrigger className="col-span-3">
                                 <SelectValue placeholder="Select calculation type" />
                             </SelectTrigger>
@@ -155,6 +161,12 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
                         <div className="grid grid-cols-4 items-center gap-4">
                             <Label htmlFor="brand" className="text-right">Brand</Label>
                             <Input id="brand" name="brand" ref={brandRef} className="col-span-3" placeholder="e.g., KKP, ABC" />
+                        </div>
+                    )}
+                    {category === 'Rods & Rings' && (
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="weightPerUnit" className="text-right">Weight/Unit (Kg)</Label>
+                            <Input id="weightPerUnit" name="weightPerUnit" ref={weightPerUnitRef} type="number" step="any" className="col-span-3" placeholder="e.g., 10.69" />
                         </div>
                     )}
                 </div>
@@ -248,7 +260,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
         const formData = new FormData(event.currentTarget);
         const category = formData.get('category') as ProductCategory || 'General';
         
-        const updatedProductData: Partial<Product> & { brand?: string } = {
+        const updatedProductData: Partial<Product> = {
             name: formData.get('name') as string,
             sku: formData.get('sku') as string,
             stock: Number(formData.get('stock')),
@@ -261,8 +273,13 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             historicalData: productToEdit.historicalData || []
         };
     
-        if (category === 'Red Bricks' && formData.get('brand')) {
+        if (category === 'Red Bricks') {
             updatedProductData.brand = formData.get('brand') as string;
+        }
+        
+        if (category === 'Rods & Rings') {
+            updatedProductData.weightPerUnit = Number(formData.get('weightPerUnit'));
+            updatedProductData.calculationType = 'Per Kg';
         }
     
         const updatedProduct: Product = {
@@ -374,10 +391,8 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                     <TableHead>SKU</TableHead>
                                     <TableHead>Category</TableHead>
                                     <TableHead>Stock</TableHead>
-                                    <TableHead>Reorder Point</TableHead>
+                                    <TableHead>Weight/Unit (Kg)</TableHead>
                                     <TableHead className="text-right">Sale Price</TableHead>
-                                    <TableHead className="text-right">Cost Price</TableHead>
-                                    <TableHead>GST %</TableHead>
                                     <TableHead>Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -392,20 +407,15 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                             <TableCell className={cn(isLowStock && "text-destructive font-bold")}>
                                                 <div className="flex items-center gap-2">
                                                     {isLowStock && <AlertTriangle className="h-4 w-4 text-destructive" />}
-                                                    {product.category === 'Rods & Rings' 
-                                                        ? `${product.stock} nos`
-                                                        : product.stock
-                                                    }
+                                                    {product.stock}
+                                                    {product.category === 'Rods & Rings' && ' nos'}
                                                 </div>
                                             </TableCell>
-                                            <TableCell>{product.reorderPoint ?? 'N/A'}</TableCell>
+                                            <TableCell>{product.weightPerUnit ? `${product.weightPerUnit} kg` : 'N/A'}</TableCell>
                                             <TableCell className="text-right">
                                                 {formatNumber(product.price)}
+                                                {product.calculationType === 'Per Kg' && <span className="text-muted-foreground text-xs">/kg</span>}
                                             </TableCell>
-                                            <TableCell className="text-right">
-                                                {formatNumber(product.cost)}
-                                            </TableCell>
-                                            <TableCell>{product.gst}%</TableCell>
                                             <TableCell>
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
@@ -458,10 +468,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                             <div>
                                                 <p className="text-xs text-muted-foreground">Stock</p>
                                                 <p className={cn("font-bold", isLowStock && "text-destructive")}>
-                                                    {product.category === 'Rods & Rings' 
-                                                        ? `${product.stock} nos`
-                                                        : product.stock
-                                                    }
+                                                    {product.stock} {product.category === 'Rods & Rings' && 'nos'}
                                                 </p>
                                             </div>
                                             <div>
@@ -470,24 +477,19 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                             </div>
                                             <div>
                                                 <p className="text-xs text-muted-foreground">Sale Price</p>
-                                                <p className="font-bold">{formatNumber(product.price)}</p>
+                                                <p className="font-bold">
+                                                    {formatNumber(product.price)}
+                                                    {product.calculationType === 'Per Kg' && <span className="text-muted-foreground text-xs">/kg</span>}
+                                                </p>
                                             </div>
                                             <div>
-                                                <p className="text-xs text-muted-foreground">Cost Price</p>
-                                                <p className="font-bold">{formatNumber(product.cost)}</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-xs text-muted-foreground">GST</p>
-                                                <p className="font-bold">{product.gst}%</p>
+                                                <p className="text-xs text-muted-foreground">Weight/Unit</p>
+                                                <p className="font-bold">{product.weightPerUnit ? `${product.weightPerUnit} kg` : 'N/A'}</p>
                                             </div>
                                             <div>
                                                 <p className="text-xs text-muted-foreground">Category</p>
                                                 <p className="font-bold">{product.category || 'General'}</p>
                                             </div>
-                                        </div>
-                                         <div>
-                                            <p className="text-xs text-muted-foreground">Calculation Type</p>
-                                            <p className="font-bold">{product.calculationType === 'Per Kg' ? 'Per Kilogram' : 'Per Unit'}</p>
                                         </div>
                                     </CardContent>
                                 </Card>
@@ -594,7 +596,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                             </div>
                             <div className="grid grid-cols-4 items-center gap-4">
                                 <Label htmlFor="calculationTypeEdit" className="text-right">Calculation Type</Label>
-                                <Select name="calculationType" defaultValue={productToEdit?.calculationType || 'Per Unit'}>
+                                <Select name="calculationType" defaultValue={productToEdit?.calculationType || 'Per Unit'} disabled={editCategory === 'Rods & Rings'}>
                                     <SelectTrigger id="calculationTypeEdit" className="col-span-3">
                                         <SelectValue />
                                     </SelectTrigger>
@@ -608,6 +610,12 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                 <div className="grid grid-cols-4 items-center gap-4">
                                     <Label htmlFor="brandEdit" className="text-right">Brand</Label>
                                     <Input id="brandEdit" name="brand" className="col-span-3" defaultValue={productToEdit?.brand} placeholder="e.g., KKP, ABC"/>
+                                </div>
+                            )}
+                             {editCategory === 'Rods & Rings' && (
+                                <div className="grid grid-cols-4 items-center gap-4">
+                                    <Label htmlFor="weightPerUnitEdit" className="text-right">Weight/Unit (Kg)</Label>
+                                    <Input id="weightPerUnitEdit" name="weightPerUnit" type="number" step="any" className="col-span-3" defaultValue={productToEdit?.weightPerUnit} placeholder="e.g., 10.69"/>
                                 </div>
                             )}
                         </div>

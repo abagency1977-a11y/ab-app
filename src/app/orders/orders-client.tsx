@@ -200,14 +200,22 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 return `INR ${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
             };
             
-            const formatQuantity = (quantity: number, type: CalculationType, category: ProductCategory) => {
-                 if (type === 'Per Kg') {
-                    return `${quantity.toFixed(2)} kg`;
+            const formatQuantity = (item: any) => {
+                if (item.category === 'Rods & Rings') {
+                    return `${item.quantity} nos`;
                 }
-                if (category === 'Rods & Rings') {
-                    return `${quantity} nos`;
+                 if (item.calculationType === 'Per Kg') {
+                    return `${(item.quantity).toFixed(2)} kg`;
                 }
-                return `${quantity} pcs`;
+                return `${item.quantity} pcs`;
+            }
+            
+            const formatRate = (item: any) => {
+                let rate = formatNumber(item.price);
+                 if (item.calculationType === 'Per Kg') {
+                    rate += '/kg';
+                }
+                return rate;
             }
 
             if (logoUrl) {
@@ -273,10 +281,10 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
 
             const tableStartY = Math.max(yPos, rightYPos) + 10;
             const tableBody = orderToPrint.items.map(item => {
-                 const totalValue = orderToPrint.isGstInvoice
-                    ? item.price * item.quantity * (1 + item.gst / 100)
-                    : item.price * item.quantity;
-                
+                const totalValue = orderToPrint.isGstInvoice
+                   ? item.price * (item.category === 'Rods & Rings' ? item.totalWeight! : item.quantity) * (1 + item.gst / 100)
+                   : item.price * (item.category === 'Rods & Rings' ? item.totalWeight! : item.quantity);
+
                 let description = item.productName;
                 if (item.brand) {
                     description += ` (Brand: ${item.brand})`;
@@ -284,8 +292,9 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
 
                 return [
                     description,
-                    formatQuantity(item.quantity, item.calculationType || 'Per Unit', item.category || 'General'),
-                    formatNumber(item.price) + (item.calculationType === 'Per Kg' ? '/kg' : ''),
+                    formatQuantity(item),
+                    item.category === 'Rods & Rings' ? `${item.totalWeight?.toFixed(2)} kg` : 'N/A',
+                    formatRate(item),
                     orderToPrint.isGstInvoice ? `${item.gst}%` : 'N/A',
                     formatNumber(totalValue)
                 ];
@@ -293,7 +302,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
 
             (doc as any).autoTable({
                 startY: tableStartY,
-                head: [['Item Description', 'Quantity/WT.(kg)', 'Rate', 'GST', 'Total']],
+                head: [['Item Description', 'Quantity', 'Total Weight', 'Rate', 'GST', 'Total']],
                 body: tableBody,
                 theme: 'grid',
                 headStyles: {
@@ -306,11 +315,12 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                     fontSize: 9,
                 },
                 columnStyles: {
-                    0: { cellWidth: 70 }, 
+                    0: { cellWidth: 60 }, 
                     1: { halign: 'center' },
-                    2: { halign: 'right' },
-                    3: { halign: 'center' },
-                    4: { halign: 'right' },
+                    2: { halign: 'center' },
+                    3: { halign: 'right' },
+                    4: { halign: 'center' },
+                    5: { halign: 'right' },
                 }
             });
 
@@ -729,8 +739,8 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
     );
 }
 
-const initialItemState = { productId: '', quantity: '', price: '', cost: '', gst: '', stock: 0, calculationType: 'Per Unit' as CalculationType, category: 'General' as ProductCategory };
-type OrderItemState = { productId: string, quantity: string, price: string, cost: string, gst: string, stock: number, calculationType: CalculationType, category: ProductCategory };
+const initialItemState = { productId: '', quantity: '', price: '', cost: '', gst: '', stock: 0, calculationType: 'Per Unit' as CalculationType, category: 'General' as ProductCategory, weightPerUnit: 0 };
+type OrderItemState = { productId: string, quantity: string, price: string, cost: string, gst: string, stock: number, calculationType: CalculationType, category: ProductCategory, weightPerUnit: number };
 
 function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onOrderAdded, onOrderUpdated, onCustomerAdded, existingOrder }: {
     isOpen: boolean,
@@ -800,9 +810,10 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                     price: String(item.price),
                     cost: String(item.cost),
                     gst: String(item.gst),
-                    stock: (product?.stock ?? 0) + (isEditMode ? item.quantity : 0), // Add back current item quantity to stock for validation
+                    stock: (product?.stock ?? 0) + (isEditMode ? item.quantity : 0),
                     calculationType: item.calculationType || 'Per Unit',
                     category: product?.category || 'General',
+                    weightPerUnit: product?.weightPerUnit || 0
                 }
             }));
             setPaymentTerm(existingOrder.paymentTerm);
@@ -881,6 +892,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                 stock: product.stock,
                 calculationType: product.calculationType || 'Per Unit',
                 category: product.category || 'General',
+                weightPerUnit: product.weightPerUnit || 0
             });
         }
     };
@@ -959,10 +971,27 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
     };
 
     const { subTotal, currentInvoiceTotal } = useMemo(() => {
-        const subTotal = items.reduce((sum, item) => sum + (parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 0), 0);
+        const subTotal = items.reduce((sum, item) => {
+            const price = parseFloat(item.price) || 0;
+            const quantity = parseFloat(item.quantity) || 0;
+            if (item.category === 'Rods & Rings') {
+                const weight = quantity * (item.weightPerUnit || 0);
+                return sum + (price * weight);
+            }
+            return sum + (price * quantity);
+        }, 0);
         
         const totalGst = isGstInvoice 
-            ? items.reduce((sum, item) => sum + ((parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 0) * ((parseFloat(item.gst) || 0) / 100)), 0)
+            ? items.reduce((sum, item) => {
+                const price = parseFloat(item.price) || 0;
+                const quantity = parseFloat(item.quantity) || 0;
+                const gst = parseFloat(item.gst) || 0;
+                if (item.category === 'Rods & Rings') {
+                    const weight = quantity * (item.weightPerUnit || 0);
+                    return sum + (price * weight * (gst / 100));
+                }
+                return sum + (price * quantity * (gst / 100));
+            }, 0)
             : 0;
         
         const totalValue = subTotal + totalGst;
@@ -1022,6 +1051,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                     calculationType: product?.calculationType || 'Per Unit',
                     brand: product?.brand,
                     category: product?.category || 'General',
+                    totalWeight: product?.category === 'Rods & Rings' ? (parseFloat(item.quantity) || 0) * (product.weightPerUnit || 0) : undefined
                 };
             }),
             total: isOpeningBalanceOrder ? previousBalance : currentInvoiceTotal,
@@ -1176,7 +1206,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                 <Card>
                                     <CardContent className="p-4 space-y-4">
                                         <DialogTitle className="text-lg mb-4">Add Items</DialogTitle>
-                                        <div className="grid grid-cols-1 md:grid-cols-9 gap-4 items-end">
+                                        <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
                                             <div className="space-y-2 col-span-3">
                                                 <Label>Item Name</Label>
                                                  <Combobox 
@@ -1188,27 +1218,25 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                                     emptyPlaceholder="No item found."
                                                 />
                                             </div>
-                                            <div className="space-y-2">
-                                                <Label>Stock Left</Label>
+                                            <div className="space-y-2 col-span-1">
+                                                <Label>Stock</Label>
                                                 <Input value={currentItem.stock} readOnly disabled />
                                             </div>
-                                            <div className="space-y-2">
-                                                <Label>{currentItem.category === 'Rods & Rings' ? 'Nos' : 'Quantity'}</Label>
+                                            <div className="space-y-2 col-span-2">
+                                                <Label>{currentItem.category === 'Rods & Rings' ? 'Quantity (Nos)' : 'Quantity'}</Label>
                                                 <Input type="number" placeholder="0" value={currentItem.quantity} onChange={e => setCurrentItem(s => ({ ...s, quantity: e.target.value }))} min="0" step="any" />
                                             </div>
-                                            <div className="space-y-2">
-                                                <Label>Sale Price</Label>
+                                             {currentItem.category === 'Rods & Rings' && (
+                                                <div className="space-y-2 col-span-2">
+                                                    <Label>Total Weight (Kg)</Label>
+                                                    <Input value={((parseFloat(currentItem.quantity) || 0) * currentItem.weightPerUnit).toFixed(2)} readOnly disabled />
+                                                </div>
+                                            )}
+                                            <div className="space-y-2 col-span-2">
+                                                <Label>Sale Price {currentItem.calculationType === 'Per Kg' && '(per Kg)'}</Label>
                                                 <Input type="number" value={currentItem.price} onChange={e => setCurrentItem(s => ({ ...s, price: e.target.value }))} />
                                             </div>
-                                            <div className="space-y-2">
-                                                <Label>Cost Price</Label>
-                                                <Input type="number" value={currentItem.cost} onChange={e => setCurrentItem(s => ({ ...s, cost: e.target.value }))} />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label>GST %</Label>
-                                                <Input type="number" value={currentItem.gst} onChange={e => setCurrentItem(s => ({ ...s, gst: e.target.value }))} />
-                                            </div>
-                                            <div className="flex justify-end mt-4">
+                                            <div className="flex justify-end mt-4 col-span-2">
                                                 {editingItemIndex !== null ? (
                                                     <Button type="button" onClick={handleUpdateItem}>Update Item</Button>
                                                 ) : (
@@ -1225,17 +1253,22 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                     <CardContent className="p-4">
                                         <DialogTitle className="text-lg mb-4">Order Items</DialogTitle>
                                         <Table>
-                                            <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Quantity/WT.(kg)</TableHead><TableHead>Price</TableHead><TableHead>Cost</TableHead><TableHead>GST</TableHead><TableHead>Total</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+                                            <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Quantity</TableHead><TableHead>Total Wt.</TableHead><TableHead>Price</TableHead><TableHead>GST</TableHead><TableHead>Total</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
                                             <TableBody>
                                                 {items.map((item, index) => {
                                                     const product = products.find(p => p.id === item.productId);
                                                     const price = parseFloat(item.price) || 0;
-                                                    const cost = parseFloat(item.cost) || 0;
                                                     const quantity = parseFloat(item.quantity) || 0;
                                                     const gst = parseFloat(item.gst) || 0;
+                                                    
+                                                    const totalWeight = item.category === 'Rods & Rings' ? quantity * (item.weightPerUnit || 0) : 0;
+                                                    const priceBase = item.category === 'Rods & Rings' ? totalWeight : quantity;
+                                                    
+                                                    const itemSubTotal = price * priceBase;
+
                                                     const itemTotal = isGstInvoice
-                                                        ? price * quantity * (1 + gst / 100)
-                                                        : price * quantity;
+                                                        ? itemSubTotal * (1 + gst / 100)
+                                                        : itemSubTotal;
                                                     
                                                     let productName = product?.name || 'Unknown';
                                                     if (product?.brand) productName += ` (${product.brand})`;
@@ -1243,9 +1276,9 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                                     return (
                                                         <TableRow key={index}>
                                                             <TableCell>{productName}</TableCell>
-                                                            <TableCell>{quantity} {item.calculationType === 'Per Kg' ? 'kg' : (item.category === 'Rods & Rings' ? 'nos' : '')}</TableCell>
-                                                            <TableCell>{formatNumberForDisplay(price)}</TableCell>
-                                                            <TableCell>{formatNumberForDisplay(cost)}</TableCell>
+                                                            <TableCell>{quantity} {item.category === 'Rods & Rings' ? 'nos' : (item.calculationType === 'Per Kg' ? 'kg' : '')}</TableCell>
+                                                            <TableCell>{item.category === 'Rods & Rings' ? `${totalWeight.toFixed(2)} kg` : 'N/A'}</TableCell>
+                                                            <TableCell>{formatNumberForDisplay(price)}{item.calculationType === 'Per Kg' ? '/kg' : ''}</TableCell>
                                                             <TableCell>{isGstInvoice ? `${item.gst}%` : 'N/A'}</TableCell>
                                                             <TableCell>{formatNumberForDisplay(itemTotal)}</TableCell>
                                                             <TableCell className="space-x-2">
