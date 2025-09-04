@@ -244,8 +244,12 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             yPos += 5;
             const addressLines = doc.splitTextToSize(customer.address || 'No address provided', 80);
             doc.text(addressLines, margin, yPos);
-            yPos += (addressLines.length * 5) + 5; 
-            doc.text(customer.phone, margin, yPos);
+            yPos += (addressLines.length * 5); 
+            doc.text(`Phone: ${customer.phone || 'N/A'}`, margin, yPos);
+            yPos += 5;
+            if (customer.gstin) {
+                 doc.text(`GSTIN: ${customer.gstin}`, margin, yPos);
+            }
             
             let rightYPos = 58;
             doc.setFontSize(10);
@@ -306,7 +310,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 body: tableBody,
                 theme: 'grid',
                 headStyles: {
-                    fillColor: [222, 247, 236], 
+                    fillColor: [204, 229, 255], // Light blue
                     textColor: [3, 7, 6], 
                     fontStyle: 'bold',
                 },
@@ -330,9 +334,15 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             doc.setFontSize(10);
             doc.setFont('helvetica', 'normal');
 
-            const addTotalRow = (label: string, value: number) => {
+            const addTotalRow = (label: string, value: number, isBold = false) => {
+                if (isBold) {
+                    doc.setFont('helvetica', 'bold');
+                }
                 doc.text(label, totalsLeftColX, finalY, { align: 'right' });
                 doc.text(formatNumber(value), totalsRightColX, finalY, { align: 'right' });
+                if (isBold) {
+                    doc.setFont('helvetica', 'normal');
+                }
                 finalY += 6;
             };
 
@@ -341,14 +351,15 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             addTotalRow("Current Items Total:", orderToPrint.total);
             if(orderToPrint.deliveryFees > 0) addTotalRow("Delivery Fees:", orderToPrint.deliveryFees);
             if(orderToPrint.discount > 0) addTotalRow("Discount:", -orderToPrint.discount);
-            addTotalRow("Subtotal:", subTotal);
+            addTotalRow("Subtotal:", subTotal, true);
             if(orderToPrint.previousBalance > 0) addTotalRow("Previous Balance:", orderToPrint.previousBalance);
 
 
-            finalY += 12; 
+            finalY += 2; 
             
             const grandTotalText = `Grand Total: ${formatNumber(orderToPrint.grandTotal)}`;
             doc.setFont('helvetica', 'bold');
+            doc.setFontSize(12);
             
             const isCredit = orderToPrint.paymentTerm === 'Credit' && (orderToPrint.balanceDue ?? 0) > 0;
             const boxColor = isCredit ? [255, 235, 238] : [222, 247, 236]; 
@@ -534,7 +545,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                         <FileSpreadsheet className="mr-2 h-4 w-4" />
                         Export to Excel
                     </Button>
-                    <Button onClick={openOrderDialog} disabled={isLoading}>
+                    <Button onClick={openOrderDialog} disabled={isLoading} className="transform hover:scale-105 transition-transform">
                         {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
                         Place Order
                     </Button>
@@ -584,7 +595,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                     </TableHeader>
                     <TableBody>
                         {filteredOrders.map((order) => (
-                            <TableRow key={order.id}>
+                            <TableRow key={order.id} className="transition-transform hover:-translate-y-px hover:shadow-md">
                                 <TableCell className="font-medium">{order.id}</TableCell>
                                 <TableCell>{order.customerName}</TableCell>
                                 <TableCell>{new Date(order.orderDate).toLocaleDateString('en-IN')}</TableCell>
@@ -1298,15 +1309,15 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                     <Card>
                                         <CardContent className="p-4 space-y-2">
                                             <DialogTitle className="text-lg mb-4">Order Summary</DialogTitle>
-                                            <div className="flex justify-between">
+                                            <div className="flex justify-between text-sm">
                                                 <span>Current Items Total:</span> 
                                                 <span className="font-semibold">{formatNumberForDisplay(currentInvoiceTotal)}</span>
                                             </div>
-                                            <div className="flex justify-between items-center">
+                                             <div className="flex justify-between items-center text-sm">
                                                 <Label htmlFor="delivery_fees" className="flex-1">Delivery Fees</Label>
                                                 <Input type="number" placeholder="0.00" className="w-24 h-8" value={String(deliveryFees)} onChange={e => setDeliveryFees(parseFloat(e.target.value) || 0)} />
                                             </div>
-                                            <div className="flex justify-between items-center">
+                                             <div className="flex justify-between items-center text-sm">
                                                 <div className="flex items-center space-x-2">
                                                     <Checkbox id="enable_discount" checked={enableDiscount} onCheckedChange={c => setEnableDiscount(c as boolean)} />
                                                     <Label htmlFor="enable_discount" className="flex-1">Discount</Label>
@@ -1314,12 +1325,12 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                                 <Input type="number" placeholder="0.00" className="w-24 h-8" value={String(discount)} onChange={e => setDiscount(parseFloat(e.target.value) || 0)} disabled={!enableDiscount} />
                                             </div>
                                             <Separator />
-                                            <div className="flex justify-between">
+                                            <div className="flex justify-between text-sm">
                                                 <span className="font-medium">Subtotal:</span>
                                                 <span className="font-bold">{formatNumberForDisplay(subTotal)}</span>
                                             </div>
                                             {previousBalance > 0 && (
-                                                <div className="flex justify-between text-destructive">
+                                                <div className="flex justify-between text-destructive text-sm">
                                                     <span>Previous Balance:</span> 
                                                     <span className="font-semibold">{formatNumberForDisplay(previousBalance)}</span>
                                                 </div>
@@ -1350,6 +1361,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                             <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="name" className="text-right">Name</Label><Input id="name" name="name" className="col-span-3" required /></div>
                             <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="phone" className="text-right">Phone</Label><Input id="phone" name="phone" className="col-span-3" /></div>
                             <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="address" className="text-right">Address</Label><Input id="address" name="address" className="col-span-3" /></div>
+                            <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="gstin" className="text-right">GSTIN</Label><Input id="gstin" name="gstin" className="col-span-3" /></div>
                         </div>
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setIsAddCustomerOpen(false)}>Cancel</Button>
@@ -1361,5 +1373,3 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
         </>
     );
 }
-
-    

@@ -204,7 +204,7 @@ export function SuppliersClient({ initialSuppliers }: { initialSuppliers: Suppli
         <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <h1 className="text-3xl font-bold">Suppliers</h1>
-                <Button onClick={() => openDialog()}>
+                <Button onClick={() => openDialog()} className="transform hover:scale-105 transition-transform">
                     <PlusCircle className="mr-2 h-4 w-4" /> Add Supplier
                 </Button>
             </div>
@@ -230,7 +230,7 @@ export function SuppliersClient({ initialSuppliers }: { initialSuppliers: Suppli
                     </TableHeader>
                     <TableBody>
                         {filteredSuppliers.map((supplier) => (
-                            <TableRow key={supplier.id}>
+                            <TableRow key={supplier.id} className="transition-transform hover:-translate-y-px hover:shadow-md">
                                 <TableCell className="font-medium">{supplier.name}</TableCell>
                                 <TableCell>{supplier.contactPerson || 'N/A'}</TableCell>
                                 <TableCell>{supplier.phone}</TableCell>

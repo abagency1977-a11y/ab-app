@@ -21,6 +21,7 @@ import html2canvas from 'html2canvas';
 import { ReceiptTemplate } from '@/components/receipt-template';
 import { addPaymentToOrder, deleteOrder, getOrders, getCustomers } from '@/lib/data';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 
 type SortKey = keyof Order | 'id' | 'customerName' | 'orderDate' | 'status' | 'balanceDue' | 'grandTotal' | 'total' | 'previousBalance';
 
@@ -54,8 +55,9 @@ const InvoiceTable = ({ invoices, onRowClick, onDeleteClick, sortConfig, request
             <TableBody>
                 {invoices.map((invoice) => {
                     const invoiceAmount = (invoice.total || 0) + (invoice.deliveryFees || 0) - (invoice.discount || 0);
+                    const hasDue = (invoice.balanceDue ?? 0) > 0;
                     return (
-                        <TableRow key={invoice.id}>
+                        <TableRow key={invoice.id} className="transition-transform hover:-translate-y-px hover:shadow-md">
                             <TableCell onClick={() => onRowClick?.(invoice)} className="font-medium cursor-pointer">{invoice.id.replace('ORD', 'INV')}</TableCell>
                             <TableCell onClick={() => onRowClick?.(invoice)} className="cursor-pointer">{invoice.customerName}</TableCell>
                             <TableCell onClick={() => onRowClick?.(invoice)} className="cursor-pointer">{new Date(invoice.orderDate).toLocaleDateString('en-IN')}</TableCell>
@@ -63,9 +65,9 @@ const InvoiceTable = ({ invoices, onRowClick, onDeleteClick, sortConfig, request
                                 <Badge variant={invoice.status === 'Fulfilled' ? 'default' : invoice.status === 'Pending' ? 'secondary' : invoice.status === 'Part Payment' ? 'outline' : 'destructive'} className="capitalize">{invoice.status}</Badge>
                             </TableCell>
                             <TableCell onClick={() => onRowClick?.(invoice)} className="text-right cursor-pointer">{formatNumber(invoiceAmount)}</TableCell>
-                            <TableCell onClick={() => onRowClick?.(invoice)} className="text-right cursor-pointer">{formatNumber(invoice.previousBalance)}</TableCell>
+                            <TableCell onClick={() => onRowClick?.(invoice)} className={cn("text-right cursor-pointer", hasDue && "text-destructive")}>{formatNumber(invoice.previousBalance)}</TableCell>
                             <TableCell onClick={() => onRowClick?.(invoice)} className="text-right font-bold cursor-pointer">{formatNumber(invoice.grandTotal)}</TableCell>
-                             <TableCell onClick={() => onRowClick?.(invoice)} className={`text-right font-medium cursor-pointer ${invoice.balanceDue && invoice.balanceDue > 0 ? 'text-red-600' : ''}`}>
+                             <TableCell onClick={() => onRowClick?.(invoice)} className={cn('text-right font-medium cursor-pointer', hasDue && 'text-destructive')}>
                                 {formatNumber(invoice.balanceDue)}
                             </TableCell>
                              <TableCell className="text-center">

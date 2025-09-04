@@ -6,6 +6,7 @@ export interface Customer {
   name: string;
   phone: string;
   address: string;
+  gstin?: string;
   transactionHistory: {
     totalSpent: number;
     lastPurchaseDate: string;
@@ -138,5 +139,3 @@ export interface LowStockAlert {
     stock: number;
     reorderPoint: number;
 }
-
-    

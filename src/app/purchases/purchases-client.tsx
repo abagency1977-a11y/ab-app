@@ -21,6 +21,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Combobox } from '@/components/ui/combobox';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { cn } from '@/lib/utils';
 
 type SortKey = keyof Purchase | 'id' | 'supplierName' | 'purchaseDate' | 'balanceDue' | 'total';
 
@@ -159,7 +160,7 @@ export function PurchasesClient({ initialPurchases, initialSuppliers, initialPro
         <div className="space-y-4">
             <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-bold">Purchases</h1>
-                 <Button onClick={openPurchaseDialog} disabled={isLoading}>
+                 <Button onClick={openPurchaseDialog} disabled={isLoading} className="transform hover:scale-105 transition-transform">
                     {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
                      Add Purchase
                 </Button>
@@ -185,7 +186,7 @@ export function PurchasesClient({ initialPurchases, initialSuppliers, initialPro
                     </TableHeader>
                     <TableBody>
                         {filteredPurchases.map((purchase) => (
-                            <TableRow key={purchase.id} onClick={() => setSelectedPurchase(purchase)} className="cursor-pointer">
+                            <TableRow key={purchase.id} onClick={() => setSelectedPurchase(purchase)} className="cursor-pointer transition-transform hover:-translate-y-px hover:shadow-md">
                                 <TableCell className="font-medium">{purchase.id}</TableCell>
                                 <TableCell>{purchase.supplierName}</TableCell>
                                 <TableCell>{new Date(purchase.purchaseDate).toLocaleDateString('en-IN')}</TableCell>
@@ -194,7 +195,7 @@ export function PurchasesClient({ initialPurchases, initialSuppliers, initialPro
                                         {purchase.balanceDue <= 0 ? 'Paid' : 'Partial'}
                                     </Badge>
                                 </TableCell>
-                                <TableCell className="text-right text-red-600 font-medium">
+                                <TableCell className={cn("text-right font-medium", purchase.balanceDue > 0 && "text-destructive")}>
                                     {formatNumberForDisplay(purchase.balanceDue)}
                                 </TableCell>
                                 <TableCell className="text-right">

@@ -126,7 +126,7 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="stock" className="text-right">{category === 'Rods & Rings' ? 'Stock in Nos' : 'Stock'}</Label>
-                        <Input id="stock" name="stock" ref={stockRef} type="number" className="col-span-3" required />
+                        <Input id="stock" name="stock" ref={stockRef} type="number" className="col-span-3" required defaultValue="0" />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="price" className="text-right">Sale Price</Label>
@@ -318,7 +318,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
         <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <h1 className="text-3xl font-bold">Inventory</h1>
-                 <Button onClick={() => setIsAddDialogOpen(true)}>
+                 <Button onClick={() => setIsAddDialogOpen(true)} className="transform hover:scale-105 transition-transform">
                     <PlusCircle className="mr-2 h-4 w-4" /> Add Product
                 </Button>
             </div>
@@ -350,7 +350,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                             {filteredProducts.map((product) => {
                                 const isLowStock = product.reorderPoint !== undefined && product.stock <= product.reorderPoint;
                                 return (
-                                    <TableRow key={product.id}>
+                                    <TableRow key={product.id} className="transition-transform hover:-translate-y-px hover:shadow-md">
                                         <TableCell className="font-medium">{product.name} {product.brand && <span className="text-muted-foreground text-xs">({product.brand})</span>}</TableCell>
                                         <TableCell>{product.sku}</TableCell>
                                         <TableCell><Badge variant="secondary">{product.category || 'General'}</Badge></TableCell>
@@ -554,6 +554,3 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             </AlertDialog>
         </div>
     );
-
-    
-

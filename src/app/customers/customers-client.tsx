@@ -21,29 +21,36 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol' }).format(value);
 
 type SortKey = keyof Customer | 'transactionHistory.totalSpent';
 
-function AddCustomerDialog({ isOpen, onOpenChange, onCustomerAdded }: {
+function AddCustomerDialog({ isOpen, onOpenChange, onCustomerAdded, existingCustomer }: {
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;
     onCustomerAdded: (customer: Customer) => void;
+    existingCustomer?: Customer | null;
 }) {
-    const nameRef = useRef<HTMLInputElement>(null);
-    const phoneRef = useRef<HTMLInputElement>(null);
-    const addressRef = useRef<HTMLInputElement>(null);
     const { toast } = useToast();
+    const [formData, setFormData] = useState<Partial<Customer>>({});
 
-    const handleAddCustomer = async () => {
-        const newCustomerData = {
-            name: nameRef.current?.value || '',
-            phone: phoneRef.current?.value || '',
-            address: addressRef.current?.value || '',
-        };
+    const isEditMode = !!existingCustomer;
 
-        if (!newCustomerData.name) {
+    useEffect(() => {
+        if (isOpen) {
+            setFormData(existingCustomer || {});
+        }
+    }, [isOpen, existingCustomer]);
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleSaveCustomer = async () => {
+        if (!formData.name) {
             toast({
                 title: "Validation Error",
                 description: "Customer name is required.",
@@ -53,18 +60,25 @@ function AddCustomerDialog({ isOpen, onOpenChange, onCustomerAdded }: {
         }
 
         try {
-            const newCustomerFromDB = await addCustomer(newCustomerData);
-            onCustomerAdded(newCustomerFromDB);
+            let savedCustomer: Customer;
+            if (isEditMode && existingCustomer) {
+                const updatedData = { ...existingCustomer, ...formData };
+                await updateCustomer(updatedData);
+                savedCustomer = updatedData;
+            } else {
+                savedCustomer = await addCustomer(formData as Omit<Customer, 'id' | 'transactionHistory' | 'orders'>);
+            }
+            onCustomerAdded(savedCustomer);
             onOpenChange(false);
             toast({
-                title: "Customer Added",
-                description: `${newCustomerFromDB.name} has been successfully added.`,
+                title: isEditMode ? "Customer Updated" : "Customer Added",
+                description: `${savedCustomer.name} has been successfully saved.`,
             });
         } catch (error) {
-            console.error("Failed to add customer:", error);
+            console.error("Failed to save customer:", error);
             toast({
                 title: "Error",
-                description: "Failed to add customer. Please try again.",
+                description: "Failed to save customer. Please try again.",
                 variant: 'destructive',
             });
         }
@@ -74,85 +88,9 @@ function AddCustomerDialog({ isOpen, onOpenChange, onCustomerAdded }: {
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Add New Customer</DialogTitle>
+                    <DialogTitle>{isEditMode ? `Edit Customer: ${existingCustomer?.name}` : 'Add New Customer'}</DialogTitle>
                     <DialogDescription>
-                        Fill in the details below to add a new customer to the system.
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="name" className="text-right">Name</Label>
-                        <Input id="name" name="name" ref={nameRef} className="col-span-3" required />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="phone" className="text-right">Phone</Label>
-                        <Input id="phone" name="phone" ref={phoneRef} className="col-span-3" />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="address" className="text-right">Address</Label>
-                        <Input id="address" name="address" ref={addressRef} className="col-span-3" />
-                    </div>
-                </div>
-                <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                    <Button type="button" onClick={handleAddCustomer}>Save Customer</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-}
-
-function EditCustomerDialog({ isOpen, onOpenChange, onCustomerUpdated, customer }: {
-    isOpen: boolean;
-    onOpenChange: (open: boolean) => void;
-    onCustomerUpdated: (customer: Customer) => void;
-    customer: Customer | null;
-}) {
-    const { toast } = useToast();
-    const [formData, setFormData] = useState<Partial<Customer>>({});
-
-    useEffect(() => {
-        if (customer) {
-            setFormData(customer);
-        }
-    }, [customer]);
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-    };
-
-    const handleUpdateCustomer = async () => {
-        if (!customer) return;
-        
-        try {
-            const updatedCustomerData = { ...customer, ...formData };
-            await updateCustomer(updatedCustomerData);
-            onCustomerUpdated(updatedCustomerData);
-            onOpenChange(false);
-            toast({
-                title: "Customer Updated",
-                description: `${updatedCustomerData.name} has been successfully updated.`,
-            });
-        } catch (error) {
-            console.error("Failed to update customer:", error);
-            toast({
-                title: "Error",
-                description: "Failed to update customer. Please try again.",
-                variant: 'destructive',
-            });
-        }
-    };
-
-    if (!customer) return null;
-
-    return (
-        <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Edit Customer: {customer.name}</DialogTitle>
-                    <DialogDescription>
-                        Update the customer details below.
+                        Fill in the details below to manage a customer.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
@@ -168,15 +106,20 @@ function EditCustomerDialog({ isOpen, onOpenChange, onCustomerUpdated, customer 
                         <Label htmlFor="address" className="text-right">Address</Label>
                         <Input id="address" name="address" value={formData.address || ''} onChange={handleChange} className="col-span-3" />
                     </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="gstin" className="text-right">GSTIN</Label>
+                        <Input id="gstin" name="gstin" value={formData.gstin || ''} onChange={handleChange} className="col-span-3" />
+                    </div>
                 </div>
                 <DialogFooter>
                     <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                    <Button type="button" onClick={handleUpdateCustomer}>Save Changes</Button>
+                    <Button type="button" onClick={handleSaveCustomer}>Save Customer</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
     );
 }
+
 
 export function CustomersClient({ customers: initialCustomers, orders: initialOrders }: { customers: Customer[], orders: Order[] }) {
     const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
@@ -184,7 +127,6 @@ export function CustomersClient({ customers: initialCustomers, orders: initialOr
     const [search, setSearch] = useState('');
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'ascending' | 'descending' } | null>(null);
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-    const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [customerToEdit, setCustomerToEdit] = useState<Customer | null>(null);
     const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
     const [isBulkPaymentOpen, setIsBulkPaymentOpen] = useState(false);
@@ -214,7 +156,6 @@ export function CustomersClient({ customers: initialCustomers, orders: initialOr
                     bValue = b.transactionHistory.totalSpent;
                 } else {
                     aValue = a[sortConfig.key as keyof Customer];
-                    bValue = b[sortConfig.key as keyof Customer];
                 }
 
                 if (aValue < bValue) {
@@ -241,12 +182,13 @@ export function CustomersClient({ customers: initialCustomers, orders: initialOr
         customer.name.toLowerCase().includes(search.toLowerCase())
     );
     
-    const handleCustomerAdded = (newCustomer: Customer) => {
-        setCustomers(prevCustomers => [...prevCustomers, newCustomer]);
-    };
-    
-    const handleCustomerUpdated = (updatedCustomer: Customer) => {
-        setCustomers(prevCustomers => prevCustomers.map(c => c.id === updatedCustomer.id ? updatedCustomer : c));
+    const handleCustomerSaved = (savedCustomer: Customer) => {
+        const exists = customers.some(c => c.id === savedCustomer.id);
+        if (exists) {
+            setCustomers(prev => prev.map(c => c.id === savedCustomer.id ? savedCustomer : c));
+        } else {
+            setCustomers(prev => [...prev, savedCustomer]);
+        }
     };
 
     const handleDeleteCustomer = async () => {
@@ -302,7 +244,7 @@ export function CustomersClient({ customers: initialCustomers, orders: initialOr
         <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <h1 className="text-3xl font-bold">Customers</h1>
-                <Button onClick={() => setIsAddDialogOpen(true)}>
+                <Button onClick={() => setIsAddDialogOpen(true)} className="transform hover:scale-105 transition-transform">
                     <PlusCircle className="mr-2 h-4 w-4" /> Add Customer
                 </Button>
             </div>
@@ -337,7 +279,7 @@ export function CustomersClient({ customers: initialCustomers, orders: initialOr
                     </TableHeader>
                     <TableBody>
                         {filteredCustomers.map((customer) => (
-                            <TableRow key={customer.id}>
+                            <TableRow key={customer.id} className="transition-transform hover:-translate-y-px hover:shadow-md">
                                 <TableCell className="font-medium">{customer.name}</TableCell>
                                 <TableCell>
                                     <div className="text-sm text-muted-foreground">{customer.phone}</div>
@@ -355,7 +297,7 @@ export function CustomersClient({ customers: initialCustomers, orders: initialOr
                                             </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end">
-                                            <DropdownMenuItem onClick={() => { setCustomerToEdit(customer); setIsEditDialogOpen(true); }}>Edit</DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => { setCustomerToEdit(customer); setIsAddDialogOpen(true); }}>Edit</DropdownMenuItem>
                                             <DropdownMenuItem asChild>
                                                 <Link href={`/customers/${customer.id}`}>View Details</Link>
                                             </DropdownMenuItem>
@@ -388,7 +330,7 @@ export function CustomersClient({ customers: initialCustomers, orders: initialOr
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
-                                         <DropdownMenuItem onClick={() => { setCustomerToEdit(customer); setIsEditDialogOpen(true); }}>Edit</DropdownMenuItem>
+                                         <DropdownMenuItem onClick={() => { setCustomerToEdit(customer); setIsAddDialogOpen(true); }}>Edit</DropdownMenuItem>
                                         <DropdownMenuItem asChild>
                                             <Link href={`/customers/${customer.id}`}>View Details</Link>
                                         </DropdownMenuItem>
@@ -425,14 +367,8 @@ export function CustomersClient({ customers: initialCustomers, orders: initialOr
             <AddCustomerDialog 
                 isOpen={isAddDialogOpen} 
                 onOpenChange={setIsAddDialogOpen} 
-                onCustomerAdded={handleCustomerAdded} 
-            />
-            
-            <EditCustomerDialog 
-                isOpen={isEditDialogOpen} 
-                onOpenChange={setIsEditDialogOpen}
-                onCustomerUpdated={handleCustomerUpdated}
-                customer={customerToEdit}
+                onCustomerAdded={handleCustomerSaved} 
+                existingCustomer={customerToEdit}
             />
 
             <AlertDialog open={!!customerToDelete} onOpenChange={(open) => !open && setCustomerToDelete(null)}>
@@ -624,7 +560,7 @@ function BulkPaymentDialog({ isOpen, onOpenChange, customer, onPaymentSuccess }:
                                                 </TableCell>
                                                 <TableCell>{inv.id.replace("ORD", "INV")}</TableCell>
                                                 <TableCell>{new Date(inv.orderDate).toLocaleDateString('en-IN')}</TableCell>
-                                                <TableCell className="text-right">{formatNumber(inv.balanceDue ?? 0)}</TableCell>
+                                                <TableCell className={cn("text-right", (inv.balanceDue ?? 0) > 0 && "text-red-600 font-medium")}>{formatNumber(inv.balanceDue ?? 0)}</TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>

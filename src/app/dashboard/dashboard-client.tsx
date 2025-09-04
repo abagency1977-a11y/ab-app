@@ -15,12 +15,12 @@ import Link from 'next/link';
 const chartConfig = {
   revenue: {
     label: 'Revenue',
-    color: 'hsl(var(--primary))',
+    color: 'hsl(var(--chart-1))',
   },
 } satisfies ChartConfig;
 
 const StatCard = ({ title, value, icon: Icon, description, valueClassName }: { title: string, value: string | React.ReactNode, icon: React.ElementType, description: string, valueClassName?: string }) => (
-    <Card>
+    <Card className="bg-gradient-to-br from-card to-muted/50">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{title}</CardTitle>
             <Icon className="h-4 w-4 text-muted-foreground" />
@@ -47,7 +47,7 @@ const RecentOrdersList = ({ orders }: { orders: Order[] }) => (
             </TableHeader>
             <TableBody>
                 {orders.map((order: Order) => (
-                    <TableRow key={order.id}>
+                    <TableRow key={order.id} className="transition-transform hover:-translate-y-px hover:shadow-md">
                         <TableCell>
                             <div className="font-medium">{order.customerName}</div>
                             <div className="text-sm text-muted-foreground">{order.id}</div>
@@ -129,7 +129,7 @@ const AlertList = ({ alerts, isOverdue }: { alerts: PaymentAlert[], isOverdue: b
                             Due: {new Date(alert.dueDate).toLocaleDateString('en-IN')} ({isOverdue ? `${Math.abs(alert.days)} days ago` : `in ${alert.days} days`})
                         </p>
                     </div>
-                    <div className="ml-auto font-medium">{formatNumber(alert.balanceDue)}</div>
+                    <div className="ml-auto font-medium text-destructive">{formatNumber(alert.balanceDue)}</div>
                 </div>
             ))}
         </div>
