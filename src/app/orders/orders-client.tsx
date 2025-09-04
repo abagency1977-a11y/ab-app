@@ -336,10 +336,14 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 finalY += 6;
             };
 
-            addTotalRow("Subtotal:", orderToPrint.total);
+            const subTotal = orderToPrint.total + orderToPrint.deliveryFees - orderToPrint.discount;
+
+            addTotalRow("Current Items Total:", orderToPrint.total);
             if(orderToPrint.deliveryFees > 0) addTotalRow("Delivery Fees:", orderToPrint.deliveryFees);
             if(orderToPrint.discount > 0) addTotalRow("Discount:", -orderToPrint.discount);
+            addTotalRow("Subtotal:", subTotal);
             if(orderToPrint.previousBalance > 0) addTotalRow("Previous Balance:", orderToPrint.previousBalance);
+
 
             finalY += 12; 
             
@@ -376,62 +380,6 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             setIsLoading(false);
             setOrderToPrint(null);
         }
-    };
-
-    const handleExportToExcel = () => {
-        const dataToExport = orders.flatMap(order => 
-            order.items.map(item => {
-                const totalPaid = order.payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
-                return {
-                    'Order ID': order.id,
-                    'Customer Name': order.customerName,
-                    'Order Date': new Date(order.orderDate).toLocaleDateString('en-CA'), // YYYY-MM-DD
-                    'Status': order.status,
-                    'Payment Term': order.paymentTerm,
-                    'Due Date': order.dueDate ? new Date(order.dueDate).toLocaleDateString('en-CA') : 'N/A',
-                    'Item Name': item.productName,
-                    'Item Quantity': item.quantity,
-                    'Item Price': item.price,
-                    'Item GST %': item.gst,
-                    'Subtotal': order.total,
-                    'Discount': order.discount,
-                    'Delivery Fees': order.deliveryFees,
-                    'Previous Balance': order.previousBalance,
-                    'Grand Total': order.grandTotal,
-                    'Total Paid': totalPaid,
-                    'Balance Due': order.balanceDue,
-                };
-            })
-        );
-
-        const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Orders");
-
-        // Set column widths
-        const colWidths = [
-            { wch: 15 }, // Order ID
-            { wch: 25 }, // Customer Name
-            { wch: 12 }, // Order Date
-            { wch: 15 }, // Status
-            { wch: 15 }, // Payment Term
-            { wch: 12 }, // Due Date
-            { wch: 30 }, // Item Name
-            { wch: 10 }, // Item Quantity
-            { wch: 10 }, // Item Price
-            { wch: 10 }, // Item GST %
-            { wch: 12 }, // Subtotal
-            { wch: 10 }, // Discount
-            { wch: 12 }, // Delivery Fees
-            { wch: 15 }, // Previous Balance
-            { wch: 15 }, // Grand Total
-            { wch: 12 }, // Total Paid
-            { wch: 12 }, // Balance Due
-        ];
-        worksheet['!cols'] = colWidths;
-
-        XLSX.writeFile(workbook, "All_Orders_Backup.xlsx");
-        toast({ title: 'Success', description: 'All orders have been exported to Excel.' });
     };
 
     const refreshData = async () => {
@@ -970,8 +918,8 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
         }
     };
 
-    const { subTotal, currentInvoiceTotal } = useMemo(() => {
-        const subTotal = items.reduce((sum, item) => {
+    const { currentInvoiceTotal, subTotal, grandTotal } = useMemo(() => {
+        const currentItemsTotal = items.reduce((sum, item) => {
             const price = parseFloat(item.price) || 0;
             const quantity = parseFloat(item.quantity) || 0;
             if (item.category === 'Rods & Rings') {
@@ -994,11 +942,13 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
             }, 0)
             : 0;
         
-        const totalValue = subTotal + totalGst;
-        return { subTotal, currentInvoiceTotal: totalValue };
-    }, [items, isGstInvoice]);
+        const currentInvoiceTotal = currentItemsTotal + totalGst;
+        const subTotal = currentInvoiceTotal + deliveryFees - discount;
+        const grandTotal = subTotal + previousBalance;
 
-    const grandTotal = useMemo(() => currentInvoiceTotal - discount + deliveryFees + previousBalance, [currentInvoiceTotal, discount, deliveryFees, previousBalance]);
+        return { currentInvoiceTotal, subTotal, grandTotal };
+    }, [items, isGstInvoice, deliveryFees, discount, previousBalance]);
+
 
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -1041,7 +991,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                 category: 'General',
             }] : items.map(item => {
                 const product = products.find(p => p.id === item.productId);
-                const orderItem: OrderItem = {
+                const orderItem: Partial<OrderItem> = {
                     productId: item.productId,
                     productName: product?.name || 'Unknown',
                     quantity: parseFloat(item.quantity) || 0,
@@ -1313,10 +1263,12 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                     {/* Order Summary */}
                                     <Card>
                                         <CardContent className="p-4 space-y-2">
-                                            <DialogTitle className="text-lg">Order Summary</DialogTitle>
-                                            <div className="flex justify-between"><span>Current Items Total:</span> <span className="font-semibold">{formatNumberForDisplay(currentInvoiceTotal)}</span></div>
-                                            {previousBalance > 0 && <div className="flex justify-between text-destructive"><span>Previous Due:</span> <span className="font-semibold">{formatNumberForDisplay(previousBalance)}</span></div>}
-                                             <div className="flex justify-between items-center">
+                                            <DialogTitle className="text-lg mb-4">Order Summary</DialogTitle>
+                                            <div className="flex justify-between">
+                                                <span>Current Items Total:</span> 
+                                                <span className="font-semibold">{formatNumberForDisplay(currentInvoiceTotal)}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
                                                 <Label htmlFor="delivery_fees" className="flex-1">Delivery Fees</Label>
                                                 <Input type="number" placeholder="0.00" className="w-24 h-8" value={String(deliveryFees)} onChange={e => setDeliveryFees(parseFloat(e.target.value) || 0)} />
                                             </div>
@@ -1327,6 +1279,17 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                                 </div>
                                                 <Input type="number" placeholder="0.00" className="w-24 h-8" value={String(discount)} onChange={e => setDiscount(parseFloat(e.target.value) || 0)} disabled={!enableDiscount} />
                                             </div>
+                                            <Separator />
+                                            <div className="flex justify-between">
+                                                <span className="font-medium">Subtotal:</span>
+                                                <span className="font-bold">{formatNumberForDisplay(subTotal)}</span>
+                                            </div>
+                                            {previousBalance > 0 && (
+                                                <div className="flex justify-between text-destructive">
+                                                    <span>Previous Balance:</span> 
+                                                    <span className="font-semibold">{formatNumberForDisplay(previousBalance)}</span>
+                                                </div>
+                                            )}
                                             <Separator />
                                             <div className="flex justify-between text-lg">
                                                 <span className="font-bold">Grand Total:</span>
@@ -1364,5 +1327,3 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
         </>
     );
 }
-
-    
