@@ -174,16 +174,28 @@ async function getNextId(transaction: Transaction, counterName: string, prefix: 
     return `${prefix}-${String(nextNumber).padStart(4, '0')}`;
 }
 
-// Helper to remove undefined properties from an object before saving to Firestore
-const cleanUndefined = (obj: any) => {
-    const newObj: any = {};
-    Object.keys(obj).forEach(key => {
-        if (obj[key] !== undefined) {
-            newObj[key] = obj[key];
+const cleanDataForFirebase = (data: any): any => {
+    if (data === null || data === undefined) {
+        return data;
+    }
+
+    if (Array.isArray(data)) {
+        return data.map(item => cleanDataForFirebase(item));
+    }
+
+    if (typeof data === 'object' && !(data instanceof Date)) {
+        const newObj: { [key: string]: any } = {};
+        for (const key in data) {
+            if (data.hasOwnProperty(key) && data[key] !== undefined) {
+                newObj[key] = cleanDataForFirebase(data[key]);
+            }
         }
-    });
-    return newObj;
-}
+        return newObj;
+    }
+
+    return data;
+};
+
 
 async function runBalanceChainUpdate(customerId: string, workload: (orders: Order[]) => Order[]) {
     // Read outside the transaction
@@ -242,7 +254,7 @@ async function runBalanceChainUpdate(customerId: string, workload: (orders: Orde
                 }
 
                 // Write the updated order back to the database
-                const cleanedOrder = cleanUndefined(order);
+                const cleanedOrder = cleanDataForFirebase(order);
                 transaction.set(orderRef, cleanedOrder);
             }
         });
