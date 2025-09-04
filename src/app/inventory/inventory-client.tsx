@@ -8,8 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { predictProductDemand, PredictProductDemandOutput } from '@/ai/flows/predict-product-demand';
-import { Lightbulb, Loader2, PlusCircle, MoreHorizontal, AlertTriangle } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, AlertTriangle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -182,10 +181,6 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
 
 export function InventoryClient({ products: initialProducts }: { products: Product[] }) {
     const [products, setProducts] = useState<Product[]>(initialProducts);
-    const [selectedProduct, setSelectedProduct] = useState<string | undefined>(initialProducts[0]?.id);
-    const [prediction, setPrediction] = useState<PredictProductDemandOutput | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [productToEdit, setProductToEdit] = useState<Product | null>(null);
@@ -212,36 +207,6 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             product.sku.toLowerCase().includes(searchQuery.toLowerCase())
         );
     }, [products, searchQuery]);
-
-    const handlePredictDemand = async () => {
-        if (!selectedProduct) {
-            setError('Please select a product.');
-            return;
-        }
-        
-        const product = products.find(p => p.id === selectedProduct);
-        if (!product || !product.historicalData) {
-            setError('Selected product has no historical data for prediction.');
-            return;
-        }
-
-        setIsLoading(true);
-        setError(null);
-        setPrediction(null);
-
-        try {
-            const result = await predictProductDemand({
-                productName: product.name,
-                historicalOrderData: JSON.stringify(product.historicalData),
-            });
-            setPrediction(result);
-        } catch (e) {
-            setError('An error occurred while predicting demand.');
-            console.error(e);
-        } finally {
-            setIsLoading(false);
-        }
-    };
     
     const refreshProducts = async () => {
         const freshProducts = await getProducts();
@@ -344,20 +309,6 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                             <Skeleton className="h-8 w-full" />
                         </div>
                     </div>
-                    <div className="md:col-span-1">
-                        <Card>
-                            <CardHeader>
-                                <Skeleton className="h-6 w-3/4" />
-                                <Skeleton className="h-4 w-full" />
-                            </CardHeader>
-                            <CardContent>
-                                <Skeleton className="h-10 w-full" />
-                            </CardContent>
-                            <CardFooter>
-                                <Skeleton className="h-10 w-full" />
-                            </CardFooter>
-                        </Card>
-                    </div>
                 </div>
             </div>
         );
@@ -372,86 +323,53 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                 </Button>
             </div>
             
-            <div className="md:grid md:grid-cols-3 gap-6">
-                <div className="md:col-span-2 space-y-4">
-                    <div className="flex items-center">
-                        <Input
-                            placeholder="Search by product name or SKU..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="max-w-sm"
-                        />
-                    </div>
-                    {/* Desktop Table View */}
-                    <div className="hidden md:block rounded-lg border shadow-sm">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Product</TableHead>
-                                    <TableHead>SKU</TableHead>
-                                    <TableHead>Category</TableHead>
-                                    <TableHead>Stock</TableHead>
-                                    <TableHead>Weight/Unit (Kg)</TableHead>
-                                    <TableHead className="text-right">Sale Price</TableHead>
-                                    <TableHead>Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {filteredProducts.map((product) => {
-                                    const isLowStock = product.reorderPoint !== undefined && product.stock <= product.reorderPoint;
-                                    return (
-                                        <TableRow key={product.id}>
-                                            <TableCell className="font-medium">{product.name} {product.brand && <span className="text-muted-foreground text-xs">({product.brand})</span>}</TableCell>
-                                            <TableCell>{product.sku}</TableCell>
-                                            <TableCell><Badge variant="secondary">{product.category || 'General'}</Badge></TableCell>
-                                            <TableCell className={cn(isLowStock && "text-destructive font-bold")}>
-                                                <div className="flex items-center gap-2">
-                                                    {isLowStock && <AlertTriangle className="h-4 w-4 text-destructive" />}
-                                                    {product.stock}
-                                                    {product.category === 'Rods & Rings' && ' nos'}
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>{product.weightPerUnit ? `${product.weightPerUnit} kg` : 'N/A'}</TableCell>
-                                            <TableCell className="text-right">
-                                                {formatNumber(product.price)}
-                                                {product.calculationType === 'Per Kg' && <span className="text-muted-foreground text-xs">/kg</span>}
-                                            </TableCell>
-                                            <TableCell>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button variant="ghost" className="h-8 w-8 p-0">
-                                                            <span className="sr-only">Open menu</span>
-                                                            <MoreHorizontal className="h-4 w-4" />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem onClick={() => { setProductToEdit(product); setIsEditDialogOpen(true); }}>Edit</DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => setProductToDelete(product)} className="text-red-600">Delete</DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            </TableCell>
-                                        </TableRow>
-                                    );
-                                })}
-                            </TableBody>
-                        </Table>
-                    </div>
-
-                    {/* Mobile Card View */}
-                    <div className="grid md:hidden gap-4">
-                        {filteredProducts.map((product) => {
-                            const isLowStock = product.reorderPoint !== undefined && product.stock <= product.reorderPoint;
-                             return (
-                                <Card key={product.id} className={cn(isLowStock && "border-destructive")}>
-                                    <CardHeader>
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <CardTitle>{product.name} {product.brand && <span className="text-muted-foreground text-sm">({product.brand})</span>}</CardTitle>
-                                                <CardDescription>SKU: {product.sku}</CardDescription>
+            <div className="space-y-4">
+                <div className="flex items-center">
+                    <Input
+                        placeholder="Search by product name or SKU..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="max-w-sm"
+                    />
+                </div>
+                {/* Desktop Table View */}
+                <div className="hidden md:block rounded-lg border shadow-sm">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Product</TableHead>
+                                <TableHead>SKU</TableHead>
+                                <TableHead>Category</TableHead>
+                                <TableHead>Stock</TableHead>
+                                <TableHead>Weight/Unit (Kg)</TableHead>
+                                <TableHead className="text-right">Sale Price</TableHead>
+                                <TableHead>Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {filteredProducts.map((product) => {
+                                const isLowStock = product.reorderPoint !== undefined && product.stock <= product.reorderPoint;
+                                return (
+                                    <TableRow key={product.id}>
+                                        <TableCell className="font-medium">{product.name} {product.brand && <span className="text-muted-foreground text-xs">({product.brand})</span>}</TableCell>
+                                        <TableCell>{product.sku}</TableCell>
+                                        <TableCell><Badge variant="secondary">{product.category || 'General'}</Badge></TableCell>
+                                        <TableCell className={cn(isLowStock && "text-destructive font-bold")}>
+                                            <div className="flex items-center gap-2">
+                                                {isLowStock && <AlertTriangle className="h-4 w-4 text-destructive" />}
+                                                {product.stock}
+                                                {product.category === 'Rods & Rings' && ' nos'}
                                             </div>
+                                        </TableCell>
+                                        <TableCell>{product.weightPerUnit ? `${product.weightPerUnit} kg` : 'N/A'}</TableCell>
+                                        <TableCell className="text-right">
+                                            {formatNumber(product.price)}
+                                            {product.calculationType === 'Per Kg' && <span className="text-muted-foreground text-xs">/kg</span>}
+                                        </TableCell>
+                                        <TableCell>
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" className="h-8 w-8 p-0 -mt-2 -mr-2">
+                                                    <Button variant="ghost" className="h-8 w-8 p-0">
                                                         <span className="sr-only">Open menu</span>
                                                         <MoreHorizontal className="h-4 w-4" />
                                                     </Button>
@@ -461,79 +379,72 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                                     <DropdownMenuItem onClick={() => setProductToDelete(product)} className="text-red-600">Delete</DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
-                                        </div>
-                                    </CardHeader>
-                                    <CardContent className="space-y-4">
-                                        <div className="grid grid-cols-3 gap-4">
-                                            <div>
-                                                <p className="text-xs text-muted-foreground">Stock</p>
-                                                <p className={cn("font-bold", isLowStock && "text-destructive")}>
-                                                    {product.stock} {product.category === 'Rods & Rings' && 'nos'}
-                                                </p>
-                                            </div>
-                                            <div>
-                                                <p className="text-xs text-muted-foreground">Reorder</p>
-                                                <p className="font-bold">{product.reorderPoint ?? 'N/A'}</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-xs text-muted-foreground">Sale Price</p>
-                                                <p className="font-bold">
-                                                    {formatNumber(product.price)}
-                                                    {product.calculationType === 'Per Kg' && <span className="text-muted-foreground text-xs">/kg</span>}
-                                                </p>
-                                            </div>
-                                            <div>
-                                                <p className="text-xs text-muted-foreground">Weight/Unit</p>
-                                                <p className="font-bold">{product.weightPerUnit ? `${product.weightPerUnit} kg` : 'N/A'}</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-xs text-muted-foreground">Category</p>
-                                                <p className="font-bold">{product.category || 'General'}</p>
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            )
-                        })}
-                    </div>
-
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
+                        </TableBody>
+                    </Table>
                 </div>
-                <div className="md:col-span-1">
-                     <Card className="sticky top-20">
-                        <CardHeader>
-                            <CardTitle>Predict Product Demand</CardTitle>
-                            <CardDescription>Use AI to predict how much product is needed based on historical orders.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <Select onValueChange={setSelectedProduct} defaultValue={selectedProduct}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select a product" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {products.map(product => (
-                                        <SelectItem key={product.id} value={product.id}>{product.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            {error && <Alert variant="destructive"><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
-                            {prediction && (
-                                <Alert>
-                                    <Lightbulb className="h-4 w-4" />
-                                    <AlertTitle>Prediction Result</AlertTitle>
-                                    <AlertDescription>
-                                        <p className="font-bold text-lg">Predicted Demand: {prediction.predictedDemand} units</p>
-                                        <p className="mt-2 text-sm">{prediction.rationale}</p>
-                                    </AlertDescription>
-                                </Alert>
-                            )}
-                        </CardContent>
-                        <CardFooter>
-                            <Button onClick={handlePredictDemand} disabled={isLoading} className="w-full">
-                                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                {isLoading ? 'Predicting...' : 'Predict Demand'}
-                            </Button>
-                        </CardFooter>
-                    </Card>
+
+                {/* Mobile Card View */}
+                <div className="grid md:hidden gap-4">
+                    {filteredProducts.map((product) => {
+                        const isLowStock = product.reorderPoint !== undefined && product.stock <= product.reorderPoint;
+                         return (
+                            <Card key={product.id} className={cn(isLowStock && "border-destructive")}>
+                                <CardHeader>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <CardTitle>{product.name} {product.brand && <span className="text-muted-foreground text-sm">({product.brand})</span>}</CardTitle>
+                                            <CardDescription>SKU: {product.sku}</CardDescription>
+                                        </div>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" className="h-8 w-8 p-0 -mt-2 -mr-2">
+                                                    <span className="sr-only">Open menu</span>
+                                                    <MoreHorizontal className="h-4 w-4" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem onClick={() => { setProductToEdit(product); setIsEditDialogOpen(true); }}>Edit</DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => setProductToDelete(product)} className="text-red-600">Delete</DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="grid grid-cols-3 gap-4">
+                                        <div>
+                                            <p className="text-xs text-muted-foreground">Stock</p>
+                                            <p className={cn("font-bold", isLowStock && "text-destructive")}>
+                                                {product.stock} {product.category === 'Rods & Rings' && 'nos'}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-muted-foreground">Reorder</p>
+                                            <p className="font-bold">{product.reorderPoint ?? 'N/A'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-muted-foreground">Sale Price</p>
+                                            <p className="font-bold">
+                                                {formatNumber(product.price)}
+                                                {product.calculationType === 'Per Kg' && <span className="text-muted-foreground text-xs">/kg</span>}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-muted-foreground">Weight/Unit</p>
+                                            <p className="font-bold">{product.weightPerUnit ? `${product.weightPerUnit} kg` : 'N/A'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-muted-foreground">Category</p>
+                                            <p className="font-bold">{product.category || 'General'}</p>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )
+                    })}
                 </div>
             </div>
 
