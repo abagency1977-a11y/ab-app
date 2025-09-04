@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import type { Order, Customer, Product, PaymentTerm, PaymentMode, OrderStatus, CalculationType, ProductCategory } from '@/lib/types';
+import type { Order, Customer, Product, PaymentTerm, PaymentMode, OrderStatus, CalculationType, ProductCategory, OrderItem } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -282,8 +282,8 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
             const tableStartY = Math.max(yPos, rightYPos) + 10;
             const tableBody = orderToPrint.items.map(item => {
                 const totalValue = orderToPrint.isGstInvoice
-                   ? item.price * (item.category === 'Rods & Rings' ? item.totalWeight! : item.quantity) * (1 + item.gst / 100)
-                   : item.price * (item.category === 'Rods & Rings' ? item.totalWeight! : item.quantity);
+                   ? item.price * (item.category === 'Rods & Rings' && item.totalWeight ? item.totalWeight : item.quantity) * (1 + item.gst / 100)
+                   : item.price * (item.category === 'Rods & Rings' && item.totalWeight ? item.totalWeight : item.quantity);
 
                 let description = item.productName;
                 if (item.brand) {
@@ -293,7 +293,7 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
                 return [
                     description,
                     formatQuantity(item),
-                    item.category === 'Rods & Rings' ? `${item.totalWeight?.toFixed(2)} kg` : 'N/A',
+                    item.category === 'Rods & Rings' && item.totalWeight ? `${item.totalWeight?.toFixed(2)} kg` : 'N/A',
                     formatRate(item),
                     orderToPrint.isGstInvoice ? `${item.gst}%` : 'N/A',
                     formatNumber(totalValue)
@@ -1041,18 +1041,25 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                 category: 'General',
             }] : items.map(item => {
                 const product = products.find(p => p.id === item.productId);
-                return {
+                const orderItem: OrderItem = {
                     productId: item.productId,
                     productName: product?.name || 'Unknown',
                     quantity: parseFloat(item.quantity) || 0,
                     price: parseFloat(item.price) || 0,
                     cost: parseFloat(item.cost) || 0,
                     gst: parseFloat(item.gst) || 0,
-                    calculationType: product?.calculationType || 'Per Unit',
-                    brand: product?.brand,
-                    category: product?.category || 'General',
-                    totalWeight: product?.category === 'Rods & Rings' ? (parseFloat(item.quantity) || 0) * (product.weightPerUnit || 0) : undefined
+                    calculationType: product?.calculationType,
+                    category: product?.category,
                 };
+
+                if (product?.brand) {
+                    orderItem.brand = product.brand;
+                }
+                if (product?.category === 'Rods & Rings') {
+                    orderItem.totalWeight = (parseFloat(item.quantity) || 0) * (product.weightPerUnit || 0);
+                }
+
+                return orderItem;
             }),
             total: isOpeningBalanceOrder ? previousBalance : currentInvoiceTotal,
             previousBalance: isOpeningBalanceOrder ? 0 : previousBalance,
@@ -1357,3 +1364,5 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
         </>
     );
 }
+
+    

@@ -62,8 +62,8 @@ export interface OrderItem {
   price: number;
   cost: number; // Snapshot of cost at time of sale
   gst: number;
-  calculationType: CalculationType;
-  category: ProductCategory;
+  calculationType?: CalculationType;
+  category?: ProductCategory;
   brand?: string; // Brand for items like bricks
   totalWeight?: number; // For Rods & Rings
 }
@@ -138,3 +138,5 @@ export interface LowStockAlert {
     stock: number;
     reorderPoint: number;
 }
+
+    
