@@ -174,14 +174,16 @@ function MobileHeader() {
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <SidebarProvider>
-      <MainSidebar />
-      <SidebarInset className="flex flex-col">
-        <MobileHeader />
-        <ScrollArea className="flex-1">
-          <main className="flex-1 p-4 md:p-6">{children}</main>
-        </ScrollArea>
-      </SidebarInset>
-    </SidebarProvider>
+    <div className="relative flex min-h-screen">
+      <SidebarProvider>
+        <MainSidebar />
+        <SidebarInset className="flex flex-col">
+          <MobileHeader />
+          <ScrollArea className="flex-1">
+            <main className="flex-1 p-4 md:p-6">{children}</main>
+          </ScrollArea>
+        </SidebarInset>
+      </SidebarProvider>
+    </div>
   );
 }
