@@ -42,7 +42,7 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
     const { toast } = useToast();
 
     const handleAddProduct = async () => {
-        const productData: Omit<Product, 'id' | 'historicalData'> = {
+        const productData: Partial<Product> = {
             name: nameRef.current?.value || '',
             sku: skuRef.current?.value || '',
             stock: Number(stockRef.current?.value || 0),
@@ -273,11 +273,11 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
             historicalData: productToEdit.historicalData || []
         };
     
-        if (category === 'Red Bricks') {
+        if (category === 'Red Bricks' && formData.get('brand')) {
             updatedProductData.brand = formData.get('brand') as string;
         }
         
-        if (category === 'Rods & Rings') {
+        if (category === 'Rods & Rings' && formData.get('weightPerUnit')) {
             updatedProductData.weightPerUnit = Number(formData.get('weightPerUnit'));
             updatedProductData.calculationType = 'Per Kg';
         }
@@ -398,7 +398,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                             </TableHeader>
                             <TableBody>
                                 {filteredProducts.map((product) => {
-                                    const isLowStock = product.stock <= (product.reorderPoint ?? 0);
+                                    const isLowStock = product.reorderPoint !== undefined && product.stock <= product.reorderPoint;
                                     return (
                                         <TableRow key={product.id}>
                                             <TableCell className="font-medium">{product.name} {product.brand && <span className="text-muted-foreground text-xs">({product.brand})</span>}</TableCell>
@@ -440,7 +440,7 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                     {/* Mobile Card View */}
                     <div className="grid md:hidden gap-4">
                         {filteredProducts.map((product) => {
-                            const isLowStock = product.stock <= (product.reorderPoint ?? 0);
+                            const isLowStock = product.reorderPoint !== undefined && product.stock <= product.reorderPoint;
                              return (
                                 <Card key={product.id} className={cn(isLowStock && "border-destructive")}>
                                     <CardHeader>
@@ -645,3 +645,4 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
     );
 
     
+

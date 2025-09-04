@@ -121,10 +121,9 @@ export const getProducts = async (): Promise<Product[]> => {
     }
 };
 
-export const addProduct = async (productData: Omit<Product, 'id' | 'historicalData'>): Promise<Product> => {
-     const newProduct = { ...productData, historicalData: [] };
-    const docRef = await addDoc(collection(db, 'products'), newProduct);
-    return { id: docRef.id, ...newProduct };
+export const addProduct = async (productData: Partial<Product>): Promise<Product> => {
+    const docRef = await addDoc(collection(db, 'products'), productData);
+    return { id: docRef.id, ...productData } as Product;
 };
 
 export const updateProduct = async (productData: Partial<Product>): Promise<void> => {
@@ -173,6 +172,17 @@ async function getNextId(transaction: Transaction, counterName: string, prefix: 
     }
     transaction.set(counterRef, { currentNumber: nextNumber }, { merge: true });
     return `${prefix}-${String(nextNumber).padStart(4, '0')}`;
+}
+
+// Helper to remove undefined properties from an object before saving to Firestore
+const cleanUndefined = (obj: any) => {
+    const newObj: any = {};
+    Object.keys(obj).forEach(key => {
+        if (obj[key] !== undefined) {
+            newObj[key] = obj[key];
+        }
+    });
+    return newObj;
 }
 
 async function runBalanceChainUpdate(customerId: string, workload: (orders: Order[]) => Order[]) {
@@ -232,7 +242,8 @@ async function runBalanceChainUpdate(customerId: string, workload: (orders: Orde
                 }
 
                 // Write the updated order back to the database
-                transaction.set(orderRef, order);
+                const cleanedOrder = cleanUndefined(order);
+                transaction.set(orderRef, cleanedOrder);
             }
         });
     } catch (e) {
