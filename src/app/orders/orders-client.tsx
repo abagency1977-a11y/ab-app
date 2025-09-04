@@ -470,6 +470,40 @@ export function OrdersClient({ orders: initialOrders, customers: initialCustomer
         }
     };
 
+    const handleExportToExcel = () => {
+        const worksheetData = filteredOrders.map(order => {
+            const itemsSummary = order.items.map(item => {
+                let quantityStr = `${item.quantity}`;
+                if (item.category === 'Rods & Rings') {
+                    quantityStr += ` nos (${item.totalWeight?.toFixed(2)} kg)`;
+                } else if (item.calculationType === 'Per Kg') {
+                    quantityStr += ' kg';
+                }
+                return `${item.productName} (Qty: ${quantityStr})`;
+            }).join('; ');
+
+            return {
+                'Order ID': order.id.replace('ORD', 'INV'),
+                'Customer Name': order.customerName,
+                'Order Date': new Date(order.orderDate).toLocaleDateString('en-IN'),
+                'Status': order.status,
+                'Items': itemsSummary,
+                'Items Total': order.total,
+                'Delivery Fees': order.deliveryFees,
+                'Discount': order.discount,
+                'Subtotal': order.total + order.deliveryFees - order.discount,
+                'Previous Balance': order.previousBalance,
+                'Grand Total': order.grandTotal,
+                'Balance Due': order.balanceDue ?? 0,
+            };
+        });
+
+        const worksheet = XLSX.utils.json_to_sheet(worksheetData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Orders");
+        XLSX.writeFile(workbook, "orders_export.xlsx");
+    };
+
     if (!isMounted) {
         return (
             <div className="space-y-4">
@@ -1327,3 +1361,5 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
         </>
     );
 }
+
+    
