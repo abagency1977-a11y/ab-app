@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
@@ -8,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { PlusCircle, MoreHorizontal, AlertTriangle } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, AlertTriangle, Database } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -21,6 +20,71 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol' }).format(value);
+
+// Firebase connection test function
+const testFirebaseConnection = async (): Promise<{ success: boolean; error?: string; productsCount?: number }> => {
+    try {
+        console.log("🔌 Testing Firebase connection...");
+        const testProducts = await getProducts();
+        console.log("✅ Firebase connection successful. Products found:", testProducts.length);
+        return { success: true, productsCount: testProducts.length };
+    } catch (error) {
+        console.error("🔥 FIREBASE CONNECTION FAILED:", error);
+        return { 
+            success: false, 
+            error: error instanceof Error ? error.message : 'Unknown connection error' 
+        };
+    }
+};
+
+// Comprehensive Firebase debug function
+const debugFirebaseUpdate = async (productId: string, updates: Partial<Product>) => {
+    console.group("🔧 FIREBASE DEBUG START");
+    console.log("Product ID:", productId);
+    console.log("Update data:", updates);
+    
+    try {
+        // Test 1: Check if document exists
+        const { doc, getDoc } = await import('firebase/firestore');
+        const { db } = await import('@/lib/firebase');
+        
+        const productRef = doc(db, 'products', productId);
+        console.log("Document path:", productRef.path);
+        
+        const docSnap = await getDoc(productRef);
+        console.log("Document exists:", docSnap.exists());
+        
+        if (docSnap.exists()) {
+            console.log("Current data:", docSnap.data());
+        }
+        
+        // Test 2: Try a simple update with minimal data
+        const testUpdate = { debug_test: new Date().toISOString() };
+        console.log("Attempting test update with:", testUpdate);
+        
+        const { setDoc } = await import('firebase/firestore');
+        await setDoc(productRef, testUpdate, { merge: true });
+        console.log("✅ Test update successful!");
+        
+        // Test 3: Try the actual update data
+        console.log("Attempting actual update...");
+        await setDoc(productRef, updates, { merge: true });
+        console.log("✅ Actual update successful!");
+        
+        return true;
+        
+    } catch (error) {
+        console.error("❌ DEBUG UPDATE FAILED:", error);
+        console.error("Error details:", {
+            name: error instanceof Error ? error.name : 'Unknown',
+            message: error instanceof Error ? error.message : 'Unknown',
+            stack: error instanceof Error ? error.stack : 'No stack'
+        });
+        return false;
+    } finally {
+        console.groupEnd();
+    }
+};
 
 function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
     isOpen: boolean;
@@ -41,6 +105,17 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
     const { toast } = useToast();
 
     const handleAddProduct = async () => {
+        // Test Firebase connection first
+        const connectionTest = await testFirebaseConnection();
+        if (!connectionTest.success) {
+            toast({
+                title: "Connection Error",
+                description: "Cannot connect to database. Please check your internet connection.",
+                variant: 'destructive',
+            });
+            return;
+        }
+
         const productData: Partial<Product> = {
             name: nameRef.current?.value || '',
             sku: skuRef.current?.value || '',
@@ -104,17 +179,17 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="name" className="text-right">Name</Label>
-                        <Input id="name" name="name" ref={nameRef} className="col-span-3" required />
+                        <Label htmlFor="add-name" className="text-right">Name</Label>
+                        <Input id="add-name" name="name" ref={nameRef} autoComplete="off" className="col-span-3" required />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="sku" className="text-right">SKU</Label>
-                        <Input id="sku" name="sku" ref={skuRef} className="col-span-3" required />
+                        <Label htmlFor="add-sku" className="text-right">SKU</Label>
+                        <Input id="add-sku" name="sku" ref={skuRef} autoComplete="off" className="col-span-3" required />
                     </div>
                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="category" className="text-right">Category</Label>
+                        <Label htmlFor="add-category" className="text-right">Category</Label>
                          <Select value={category} onValueChange={(v) => setCategory(v as ProductCategory)}>
-                            <SelectTrigger className="col-span-3">
+                            <SelectTrigger id="add-category" className="col-span-3">
                                 <SelectValue placeholder="Select category" />
                             </SelectTrigger>
                             <SelectContent>
@@ -125,29 +200,29 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
                         </Select>
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="stock" className="text-right">{category === 'Rods & Rings' ? 'Stock in Nos' : 'Stock'}</Label>
-                        <Input id="stock" name="stock" ref={stockRef} type="number" className="col-span-3" required defaultValue="0" />
+                        <Label htmlFor="add-stock" className="text-right">{category === 'Rods & Rings' ? 'Stock in Nos' : 'Stock'}</Label>
+                        <Input id="add-stock" name="stock" ref={stockRef} type="number" autoComplete="off" className="col-span-3" required defaultValue="0" />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="price" className="text-right">Sale Price</Label>
-                        <Input id="price" name="price" ref={priceRef} type="number" step="0.01" className="col-span-3" required />
+                        <Label htmlFor="add-price" className="text-right">Sale Price</Label>
+                        <Input id="add-price" name="price" ref={priceRef} type="number" step="0.01" autoComplete="off" className="col-span-3" required />
                     </div>
                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="cost" className="text-right">Cost Price</Label>
-                        <Input id="cost" name="cost" ref={costRef} type="number" step="0.01" className="col-span-3" required />
+                        <Label htmlFor="add-cost" className="text-right">Cost Price</Label>
+                        <Input id="add-cost" name="cost" ref={costRef} type="number" step="0.01" autoComplete="off" className="col-span-3" required />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="gst" className="text-right">GST %</Label>
-                        <Input id="gst" name="gst" ref={gstRef} type="number" step="0.01" className="col-span-3" required />
+                        <Label htmlFor="add-gst" className="text-right">GST %</Label>
+                        <Input id="add-gst" name="gst" ref={gstRef} type="number" step="0.01" autoComplete="off" className="col-span-3" required />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="reorderPoint" className="text-right">Reorder Point</Label>
-                        <Input id="reorderPoint" name="reorderPoint" ref={reorderPointRef} type="number" className="col-span-3" defaultValue="0" />
+                        <Label htmlFor="add-reorderPoint" className="text-right">Reorder Point</Label>
+                        <Input id="add-reorderPoint" name="reorderPoint" ref={reorderPointRef} type="number" autoComplete="off" className="col-span-3" defaultValue="0" />
                     </div>
                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="calculationType" className="text-right">Calculation Type</Label>
+                        <Label htmlFor="add-calculationType" className="text-right">Calculation Type</Label>
                          <Select value={calculationType} onValueChange={(v) => setCalculationType(v as CalculationType)} disabled={category === 'Rods & Rings'}>
-                            <SelectTrigger className="col-span-3">
+                            <SelectTrigger id="add-calculationType" className="col-span-3">
                                 <SelectValue placeholder="Select calculation type" />
                             </SelectTrigger>
                             <SelectContent>
@@ -158,14 +233,14 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
                     </div>
                     {category === 'Red Bricks' && (
                         <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="brand" className="text-right">Brand</Label>
-                            <Input id="brand" name="brand" ref={brandRef} className="col-span-3" placeholder="e.g., KKP, ABC" />
+                            <Label htmlFor="add-brand" className="text-right">Brand</Label>
+                            <Input id="add-brand" name="brand" ref={brandRef} autoComplete="off" className="col-span-3" placeholder="e.g., KKP, ABC" />
                         </div>
                     )}
                     {category === 'Rods & Rings' && (
                         <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="weightPerUnit" className="text-right">Weight/Unit (Kg)</Label>
-                            <Input id="weightPerUnit" name="weightPerUnit" ref={weightPerUnitRef} type="number" step="any" className="col-span-3" placeholder="e.g., 10.69" />
+                            <Label htmlFor="add-weightPerUnit" className="text-right">Weight/Unit (Kg)</Label>
+                            <Input id="add-weightPerUnit" name="weightPerUnit" ref={weightPerUnitRef} type="number" step="any" autoComplete="off" className="col-span-3" placeholder="e.g., 10.69" />
                         </div>
                     )}
                 </div>
@@ -178,7 +253,6 @@ function AddProductDialog({ isOpen, onOpenChange, onProductAdded }: {
     );
 }
 
-
 export function InventoryClient({ products: initialProducts }: { products: Product[] }) {
     const [products, setProducts] = useState<Product[]>(initialProducts);
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -187,13 +261,37 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
     const [productToDelete, setProductToDelete] = useState<Product | null>(null);
     const [isMounted, setIsMounted] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [firebaseStatus, setFirebaseStatus] = useState<{ connected: boolean; testing: boolean; error?: string }>({ 
+        connected: false, 
+        testing: true 
+    });
     const { toast } = useToast();
     
     const [editCategory, setEditCategory] = useState<ProductCategory>('General');
 
+    // Test Firebase connection on component mount
     useEffect(() => {
+        const checkFirebaseConnection = async () => {
+            setFirebaseStatus({ connected: false, testing: true });
+            const result = await testFirebaseConnection();
+            setFirebaseStatus({ 
+                connected: result.success, 
+                testing: false,
+                error: result.error 
+            });
+            
+            if (!result.success) {
+                toast({
+                    title: "Database Connection Issue",
+                    description: "Cannot connect to the database. Some features may not work properly.",
+                    variant: 'destructive',
+                });
+            }
+        };
+
+        checkFirebaseConnection();
         setIsMounted(true);
-    }, []);
+    }, [toast]);
 
     useEffect(() => {
         if (productToEdit) {
@@ -217,61 +315,109 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
         setProducts(prevProducts => [...prevProducts, newProduct]);
     };
 
-
     const handleEditProduct = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        if (!productToEdit) return;
-    
-        const formData = new FormData(event.currentTarget);
-        const category = formData.get('category') as ProductCategory || 'General';
         
-        const updatedProductData: Partial<Product> = {
-            name: formData.get('name') as string,
-            sku: formData.get('sku') as string,
-            stock: Number(formData.get('stock')),
-            price: Number(formData.get('price')),
-            cost: Number(formData.get('cost')),
-            gst: Number(formData.get('gst')),
-            reorderPoint: Number(formData.get('reorderPoint')),
-            calculationType: formData.get('calculationType') as CalculationType || 'Per Unit',
-            category: category,
-            historicalData: productToEdit.historicalData || []
-        };
-    
-        if (category === 'Red Bricks') {
-            updatedProductData.brand = formData.get('brand') as string;
-        } else {
-            updatedProductData.brand = ''; // Clear brand if not Red Bricks
-        }
-        
-        if (category === 'Rods & Rings') {
-            updatedProductData.weightPerUnit = Number(formData.get('weightPerUnit'));
-            updatedProductData.calculationType = 'Per Kg';
-        } else {
-            updatedProductData.weightPerUnit = undefined; // Clear weight if not Rods & Rings
-        }
-    
-        const updatedProduct: Product = {
-            ...productToEdit,
-            ...updatedProductData
-        };
-    
-        try {
-            await updateProduct(updatedProduct);
-            const newProducts = products.map(p => p.id === updatedProduct.id ? updatedProduct : p);
-            setProducts(newProducts);
-            
-            setIsEditDialogOpen(false);
-            setProductToEdit(null);
+        if (!productToEdit || !productToEdit.id) {
+            console.error("No product selected for editing");
             toast({
-                title: "Product Updated",
-                description: `${updatedProduct.name} has been successfully updated.`,
+                title: "Error",
+                description: "No product selected for editing.",
+                variant: 'destructive',
             });
-    
-        } catch (e) {
-             toast({
-                title: "Error Updating Product",
-                description: "Could not save changes to the product.",
+            return;
+        }
+
+        console.log("🔄 Starting product update process...");
+
+        // Test Firebase connection first
+        if (!firebaseStatus.connected) {
+            toast({
+                title: "Database Offline",
+                description: "Cannot connect to database. Please check your internet connection.",
+                variant: 'destructive',
+            });
+            return;
+        }
+
+        try {
+            const formData = new FormData(event.currentTarget);
+            const name = formData.get('name') as string;
+            const sku = formData.get('sku') as string;
+            const category = formData.get('category') as ProductCategory || 'General';
+
+            // Validation
+            if (!name || !sku) {
+                toast({
+                    title: "Validation Error",
+                    description: "Product name and SKU are required.",
+                    variant: 'destructive',
+                });
+                return;
+            }
+            
+            const updatedProductData: Partial<Product> = {
+                name: name,
+                sku: sku,
+                stock: Number(formData.get('stock')),
+                price: Number(formData.get('price')),
+                cost: Number(formData.get('cost')),
+                gst: Number(formData.get('gst')),
+                reorderPoint: Number(formData.get('reorderPoint')),
+                calculationType: formData.get('calculationType') as CalculationType || 'Per Unit',
+                category: category,
+                updatedAt: new Date().toISOString(),
+            };
+
+            if (category === 'Red Bricks') {
+                updatedProductData.brand = formData.get('brand') as string;
+            } else {
+                updatedProductData.brand = '';
+            }
+            
+            if (category === 'Rods & Rings') {
+                updatedProductData.weightPerUnit = Number(formData.get('weightPerUnit'));
+                updatedProductData.calculationType = 'Per Kg';
+            } else {
+                updatedProductData.weightPerUnit = undefined;
+            }
+
+            console.log("📝 Update data prepared:", {
+                productId: productToEdit.id,
+                updateData: updatedProductData
+            });
+
+            // Use the debug function instead of direct update
+            const success = await debugFirebaseUpdate(productToEdit.id, updatedProductData);
+            
+            if (success) {
+                console.log("✅ Product updated successfully in Firebase");
+                
+                // Update local state
+                const updatedProduct: Product = {
+                    ...productToEdit,
+                    ...updatedProductData
+                };
+                
+                const newProducts = products.map(p => p.id === updatedProduct.id ? updatedProduct : p);
+                setProducts(newProducts);
+                
+                setIsEditDialogOpen(false);
+                setProductToEdit(null);
+                
+                toast({
+                    title: "Product Updated",
+                    description: `${updatedProduct.name} has been successfully updated.`,
+                });
+            } else {
+                throw new Error("Debug update failed - check console for details");
+            }
+
+        } catch (error) {
+            console.error("❌ PRODUCT UPDATE PROCESS FAILED:", error);
+            toast({
+                title: "Update Failed",
+                description: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
                 variant: 'destructive',
             });
         }
@@ -279,6 +425,16 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
 
     const handleDeleteProduct = async () => {
         if (!productToDelete || !productToDelete.id) return;
+        
+        if (!firebaseStatus.connected) {
+            toast({
+                title: "Database Offline",
+                description: "Cannot delete product while offline.",
+                variant: 'destructive',
+            });
+            return;
+        }
+
         try {
             await deleteProductFromDB(productToDelete.id);
             const newProducts = products.filter(p => p.id !== productToDelete.id);
@@ -290,11 +446,31 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                 variant: "destructive"
             });
         } catch(e) {
+            console.error("Delete error:", e);
             toast({
                 title: "Error",
                 description: "Failed to delete product.",
                 variant: "destructive"
             });
+        }
+    };
+
+    const retryFirebaseConnection = async () => {
+        setFirebaseStatus({ connected: false, testing: true });
+        const result = await testFirebaseConnection();
+        setFirebaseStatus({ 
+            connected: result.success, 
+            testing: false,
+            error: result.error 
+        });
+        
+        if (result.success) {
+            toast({
+                title: "Connection Restored",
+                description: "Successfully connected to the database.",
+            });
+            // Refresh products after reconnection
+            refreshProducts();
         }
     };
 
@@ -320,9 +496,112 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
 
     return (
         <div className="space-y-4">
+            {/* Firebase Status Indicator */}
+            <Alert className={cn(
+                "border-l-4",
+                firebaseStatus.testing ? "border-blue-500 bg-blue-50" :
+                firebaseStatus.connected ? "border-green-500 bg-green-50" : "border-red-500 bg-red-50"
+            )}>
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                        <Database className={cn(
+                            "h-4 w-4",
+                            firebaseStatus.testing ? "text-blue-500" :
+                            firebaseStatus.connected ? "text-green-500" : "text-red-500"
+                        )} />
+                        <div>
+                            <AlertTitle>
+                                {firebaseStatus.testing ? "Testing Database Connection..." :
+                                 firebaseStatus.connected ? "Database Connected" : "Database Disconnected"}
+                            </AlertTitle>
+                            <AlertDescription>
+                                {firebaseStatus.testing ? "Checking connection to Firebase..." :
+                                 firebaseStatus.connected ? `Connected successfully (${products.length} products loaded)` :
+                                 `Connection failed: ${firebaseStatus.error || 'Unknown error'}`}
+                            </AlertDescription>
+                        </div>
+                    </div>
+                    {!firebaseStatus.connected && !firebaseStatus.testing && (
+                        <Button variant="outline" size="sm" onClick={retryFirebaseConnection}>
+                            Retry Connection
+                        </Button>
+                    )}
+                </div>
+            </Alert>
+
+            {/* Firebase Diagnostic Tools */}
+            <Card className="mb-4">
+                <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                        <Database className="h-5 w-5" />
+                        Firebase Diagnostic Tools
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                    <div className="flex gap-2 flex-wrap">
+                        <Button variant="outline" size="sm" onClick={async () => {
+                            if (!products.length) {
+                                toast({ title: "No products", description: "No products to test with" });
+                                return;
+                            }
+                            
+                            const testProduct = products[0];
+                            console.log("🧪 Testing with product:", testProduct.id);
+                            
+                            const success = await debugFirebaseUpdate(testProduct.id, { 
+                                diagnostic_test: new Date().toISOString(),
+                                test_field: "This is a diagnostic update"
+                            });
+                            
+                            toast({ 
+                                title: success ? "Diagnostic Passed" : "Diagnostic Failed", 
+                                description: success ? "Firebase update working correctly" : "Check console for errors",
+                                variant: success ? "default" : "destructive" 
+                            });
+                        }}>
+                            Test Firebase Update
+                        </Button>
+                        
+                        <Button variant="outline" size="sm" onClick={async () => {
+                            try {
+                                const { collection, getDocs } = await import('firebase/firestore');
+                                const { db } = await import('@/lib/firebase');
+                                
+                                const querySnapshot = await getDocs(collection(db, 'products'));
+                                console.log("📊 Products in database:", querySnapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+                                
+                                toast({ 
+                                    title: "Database Read Successful", 
+                                    description: `Found ${querySnapshot.docs.length} products` 
+                                });
+                            } catch (error) {
+                                console.error("❌ Database read failed:", error);
+                                toast({ 
+                                    title: "Read Failed", 
+                                    description: "Could not read from database",
+                                    variant: "destructive" 
+                                });
+                            }
+                        }}>
+                            Test Database Read
+                        </Button>
+                    </div>
+                    
+                    <div className="text-xs text-muted-foreground space-y-1">
+                        <div>Project: ab-account-xdg7o</div>
+                        <div>Loaded Products: {products.length}</div>
+                        <div>Firebase Status: {firebaseStatus.connected ? "Connected" : "Disconnected"}</div>
+                    </div>
+                </CardContent>
+            </Card>
+
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <h1 className="text-3xl font-bold">Inventory</h1>
-                 <Button onClick={() => setIsAddDialogOpen(true)} className="transform hover:scale-105 transition-transform">
+                 <Button 
+                    onClick={() => setIsAddDialogOpen(true)} 
+                    className="transform hover:scale-105 transition-transform"
+                    disabled={!firebaseStatus.connected}
+                >
                     <PlusCircle className="mr-2 h-4 w-4" /> Add Product
                 </Button>
             </div>
@@ -371,14 +650,25 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                         <TableCell>
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" className="h-8 w-8 p-0">
+                                                    <Button variant="ghost" className="h-8 w-8 p-0" disabled={!firebaseStatus.connected}>
                                                         <span className="sr-only">Open menu</span>
                                                         <MoreHorizontal className="h-4 w-4" />
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem onClick={() => { setProductToEdit(product); setIsEditDialogOpen(true); }}>Edit</DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={() => setProductToDelete(product)} className="text-red-600">Delete</DropdownMenuItem>
+                                                    <DropdownMenuItem 
+                                                        onClick={() => { setProductToEdit(product); setIsEditDialogOpen(true); }}
+                                                        disabled={!firebaseStatus.connected}
+                                                    >
+                                                        Edit
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem 
+                                                        onClick={() => setProductToDelete(product)} 
+                                                        className="text-red-600"
+                                                        disabled={!firebaseStatus.connected}
+                                                    >
+                                                        Delete
+                                                    </DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                         </TableCell>
@@ -403,14 +693,25 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                         </div>
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" className="h-8 w-8 p-0 -mt-2 -mr-2">
+                                                <Button variant="ghost" className="h-8 w-8 p-0 -mt-2 -mr-2" disabled={!firebaseStatus.connected}>
                                                     <span className="sr-only">Open menu</span>
                                                     <MoreHorizontal className="h-4 w-4" />
                                                 </Button>
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
-                                                <DropdownMenuItem onClick={() => { setProductToEdit(product); setIsEditDialogOpen(true); }}>Edit</DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => setProductToDelete(product)} className="text-red-600">Delete</DropdownMenuItem>
+                                                <DropdownMenuItem 
+                                                    onClick={() => { setProductToEdit(product); setIsEditDialogOpen(true); }}
+                                                    disabled={!firebaseStatus.connected}
+                                                >
+                                                    Edit
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem 
+                                                    onClick={() => setProductToDelete(product)} 
+                                                    className="text-red-600"
+                                                    disabled={!firebaseStatus.connected}
+                                                >
+                                                    Delete
+                                                </DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>
                                     </div>
@@ -469,17 +770,17 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                     <form onSubmit={handleEditProduct}>
                         <div className="grid gap-4 py-4">
                             <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="name" className="text-right">Name</Label>
-                                <Input id="name" name="name" className="col-span-3" defaultValue={productToEdit?.name} required />
+                                <Label htmlFor="edit-name" className="text-right">Name</Label>
+                                <Input id="edit-name" name="name" autoComplete="off" className="col-span-3" defaultValue={productToEdit?.name} required />
                             </div>
                             <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="sku" className="text-right">SKU</Label>
-                                <Input id="sku" name="sku" className="col-span-3" defaultValue={productToEdit?.sku} required />
+                                <Label htmlFor="edit-sku" className="text-right">SKU</Label>
+                                <Input id="edit-sku" name="sku" autoComplete="off" className="col-span-3" defaultValue={productToEdit?.sku} required />
                             </div>
                              <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="categoryEdit" className="text-right">Category</Label>
+                                <Label htmlFor="edit-category" className="text-right">Category</Label>
                                 <Select name="category" defaultValue={editCategory} onValueChange={(v) => setEditCategory(v as ProductCategory)}>
-                                    <SelectTrigger id="categoryEdit" className="col-span-3">
+                                    <SelectTrigger id="edit-category" className="col-span-3">
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -490,29 +791,29 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                                 </Select>
                             </div>
                             <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="stock" className="text-right">{editCategory === 'Rods & Rings' ? 'Stock in Nos' : 'Stock'}</Label>
-                                <Input id="stock" name="stock" type="number" className="col-span-3" defaultValue={productToEdit?.stock} required />
+                                <Label htmlFor="edit-stock" className="text-right">{editCategory === 'Rods & Rings' ? 'Stock in Nos' : 'Stock'}</Label>
+                                <Input id="edit-stock" name="stock" type="number" autoComplete="off" className="col-span-3" defaultValue={productToEdit?.stock} required />
                             </div>
                              <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="reorderPoint" className="text-right">Reorder Point</Label>
-                                <Input id="reorderPoint" name="reorderPoint" type="number" className="col-span-3" defaultValue={productToEdit?.reorderPoint} />
+                                <Label htmlFor="edit-reorderPoint" className="text-right">Reorder Point</Label>
+                                <Input id="edit-reorderPoint" name="reorderPoint" type="number" autoComplete="off" className="col-span-3" defaultValue={productToEdit?.reorderPoint} />
                             </div>
                             <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="price" className="text-right">Sale Price</Label>
-                                <Input id="price" name="price" type="number" step="0.01" className="col-span-3" defaultValue={productToEdit?.price} required />
+                                <Label htmlFor="edit-price" className="text-right">Sale Price</Label>
+                                <Input id="edit-price" name="price" type="number" step="0.01" autoComplete="off" className="col-span-3" defaultValue={productToEdit?.price} required />
                             </div>
                             <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="cost" className="text-right">Cost Price</Label>
-                                <Input id="cost" name="cost" type="number" step="0.01" className="col-span-3" defaultValue={productToEdit?.cost} required />
+                                <Label htmlFor="edit-cost" className="text-right">Cost Price</Label>
+                                <Input id="edit-cost" name="cost" type="number" step="0.01" autoComplete="off" className="col-span-3" defaultValue={productToEdit?.cost} required />
                             </div>
                             <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="gst" className="text-right">GST %</Label>
-                                <Input id="gst" name="gst" type="number" step="0.01" className="col-span-3" defaultValue={productToEdit?.gst} required />
+                                <Label htmlFor="edit-gst" className="text-right">GST %</Label>
+                                <Input id="edit-gst" name="gst" type="number" step="0.01" autoComplete="off" className="col-span-3" defaultValue={productToEdit?.gst} required />
                             </div>
                             <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="calculationTypeEdit" className="text-right">Calculation Type</Label>
+                                <Label htmlFor="edit-calculationType" className="text-right">Calculation Type</Label>
                                 <Select name="calculationType" defaultValue={productToEdit?.calculationType || 'Per Unit'} disabled={editCategory === 'Rods & Rings'}>
-                                    <SelectTrigger id="calculationTypeEdit" className="col-span-3">
+                                    <SelectTrigger id="edit-calculationType" className="col-span-3">
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -523,20 +824,22 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                             </div>
                              {editCategory === 'Red Bricks' && (
                                 <div className="grid grid-cols-4 items-center gap-4">
-                                    <Label htmlFor="brandEdit" className="text-right">Brand</Label>
-                                    <Input id="brandEdit" name="brand" className="col-span-3" defaultValue={productToEdit?.brand} placeholder="e.g., KKP, ABC"/>
+                                    <Label htmlFor="edit-brand" className="text-right">Brand</Label>
+                                    <Input id="edit-brand" name="brand" autoComplete="off" className="col-span-3" defaultValue={productToEdit?.brand} placeholder="e.g., KKP, ABC"/>
                                 </div>
                             )}
                              {editCategory === 'Rods & Rings' && (
                                 <div className="grid grid-cols-4 items-center gap-4">
-                                    <Label htmlFor="weightPerUnitEdit" className="text-right">Weight/Unit (Kg)</Label>
-                                    <Input id="weightPerUnitEdit" name="weightPerUnit" type="number" step="any" className="col-span-3" defaultValue={productToEdit?.weightPerUnit} placeholder="e.g., 10.69"/>
+                                    <Label htmlFor="edit-weightPerUnit" className="text-right">Weight/Unit (Kg)</Label>
+                                    <Input id="edit-weightPerUnit" name="weightPerUnit" type="number" step="any" autoComplete="off" className="col-span-3" defaultValue={productToEdit?.weightPerUnit} placeholder="e.g., 10.69"/>
                                 </div>
                             )}
                         </div>
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => { setIsEditDialogOpen(false); setProductToEdit(null);}}>Cancel</Button>
-                            <Button type="submit">Save Changes</Button>
+                            <Button type="submit" disabled={!firebaseStatus.connected}>
+                                {firebaseStatus.connected ? 'Save Changes' : 'Database Offline'}
+                            </Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>
@@ -552,12 +855,12 @@ export function InventoryClient({ products: initialProducts }: { products: Produ
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                     <AlertDialogCancel onClick={() => setProductToDelete(null)}>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDeleteProduct}>Delete</AlertDialogAction>
+                    <AlertDialogAction onClick={handleDeleteProduct} disabled={!firebaseStatus.connected}>
+                        {firebaseStatus.connected ? 'Delete' : 'Database Offline'}
+                    </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
         </div>
     );
 }
-
-    

@@ -111,6 +111,7 @@ export const deleteCustomer = async (id: string) => {
 
 
 // PRODUCT FUNCTIONS
+// PRODUCT FUNCTIONS
 export const getProducts = async (): Promise<Product[]> => {
     try {
         const snapshot = await getDocs(collection(db, 'products'));
@@ -121,20 +122,39 @@ export const getProducts = async (): Promise<Product[]> => {
     }
 };
 
-export const addProduct = async (productData: Partial<Product>): Promise<Product> => {
-    const docRef = await addDoc(collection(db, 'products'), productData);
-    return { id: docRef.id, ...productData } as Product;
-};
+export const updateProduct = async (productId: string, updates: Partial<Product>): Promise<void> => {
+    try {
+        if (!productId || productId.trim() === '') {
+            throw new Error("Invalid product ID");
+        }
 
-export const updateProduct = async (productData: Partial<Product>): Promise<void> => {
-    const { id, ...dataToUpdate } = productData;
-    if (!id) throw new Error("Product ID is required to update.");
-    await setDoc(doc(db, 'products', id), dataToUpdate, { merge: true });
-};
+        console.log("🔄 updateProduct called:", { productId, updates });
+        
+        // Clean the updates object - remove undefined values
+        const cleanUpdates = Object.fromEntries(
+            Object.entries(updates).filter(([_, value]) => value !== undefined && value !== null)
+        );
 
+        console.log("🧹 Cleaned updates:", cleanUpdates);
 
-export const deleteProduct = async(id: string) => {
-    await deleteDoc(doc(db, 'products', id));
+        const productRef = doc(db, 'products', productId.trim());
+        console.log("📄 Document reference path:", productRef.path);
+        
+        await setDoc(productRef, cleanUpdates, { merge: true });
+        
+        console.log("✅ updateProduct completed successfully");
+        
+    } catch (error) {
+        console.error("🔥 updateProduct ERROR:", {
+            error: error,
+            productId: productId,
+            updates: updates,
+            errorName: error instanceof Error ? error.name : 'Unknown',
+            errorMessage: error instanceof Error ? error.message : 'Unknown',
+            timestamp: new Date().toISOString()
+        });
+        throw error;
+    }
 };
 
 

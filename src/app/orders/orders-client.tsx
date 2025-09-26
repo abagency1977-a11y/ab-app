@@ -850,6 +850,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
 
                 if (isEditMode && existingOrder) {
                     setPreviousBalance(existingOrder.previousBalance);
+					setDeliveryAddress(existingOrder.deliveryAddress || '');
                 } else if (hasOrders) {
                     const balance = await getCustomerBalance(customerId);
                     setPreviousBalance(balance);
@@ -857,10 +858,6 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                     setPreviousBalance(0);
                 }
 
-                const customer = customers.find(c => c.id === customerId);
-                if (customer) {
-                    setDeliveryAddress(customer.address);
-                }
             } else {
                 setPreviousBalance(0);
                 setDeliveryAddress('');
@@ -870,7 +867,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
         if (isOpen) {
           fetchBalance();
         }
-    }, [customerId, customers, orders, isOpen, isEditMode, existingOrder]);
+    }, [customerId, customers, orders, isOpen, isEditMode, existingOrder, deliveryAddress]);
 
 
     const handleProductSelect = (productId: string) => {
@@ -1301,7 +1298,20 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
                                         <CardContent className="p-4 space-y-4">
                                             <DialogTitle className="text-lg">Delivery Details</DialogTitle>
                                             <div className="space-y-2"><Label>Delivery Date</Label><Input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} /></div>
-                                            <div className="space-y-2"><Label>Delivery Address</Label><Textarea value={deliveryAddress} onChange={e => setDeliveryAddress(e.target.value)} placeholder="Leave blank to use customer's default address" /></div>
+                                <div className="space-y-2">
+									<Label htmlFor="deliveryAddress">Delivery Address *</Label>
+									<Textarea 
+										id="deliveryAddress"
+										value={deliveryAddress} 
+										onChange={e => setDeliveryAddress(e.target.value)} 
+										placeholder="Enter delivery address (required)"
+										required
+										className={!deliveryAddress ? "border-red-500" : ""}
+									/>
+									{!deliveryAddress && (
+										<p className="text-sm text-red-500">Delivery address is required</p>
+									)}
+								</div>
                                         </CardContent>
                                     </Card>
 
