@@ -9,8 +9,8 @@
  * - AllocateBulkPaymentOutput - The return type for the allocateBulkPayment function.
  */
 
-import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
+import { ai } from '@/ai/genkit-client';
+import { z } from 'zod';
 import { addBulkPayment } from '@/lib/data';
 
 const OutstandingInvoiceSchema = z.object({

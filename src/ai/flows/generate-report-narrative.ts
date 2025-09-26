@@ -10,8 +10,8 @@
  * - GenerateReportNarrativeOutput - The return type for the generateReportNarrative function.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import { ai } from '@/ai/genkit-client';
+import { z } from 'zod';
 
 const GenerateReportNarrativeInputSchema = z.object({
   reportData: z.string().describe('The report data to be summarized.'),
