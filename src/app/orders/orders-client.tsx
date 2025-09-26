@@ -860,7 +860,6 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
 
             } else {
                 setPreviousBalance(0);
-                setDeliveryAddress('');
                 setIsFirstOrder(false);
             }
         };
@@ -1003,6 +1002,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
             return;
         }
 
+		
         if (items.length === 0 && (!isFirstOrder || previousBalance <= 0)) {
             toast({
                 title: "Validation Error",
