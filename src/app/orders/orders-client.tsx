@@ -1121,7 +1121,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
     return (
         <>
             <Dialog open={isOpen} onOpenChange={(open) => { if(!open) resetForm(); else onOpenChange(open);}}>
-                <DialogContent className="max-w-6xl">
+                <DialogContent className="max-w-6xl" aria-describedby={undefined}>
                     <DialogHeader>
                         <DialogTitle>{isEditMode ? `Edit Order ${existingOrder.id}`: 'Place New Order'}</DialogTitle>
                     </DialogHeader>
@@ -1375,7 +1375,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
             </Dialog>
 
             <Dialog open={isAddCustomerOpen} onOpenChange={setIsAddCustomerOpen}>
-                <DialogContent>
+                <DialogContent aria-describedby={undefined}>
                     <DialogHeader><DialogTitle>Add New Customer</DialogTitle><DialogDescription>Fill in the details below to add a new customer.</DialogDescription></DialogHeader>
                     <form onSubmit={handleAddCustomerSubmit}>
                         <div className="grid gap-4 py-4">
