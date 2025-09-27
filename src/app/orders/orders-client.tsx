@@ -874,7 +874,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
         if (isOpen) {
           fetchBalance();
         }
-    }, [customerId, customers, orders, isOpen, isEditMode, existingOrder, deliveryAddress]);
+    }, [customerId, customers, orders, isOpen, isEditMode, existingOrder]);
 
 
     const handleProductSelect = (productId: string) => {
