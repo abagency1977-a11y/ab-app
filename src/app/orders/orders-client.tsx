@@ -833,12 +833,20 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
             setDiscount(0);
             setDeliveryFees(0);
             setEnableDiscount(false);
+			setDeliveryAddress('');
+
         }
     }, [isOpen, existingOrder, products, isEditMode]);
 
 
     useEffect(() => {
-        const fetchBalance = async () => {
+         console.log('🔍 DEBUG: useEffect running', {
+        isOpen,
+        isEditMode,
+        existingOrder: existingOrder?.id,
+        currentDeliveryAddress: deliveryAddress
+    });
+		const fetchBalance = async () => {
             if (customerId) {
                 const customerOrders = orders.filter(o => o.customerId === customerId);
                 const hasOrders = customerOrders.length > 0;
@@ -1303,7 +1311,10 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
 									<Textarea 
 										id="deliveryAddress"
 										value={deliveryAddress} 
-										onChange={e => setDeliveryAddress(e.target.value)} 
+										onChange={e => {
+											console.log('🔍 DEBUG: Delivery address changing from', deliveryAddress, 'to', e.target.value);
+											setDeliveryAddress(e.target.value);
+										}}  
 										placeholder="Enter delivery address (required)"
 										required
 										className={!deliveryAddress ? "border-red-500" : ""}
