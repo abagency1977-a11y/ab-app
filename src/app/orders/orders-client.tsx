@@ -858,7 +858,7 @@ function AddOrderDialog({ isOpen, onOpenChange, customers, products, orders, onO
 
                 if (isEditMode && existingOrder) {
                     setPreviousBalance(existingOrder.previousBalance);
-					setDeliveryAddress(existingOrder.deliveryAddress || '');
+					
                 } else if (hasOrders) {
                     const balance = await getCustomerBalance(customerId);
                     setPreviousBalance(balance);
