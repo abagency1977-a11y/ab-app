@@ -883,15 +883,24 @@ const handleEditProduct = async (updatedProductData: Partial<Product>) => {
                                                             setIsEditDialogOpen(true);
                                                         }}
                                                     >
-                                                        <Edit className="mr-2 h-4 w-4" /> Edit Product
+														<>
+                                                        
+														<Edit className="mr-2 h-4 w-4" /> Edit Product
+														
+														</>
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator />
+													
+													{/* ✅ FIX START: Add the AlertDialogTrigger wrapper */}
+												<AlertDialogTrigger asChild>
                                                     <DropdownMenuItem 
                                                         onClick={() => setProductToDelete(product)}
                                                         className="text-destructive"
                                                     >
                                                         <Trash2 className="mr-2 h-4 w-4" /> Delete
                                                     </DropdownMenuItem>
+												</AlertDialogTrigger>
+												{/* ✅ FIX END */}
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                         </TableCell>
