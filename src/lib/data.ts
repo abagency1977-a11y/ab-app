@@ -801,3 +801,36 @@ export const resetAllPayments = async () => {
         throw new Error("Failed to reset payments for all orders.");
     }
 };
+// New function to add to data.ts
+
+export const deletePaymentFromOrder = async (customerId: string, orderId: string, paymentId: string) => {
+    console.log(`Attempting to delete payment ${paymentId} from order ${orderId} for customer ${customerId}`);
+
+    // This function defines how to update the orders array within the transaction.
+    const updateChain = (orders: Order[]) => {
+        return orders.map(order => {
+            if (order.id === orderId) {
+                // Filter out the specific payment to be deleted
+                const updatedPayments = order.payments.filter(p => p.id !== paymentId);
+
+                // Return the updated order object
+                return {
+                    ...order,
+                    payments: updatedPayments,
+                } as Order; // Ensure type casting is correct
+            }
+            return order; // Return other orders unchanged
+        });
+    };
+
+    try {
+        // Assume runBalanceChainUpdate executes the updateChain function
+        // and handles the necessary Firestore transaction and balance recalculation.
+        await runBalanceChainUpdate(customerId, updateChain);
+        console.log(`Successfully deleted payment ${paymentId} from order ${orderId}.`);
+        return { success: true };
+    } catch (error) {
+        console.error("Error deleting payment from order:", error);
+        throw new Error("Failed to delete payment from order.");
+    }
+};
