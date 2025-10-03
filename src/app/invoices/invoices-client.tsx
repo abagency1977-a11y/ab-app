@@ -354,7 +354,6 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
             </div>
         );
     }
-    }//
     // --- COMPONENT RETURN ---
     return (
         <div className="p-4">
