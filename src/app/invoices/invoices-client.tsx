@@ -491,82 +491,82 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
 
                             {/* ⭐️ MODIFIED PAYMENT RECORDS LIST (STEP 2C) ⭐️ */}
                             {selectedInvoice.payments.length === 0 ? (
-                                <p className="text-sm text-gray-500">No payment records found for this invoice.</p>
-                            ) : (
-                                <div className="space-y-2">
-                                    {selectedInvoice.payments.map((payment) => (
-                                        <div key={payment.id} className="flex justify-between items-center p-3 border rounded-md">
-                                            <div className="flex flex-col">
-                                                <span className="font-medium">Amount: {formatNumber(payment.amount)}</span>
-                                                <span className="text-sm text-gray-600">
-                                                    {new Date(payment.date).toLocaleDateString('en-IN')} via {payment.mode}
-                                                </span>
-                                            </div>
-                                            <div className="flex space-x-2">
-                                                {/* Print Button */}
-                                                <Button 
-                                                    variant="ghost" 
-                                                    size="icon" 
-                                                    title="Print Receipt"
-                                                    onClick={() => handlePrintReceipt(payment)}
-                                                    disabled={isReceiptLoading}
-                                                >
-                                                    {isReceiptLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Receipt className="h-4 w-4" />}
-                                                </Button>
+								<p className="text-sm text-gray-500">No payment records found for this invoice.</p>
+							) : (
+							<div className="space-y-2">
+								{selectedInvoice.payments.map((payment) => (
+									<div key={payment.id} className="flex justify-between items-center p-3 border rounded-md">
+										<div className="flex flex-col">
+											<span className="font-medium">Amount: {formatNumber(payment.amount)}</span>
+											<span className="text-sm text-gray-600">
+												{new Date(payment.date).toLocaleDateString('en-IN')} via {payment.mode}
+											</span>
+										</div>
+                
+										<div className="flex space-x-2">
+											{/* 1. Print Receipt Button (Existing) */}
+											<Button 
+												variant="ghost" 
+												size="icon" 
+												title="Print Receipt"
+												onClick={() => handlePrintReceipt(payment)}
+												disabled={isReceiptLoading}
+											>
+												{isReceiptLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Receipt className="h-4 w-4" />}
+											</Button>
+                    
+											{/* 2. WhatsApp Share Button (Existing) */}
+											<Button 
+												variant="ghost" 
+												size="icon" 
+												title="Share Receipt (WhatsApp)"
+												onClick={() => handleWhatsAppShare(payment)} // Assuming you have this handler
+											>
+												<Share2 className="h-4 w-4" />
+											</Button>
 
-                                                {/* DELETE BUTTON BLOCK (NEW) */}
-                                                <AlertDialog>
-                                                    <AlertDialogTrigger asChild>
-                                                        <Button 
-                                                            variant="ghost" 
-                                                            size="icon" 
-                                                            title="Delete Payment Record" 
-                                                            className="text-red-500 hover:text-red-700"
-                                                            disabled={isDeleting}
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </Button>
-                                                    </AlertDialogTrigger>
-                                                    <AlertDialogContent>
-                                                        <AlertDialogHeader>
-                                                            <AlertDialogTitle>Confirm Payment Deletion</AlertDialogTitle>
-                                                            <AlertDialogDescription>
-                                                                Are you sure you want to delete this payment of <span className="font-bold">{formatNumber(payment.amount)}</span>? This action is permanent and will affect the invoice balance and customer running balance.
-                                                            </AlertDialogDescription>
-                                                        </AlertDialogHeader>
-                                                        <AlertDialogFooter>
-                                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                            <AlertDialogAction 
-                                                                onClick={() => handleDeletePayment(
-                                                                    selectedInvoice.customerId,
-                                                                    selectedInvoice.id,
-                                                                    payment.id
-                                                                )} 
-                                                                disabled={isDeleting}
-                                                                className="bg-destructive hover:bg-red-700"
-                                                            >
-                                                                {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                                                                Delete Record
-                                                            </AlertDialogAction>
-                                                        </AlertDialogFooter>
-                                                    </AlertDialogContent>
-                                                </AlertDialog>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                            {/* --- END MODIFIED PAYMENT RECORDS LIST --- */}
-                            
-                            {/* --- FOOTER BUTTONS --- */}
-                            <Separator className="my-4" />
-                            <div className="flex justify-between">
-                                {/* ... (Your existing buttons for Download/Share) */}
-                                <Button variant="outline"><Share2 className="mr-2 h-4 w-4" /> Share Invoice</Button>
-                            </div>
-                            
-                        </div>
-                    )}
+											{/* ⭐️ 3. NEW DELETE PAYMENT BUTTON ⭐️ */}
+											<AlertDialog>
+												<AlertDialogTrigger asChild>
+													<Button 
+														variant="ghost" 
+														size="icon" 
+														title="Delete Payment Record" 
+														className="text-red-500 hover:text-red-700"
+														disabled={isDeleting}
+													>
+														<Trash2 className="h-4 w-4" />
+													</Button>
+												</AlertDialogTrigger>
+												<AlertDialogContent>
+													<AlertDialogHeader>
+														<AlertDialogTitle>Confirm Payment Deletion</AlertDialogTitle>
+														<AlertDialogDescription>
+															Are you sure you want to delete this payment of <span className="font-bold">{formatNumber(payment.amount)}</span>? This action is permanent and will affect the invoice balance and customer running balance.
+														</AlertDialogDescription>
+													</AlertDialogHeader>
+													<AlertDialogFooter>
+														<AlertDialogCancel>Cancel</AlertDialogCancel>
+														<AlertDialogAction 
+															onClick={() => handleDeletePayment(
+																selectedInvoice.customerId,
+																selectedInvoice.id,
+																payment.id
+															)} 
+															disabled={isDeleting}
+															className="bg-destructive hover:bg-red-700"
+														>
+															{isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+															Delete Record
+														</AlertDialogAction>
+													</AlertDialogFooter>
+												</AlertDialogContent>
+											</AlertDialog>
+										</div>
+									</div>
+								))}
+							</div>
+						)}
                 </SheetContent>
             </Sheet>
 
