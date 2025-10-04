@@ -20,7 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 // ASSUMED DATA FUNCTIONS - Ensure these paths are correct
 import { getCustomers, getOrders, recordPayment, deleteInvoice as deleteInvoiceFromDB, deletePaymentFromOrder } from '@/lib/data';
-import ReceiptTemplate from '@/components/ReceiptTemplate'; // ASSUMED component
+import ReceiptTemplate from '@/components/receipt-template';
 import { DropdownMenuSeparator } from '@radix-ui/react-dropdown-menu';
 
 
