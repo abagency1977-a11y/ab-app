@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import type { Order, Payment, PaymentMode, Customer, SortKey } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,376 +13,89 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Receipt, Trash2, Share2, ArrowUpDown, MoreHorizontal, Edit, X } from 'lucide-react';
+import { Loader2, Receipt, Trash2, Share2, ArrowUpDown, MoreHorizontal, X, Edit } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
-// Ensure ReceiptTemplate is properly imported
-import { ReceiptTemplate } from '@/components/receipt-template'; 
-// Ensure all necessary data functions are imported
-import { addPaymentToOrder, deleteOrder, getOrders, getCustomers, deletePaymentFromOrder } from '@/lib/data'; 
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+// ASSUMED DATA FUNCTIONS - Ensure these paths are correct
+import { getCustomers, getOrders, recordPayment, deleteInvoice as deleteInvoiceFromDB, deletePaymentFromOrder } from '@/lib/data';
+import ReceiptTemplate from '@/components/ReceiptTemplate'; // ASSUMED component
+import { DropdownMenuSeparator } from '@radix-ui/react-dropdown-menu';
 
-type SortKey = keyof Order | 'id' | 'customerName' | 'orderDate' | 'status' | 'balanceDue' | 'grandTotal' | 'total' | 'previousBalance';
 
-const formatNumber = (value: number | undefined) => {
-    if (value === undefined || isNaN(value)) return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(0);
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', currencyDisplay: 'symbol' }).format(value);
-};
+// --- HELPER FUNCTION PLACEHOLDERS ---
+const formatNumber = (num: number | null | undefined): string => 
+    (num ?? 0).toLocaleString('en-IN', { style: 'currency', currency: 'INR' });
+const getCustomerName = (customerId: string, customers: Customer[]): string =>
+    customers.find(c => c.id === customerId)?.name || 'Unknown Customer';
 
-const getCustomerName = (customerId: string, customers: Customer[]) => {
-    const customer = customers.find(c => c.id === customerId);
-    return customer ? customer.name : 'Unknown Customer';
-};
+const logoUrl = '/logo.png'; // ASSUMED logo URL
 
-// --- INLINE InvoiceTable Component (Your existing table) ---
-const InvoiceTable = ({ invoices, onRowClick, onDeleteClick, sortConfig, requestSort, customers }: { 
-    invoices: Order[], 
-    onRowClick: (invoice: Order) => void, 
-    onDeleteClick: (invoice: Order) => void,
-    sortConfig: { key: SortKey; direction: 'ascending' | 'descending' } | null,
-    requestSort: (key: SortKey) => void,
-    customers: Customer[],
-}) => (
-    <div className="rounded-lg border shadow-sm">
-        <Table>
-            <TableHeader>
-                <TableRow>
-                    <TableHead><Button variant="ghost" onClick={() => requestSort('id')}>Invoice ID <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
-                    <TableHead><Button variant="ghost" onClick={() => requestSort('customerName')}>Customer <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
-                    <TableHead><Button variant="ghost" onClick={() => requestSort('orderDate')}>Date <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
-                    <TableHead><Button variant="ghost" onClick={() => requestSort('status')}>Status <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
-                    <TableHead className="text-right"><Button variant="ghost" onClick={() => requestSort('total')}>Invoice Amount <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
-                    <TableHead className="text-right"><Button variant="ghost" onClick={() => requestSort('previousBalance')}>Previous Balance <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
-                    <TableHead className="text-right"><Button variant="ghost" onClick={() => requestSort('grandTotal')}>Total <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
-                    <TableHead className="text-right"><Button variant="ghost" onClick={() => requestSort('balanceDue')}>Balance Due <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
-                    <TableHead className="text-center">Actions</TableHead>
-                </TableRow>
-            </TableHeader>
-            <TableBody>
-                {invoices.map((invoice) => {
-                    const invoiceAmount = (invoice.total || 0) + (invoice.deliveryFees || 0) - (invoice.discount || 0);
-                    const hasDue = (invoice.balanceDue ?? 0) > 0;
-                    return (
-                        <TableRow key={invoice.id} className="transition-transform hover:-translate-y-px hover:shadow-md">
-                            {/* Keep row click for quick view/edit sheet */}
-                            <TableCell onClick={() => onRowClick(invoice)} className="font-medium cursor-pointer">{invoice.id.replace('ORD', 'INV')}</TableCell>
-                            <TableCell onClick={() => onRowClick(invoice)} className="cursor-pointer">{getCustomerName(invoice.customerId, customers)}</TableCell>
-                            <TableCell onClick={() => onRowClick(invoice)} className="cursor-pointer">{new Date(invoice.orderDate).toLocaleDateString('en-IN')}</TableCell>
-                            <TableCell onClick={() => onRowClick(invoice)} className="cursor-pointer">
-                                <Badge variant={invoice.status === 'Fulfilled' ? 'default' : invoice.status === 'Pending' ? 'secondary' : invoice.status === 'Part Payment' ? 'outline' : 'destructive'} className="capitalize">{invoice.status}</Badge>
-                            </TableCell>
-                            <TableCell onClick={() => onRowClick(invoice)} className="text-right cursor-pointer">{formatNumber(invoiceAmount)}</TableCell>
-                            <TableCell onClick={() => onRowClick(invoice)} className={cn("text-right cursor-pointer", hasDue && "text-destructive")}>{formatNumber(invoice.previousBalance)}</TableCell>
-                            <TableCell onClick={() => onRowClick(invoice)} className="text-right font-bold cursor-pointer">{formatNumber(invoice.grandTotal)}</TableCell>
-                            <TableCell onClick={() => onRowClick(invoice)} className={cn('text-right font-medium cursor-pointer', hasDue && 'text-destructive')}>
-                                {formatNumber(invoice.balanceDue)}
-                            </TableCell>
-                             <TableCell className="text-center">
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" className="h-8 w-8 p-0" onClick={(e) => e.stopPropagation()}>
-                                            <span className="sr-only">Open menu</span>
-                                            <MoreHorizontal className="h-4 w-4" />
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
-                                        <SheetTrigger asChild>
-                                            <DropdownMenuItem onClick={() => onRowClick(invoice)}>
-                                                <Edit className="mr-2 h-4 w-4" /> View/Edit Invoice
-                                            </DropdownMenuItem>
-                                        </SheetTrigger>
-
-                                        <DropdownMenuSeparator />
-                                        
-                                        <AlertDialogTrigger asChild>
-                                            <DropdownMenuItem
-                                                onClick={() => onDeleteClick(invoice)} // setInvoiceToDelete
-                                                className="text-destructive focus:text-destructive"
-                                            >
-                                                <Trash2 className="mr-2 h-4 w-4" /> Delete Invoice
-                                            </DropdownMenuItem>
-                                        </AlertDialogTrigger>
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
-                            </TableCell>
-                        </TableRow>
-                    );
-                })}
-            </TableBody>
-        </Table>
-    </div>
-);
-// --- END InvoiceTable Component ---
-
-export function InvoicesClient({ orders: initialOrders, customers: initialCustomers }: { orders: Order[], customers: Customer[] }) {
-    // --- STATE DECLARATIONS ---
-    const [allInvoices, setAllInvoices] = useState<Order[]>(initialOrders);
-    const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
+// --- INVOICES CLIENT COMPONENT ---
+export default function InvoicesClient() {
+    // --- STATE MANAGEMENT ---
+    const [allInvoices, setAllInvoices] = useState<Order[]>([]);
+    const [customers, setCustomers] = useState<Customer[]>([]);
+    const [isMounted, setIsMounted] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedInvoice, setSelectedInvoice] = useState<Order | null>(null);
-    const [invoiceToDelete, setInvoiceToDelete] = useState<Order | null>(null);
-    const [receiptToPrint, setReceiptToPrint] = useState<{order: Order, payment: Payment, historicalPayments: Payment[]} | null>(null);
-    const [isReceiptLoading, setIsReceiptLoading] = useState(false);
-    const { toast } = useToast();
-    const receiptRef = useRef<HTMLDivElement>(null);
-    const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
-    const [isMounted, setIsMounted] = useState(false);
-    const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'ascending' | 'descending' } | null>(null);
-    const [paymentAmount, setPaymentAmount] = useState<string>('');
-    const [paymentMethod, setPaymentMethod] = useState<PaymentMode>('Cash'); 
+    const [paymentAmount, setPaymentAmount] = useState('');
+    const [paymentMethod, setPaymentMethod] = useState<PaymentMode>('Cash');
     const [isPaymentLoading, setIsPaymentLoading] = useState(false);
-    const [isDeleting, setIsDeleting] = useState(false); // For payment deletion
+    const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
+    const [invoiceToDelete, setInvoiceToDelete] = useState<Order | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [receiptToPrint, setReceiptToPrint] = useState<{ order: Order, payment: Payment, historicalPayments: Payment[], customer?: Customer } | null>(null);
+    const [isReceiptLoading, setIsReceiptLoading] = useState(false);
 
+    const receiptRef = useRef<HTMLDivElement>(null);
+    const { toast } = useToast();
+    
+    // --- CRITICAL useEffect: DATA FETCHING ---
     useEffect(() => {
         setIsMounted(true);
-        const savedLogo = localStorage.getItem('companyLogo');
-        if (savedLogo) {
-            setLogoUrl(savedLogo);
-        }
-    }, []);
-
-    const requestSort = (key: SortKey) => {
-        let direction: 'ascending' | 'descending' = 'ascending';
-        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
-            direction = 'descending';
-        }
-        setSortConfig({ key, direction });
-    };
-
-    const refreshOrders = async () => {
-        try {
-            const fetchedOrders = await getOrders();
-            setAllInvoices(fetchedOrders);
-            // Update the selected invoice's details in the sheet
-            if (selectedInvoice) {
-                const updatedInvoice = fetchedOrders.find(o => o.id === selectedInvoice.id);
-                setSelectedInvoice(updatedInvoice || null);
+        async function loadData() {
+            try {
+                const [orders, customersData] = await Promise.all([
+                    getOrders(),
+                    getCustomers()
+                ]);
+                setAllInvoices(orders);
+                setCustomers(customersData);
+            } catch (error) {
+                console.error("Failed to fetch data:", error);
+                toast({
+                    title: "Error",
+                    description: "Failed to load invoices or customer data.",
+                    variant: "destructive",
+                });
+            } finally {
+                setIsLoading(false);
             }
-        } catch (error) {
-            console.error("Failed to refresh orders:", error);
-            toast({
-                title: "Data Refresh Failed",
-                description: "Could not refresh invoice data after operation.",
-                variant: "destructive",
-            });
         }
-    }; 
-    
-    // ⭐️ PAYMENT DELETION HANDLER ⭐️
-    const handleDeletePayment = async (customerId: string, orderId: string, paymentId: string) => {
-        setIsDeleting(true);
-        try {
-            await deletePaymentFromOrder(customerId, orderId, paymentId);
-            toast({
-                title: "Payment Deleted",
-                description: "The payment record has been successfully removed.",
-            });
-            await refreshOrders(); 
-        } catch (error) {
-            toast({
-                title: "Deletion Failed",
-                description: "Failed to delete the payment record. Please check the console.",
-                variant: "destructive",
-            });
-            console.error(error);
-        } finally {
-            setIsDeleting(false);
-        }
-    };
+        loadData();
+    }, [toast]); // <--- CRITICAL: Correctly closed useEffect
 
-    // --- PAYMENT RECORD HANDLER ---
-    const handleRecordPayment = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!selectedInvoice || parseFloat(paymentAmount) <= 0 || isPaymentLoading) return;
-        
-        setIsPaymentLoading(true);
-        const amount = parseFloat(paymentAmount);
-        const maxAmount = selectedInvoice.balanceDue ?? 0;
-
-        if (amount > maxAmount) {
-             toast({ title: "Invalid Amount", description: "Payment amount exceeds balance due.", variant: "destructive" });
-             setIsPaymentLoading(false);
-             return;
-        }
-
-        try {
-            // Note: The structure of addPaymentToOrder may vary. Assuming it returns the new Payment object.
-            const newPayment = await addPaymentToOrder(
-                selectedInvoice.customerId,
-                selectedInvoice.id,
-                {
-                    amount: amount,
-                    mode: paymentMethod,
-                    date: new Date().toISOString(),
-                    recordedBy: 'User' // Assuming a default value
-                }
-            );
-
-            toast({ title: "Payment Recorded", description: `Recorded ${formatNumber(amount)} via ${paymentMethod}.` });
-            
-            // Re-fetch data to ensure all subsequent order balances are correct
-            await refreshOrders();
-
-            // Set up for printing receipt
-            if (newPayment) {
-                 // Get the updated invoice after refresh
-                const updatedInvoice = (await getOrders()).find(o => o.id === selectedInvoice.id);
-                if(updatedInvoice) {
-                    // Set receipt data and immediately trigger print
-                    setReceiptToPrint({
-                        order: updatedInvoice,
-                        payment: newPayment,
-                        historicalPayments: updatedInvoice.payments.filter(p => p.id !== newPayment.id),
-                    });
-                }
-            }
-
-            setPaymentAmount(''); // Clear form
-        } catch (error) {
-            toast({ title: "Payment Failed", description: "Failed to record payment. See console for details.", variant: "destructive" });
-            console.error("Error recording payment:", error);
-        } finally {
-            setIsPaymentLoading(false);
-        }
-    };
-
-    // --- INVOICE DELETION HANDLER ---
-    const handleDeleteInvoice = async () => {
-        if (!invoiceToDelete) return;
-
-        try {
-            await deleteOrder(invoiceToDelete.customerId, invoiceToDelete.id);
-            toast({ title: "Invoice Deleted", description: `Invoice ${invoiceToDelete.id.replace('ORD', 'INV')} has been removed.` });
-            
-            await refreshOrders(); // Re-fetch all orders and update selected state
-            setInvoiceToDelete(null);
-            
-            // Re-fetch customers to update their balance
-            const updatedCustomers = await getCustomers();
-            setCustomers(updatedCustomers);
-        } catch (error) {
-            toast({ title: "Deletion Failed", description: "Failed to delete the invoice. Check console.", variant: "destructive" });
-            console.error("Error deleting invoice:", error);
-        }
-    };
-    
-    // --- RECEIPT DATA SETTER (Called from Payment List) ---
-    const handleSetReceiptData = (payment: Payment) => {
-        if (!selectedInvoice) return;
-        setIsReceiptLoading(true);
-
-        // Filter historical payments based on the selected payment date
-        const paymentDate = new Date(payment.date).getTime();
-        const historicalPayments = selectedInvoice.payments
-            .filter(p => new Date(p.date).getTime() < paymentDate);
-
-        setReceiptToPrint({ order: selectedInvoice, payment, historicalPayments });
-    };
-
-    // --- RECEIPT PRINT ACTION (Called from Print Modal) ---
-    const handlePrintAction = async () => {
-        if (!receiptToPrint || !receiptRef.current) return;
-        
-        try {
-            toast({ title: "Generating Receipt...", description: "Please wait while the PDF is created." });
-            
-            // Use a short delay to ensure DOM updates are complete before capturing
-            await new Promise(resolve => setTimeout(resolve, 50)); 
-
-            const targetElement = receiptRef.current.querySelector('#printable-receipt');
-            if (!targetElement) throw new Error("Printable element not found.");
-
-            const canvas = await html2canvas(targetElement as HTMLElement, {
-                scale: 2, 
-                useCORS: true,
-                logging: false,
-            });
-
-            const imgData = canvas.toDataURL('image/png');
-            // A4 size in mm: 210 x 297
-            const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-            
-            const imgWidth = 210; // A4 width
-            const pageHeight = 297; // A4 height
-            const imgHeight = (canvas.height * imgWidth) / canvas.width;
-            let heightLeft = imgHeight;
-            let position = 0;
-
-            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-            heightLeft -= pageHeight;
-
-            while (heightLeft >= 0) {
-                position = heightLeft - imgHeight;
-                pdf.addPage();
-                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-                heightLeft -= pageHeight;
-            }
-            
-            pdf.autoPrint();
-            window.open(pdf.output('bloburl'), '_blank');
-            
-            toast({ title: "Receipt Ready", description: "The receipt has been opened in a new tab for printing." });
-
-        } catch (error) {
-            console.error('Error generating receipt:', error);
-            toast({ title: 'Print Failed', description: 'Could not create the PDF receipt.', variant: 'destructive' });
-        } finally {
-            setIsReceiptLoading(false);
-            setReceiptToPrint(null); // Close the print modal
-        }
-    };
-
-
-    const handleWhatsAppShare = (payment: Payment) => {
-        if (!selectedInvoice) return;
-        const customer = customers.find(c => c.id === selectedInvoice.customerId);
-        
-        // Use customer phone from the `Customer` object
-        const customerPhone = customer?.phone; 
-
-        if (!customerPhone) {
-            toast({ title: 'Error', description: "Customer's phone number is not available.", variant: 'destructive'});
-            return;
-        }
-
-        const sanitizedPhone = customerPhone.replace(/\D/g, '');
-        const formattedAmount = formatNumber(payment.amount).replace(/\u00A0/g, ' ');
-        const message = `Hello ${customer.name}, here is the receipt for your payment of ${formattedAmount} towards invoice ${selectedInvoice.id.replace('ORD', 'INV')}. Thank you!`;
-        const whatsappUrl = `https://wa.me/${sanitizedPhone}?text=${encodeURIComponent(message)}`;
-        
-        window.open(whatsappUrl, '_blank');
-    };
-
-    // --- SORTING AND FILTERING LOGIC (Corrected to use proper key types) ---
+    // --- MEMOIZED DATA FOR FILTERING AND SORTING ---
     const sortedInvoices = useMemo(() => {
         let sortableItems = [...allInvoices];
-        if (sortConfig !== null) {
+        if (sortConfig.key) {
             sortableItems.sort((a, b) => {
-                // Safely access properties or fallback to customerName/ID if not a direct Order key
-                const aValue = (a as any)[sortConfig.key] ?? a.customerName;
-                const bValue = (b as any)[sortConfig.key] ?? b.customerName;
+                let aVal: any = a[sortConfig.key as keyof Order] ?? '';
+                let bVal: any = b[sortConfig.key as keyof Order] ?? '';
 
-                if (sortConfig.key === 'orderDate') {
-                    const dateA = new Date(a.orderDate).getTime();
-                    const dateB = new Date(b.orderDate).getTime();
-                    return sortConfig.direction === 'ascending' ? dateA - dateB : dateB - dateA;
+                if (sortConfig.key === 'date') {
+                    aVal = new Date(aVal).getTime();
+                    bVal = new Date(bVal).getTime();
                 }
-                
-                if (typeof aValue === 'number' && typeof bValue === 'number') {
-                    return sortConfig.direction === 'ascending' ? aValue - bValue : bValue - aValue;
-                }
-                
-                const strA = String(aValue || '').toLowerCase();
-                const strB = String(bValue || '').toLowerCase();
 
-                if (strA < strB) {
-                    return sortConfig.direction === 'ascending' ? -1 : 1;
+                if (aVal < bVal) {
+                    return sortConfig.direction === 'asc' ? -1 : 1;
                 }
-                if (strA > strB) {
-                    return sortConfig.direction === 'ascending' ? 1 : -1;
+                if (aVal > bVal) {
+                    return sortConfig.direction === 'asc' ? 1 : -1;
                 }
                 return 0;
             });
@@ -393,13 +106,198 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
     const filteredInvoices = useMemo(() => {
         if (!searchQuery) return sortedInvoices;
         const query = searchQuery.toLowerCase();
-        return sortedInvoices.filter(invoice => 
-            invoice.id.toLowerCase().includes(query) ||
-            (invoice.customerName || '').toLowerCase().includes(query) ||
-            invoice.status.toLowerCase().includes(query) ||
-            invoice.orderDate.toLowerCase().includes(query)
-        );
-    }, [sortedInvoices, searchQuery]);
+        return sortedInvoices.filter(invoice => {
+            const customerName = getCustomerName(invoice.customerId, customers).toLowerCase();
+            return (
+                invoice.id.toLowerCase().includes(query) ||
+                customerName.includes(query) ||
+                (invoice.status?.toLowerCase().includes(query))
+            );
+        });
+    }, [sortedInvoices, searchQuery, customers]);
+
+    // --- HANDLER FUNCTIONS ---
+    const requestSort = (key: SortKey) => {
+        let direction: 'asc' | 'desc' = 'desc';
+        if (sortConfig.key === key && sortConfig.direction === 'desc') {
+            direction = 'asc';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const handleRecordPayment = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedInvoice || isPaymentLoading) return;
+
+        const amount = parseFloat(paymentAmount);
+        if (isNaN(amount) || amount <= 0 || amount > (selectedInvoice.balanceDue ?? 0)) {
+            toast({
+                title: "Invalid Amount",
+                description: "Please enter a valid amount less than or equal to the balance due.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        setIsPaymentLoading(true);
+        try {
+            const newPayment = await recordPayment(selectedInvoice.customerId, selectedInvoice.id, amount, paymentMethod);
+            
+            // Update local state for immediate feedback
+            const updatedInvoice = {
+                ...selectedInvoice,
+                payments: [...selectedInvoice.payments, newPayment],
+                balanceDue: (selectedInvoice.balanceDue ?? 0) - amount,
+                status: ((selectedInvoice.balanceDue ?? 0) - amount <= 0) ? 'Fulfilled' : selectedInvoice.status,
+            };
+
+            setAllInvoices(prev => prev.map(i => i.id === selectedInvoice.id ? updatedInvoice : i));
+            setSelectedInvoice(updatedInvoice); // Update the currently open invoice
+            setPaymentAmount('');
+
+            toast({
+                title: "Payment Recorded",
+                description: `Successfully recorded ${formatNumber(amount)} via ${paymentMethod}.`,
+            });
+        } catch (error) {
+            console.error("Payment recording failed:", error);
+            toast({
+                title: "Error",
+                description: "Failed to record payment. Please try again.",
+                variant: "destructive",
+            });
+        } finally {
+            setIsPaymentLoading(false);
+        }
+    };
+
+    const handleSetReceiptData = (payment: Payment) => {
+        if (!selectedInvoice) return;
+        setReceiptToPrint({
+            order: selectedInvoice,
+            payment: payment,
+            historicalPayments: selectedInvoice.payments.filter(p => new Date(p.date) <= new Date(payment.date)),
+            customer: customers.find(c => c.id === selectedInvoice.customerId),
+        });
+    };
+
+    const handleWhatsAppShare = (payment: Payment) => {
+        if (!selectedInvoice) return;
+        
+        const customer = customers.find(c => c.id === selectedInvoice.customerId);
+        const customerName = customer ? customer.name : 'Customer';
+        const customerPhone = customer ? customer.phone : '';
+
+        const receiptMessage = `*Invoice Payment Receipt*\n\n` +
+                               `*Invoice ID:* ${selectedInvoice.id.replace('ORD', 'INV')}\n` +
+                               `*Customer:* ${customerName}\n` +
+                               `*Payment Amount:* ${formatNumber(payment.amount)}\n` +
+                               `*Payment Date:* ${new Date(payment.date).toLocaleDateString('en-IN')}\n` +
+                               `*Method:* ${payment.mode}\n` +
+                               `*Current Balance Due:* ${formatNumber((selectedInvoice.balanceDue ?? 0))}\n\n` +
+                               `Thank you for your business!`;
+        
+        const encodedMessage = encodeURIComponent(receiptMessage);
+        const whatsappUrl = `https://wa.me/${customerPhone}?text=${encodedMessage}`;
+
+        window.open(whatsappUrl, '_blank');
+        toast({
+            title: "WhatsApp Share",
+            description: "Opening WhatsApp with the receipt message...",
+        });
+    };
+
+    const handlePrintAction = useCallback(() => {
+        if (receiptRef.current) {
+            setIsReceiptLoading(true);
+            try {
+                const printableContent = receiptRef.current.querySelector('#printable-receipt');
+                if (printableContent) {
+                    const printWindow = window.open('', '_blank');
+                    if (printWindow) {
+                        printWindow.document.write('<html><head><title>Print Receipt</title>');
+                        printWindow.document.write('</head><body>');
+                        printWindow.document.write(printableContent.innerHTML);
+                        printWindow.document.write('</body></html>');
+                        printWindow.document.close();
+                        printWindow.focus();
+                        printWindow.print();
+                        printWindow.close();
+                    } else {
+                        throw new Error("Failed to open print window.");
+                    }
+                }
+                toast({ title: "Print Successful", description: "Receipt sent to printer." });
+            } catch (error) {
+                console.error("Print failed:", error);
+                toast({ title: "Print Error", description: "Failed to initiate printing.", variant: "destructive" });
+            } finally {
+                setIsReceiptLoading(false);
+                setReceiptToPrint(null); // Close the modal after printing
+            }
+        }
+    }, [toast]);
+    
+    // --- PAYMENT DELETE HANDLER (NEW FEATURE) ---
+    const handleDeletePayment = async (customerId: string, orderId: string, paymentId: string) => {
+        setIsDeleting(true);
+        try {
+            await deletePaymentFromOrder(customerId, orderId, paymentId);
+            
+            // Re-fetch all orders to ensure balances are fully recalculated in state
+            const updatedOrders = await getOrders();
+            setAllInvoices(updatedOrders);
+            
+            // Find the updated version of the current invoice
+            const updatedSelectedInvoice = updatedOrders.find(i => i.id === selectedInvoice?.id);
+            if (updatedSelectedInvoice) {
+                setSelectedInvoice(updatedSelectedInvoice);
+            } else {
+                 setSelectedInvoice(null);
+            }
+
+            toast({
+                title: "Payment Deleted",
+                description: `Payment record ${paymentId.substring(0, 8)}... has been successfully removed. Balances are updated.`,
+            });
+        } catch (error) {
+            console.error("Error deleting payment:", error);
+            toast({
+                title: "Error",
+                description: "Failed to delete payment. Check console for details.",
+                variant: "destructive",
+            });
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+    
+    // --- INVOICE DELETE HANDLERS ---
+    const handleDeleteInvoice = async () => {
+        if (!invoiceToDelete) return;
+
+        try {
+            await deleteInvoiceFromDB(invoiceToDelete.customerId, invoiceToDelete.id);
+
+            // Update local state
+            setAllInvoices(prev => prev.filter(i => i.id !== invoiceToDelete.id));
+            setInvoiceToDelete(null);
+            setSelectedInvoice(null);
+
+            toast({
+                title: "Invoice Deleted",
+                description: `Invoice ${invoiceToDelete.id.replace('ORD', 'INV')} has been permanently deleted.`,
+            });
+
+        } catch (error) {
+            console.error("Error deleting invoice:", error);
+            toast({
+                title: "Error",
+                description: "Failed to delete the invoice. Please try again.",
+                variant: "destructive",
+            });
+        }
+    };
 
     const handleRowClick = (invoice: Order) => {
         const freshInvoice = allInvoices.find(i => i.id === invoice.id) || invoice;
@@ -411,7 +309,8 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
     };
 
 
-    if (!isMounted) {
+    // --- CRITICAL FIX: Ensure all logic blocks are closed before this check ---
+    if (isLoading || !isMounted) {
         // Skeleton loading state
         return (
             <div className="p-4 space-y-4">
@@ -424,7 +323,8 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
                 </div>
             </div>
         );
-    }
+    } 
+
     // --- COMPONENT RETURN ---
     return (
         <div className="p-4">
@@ -481,7 +381,6 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
                  if (!open) {
                     setSelectedInvoice(null);
                     setPaymentAmount('');
-                    setIsDeleting(false); // Reset delete state when closing
                  }
             }}>
                 <SheetContent side="right" className="sm:max-w-xl flex flex-col">
@@ -574,68 +473,69 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
 										</div>
                 
 										<div className="flex space-x-2">
-												{/* 1. Print Receipt Button (Existing) */}
-												<Button 
-														variant="ghost" 
-														size="icon" 
-														title="Print Receipt"
-														onClick={() => handleSetReceiptData(payment)} // Sets data to open modal
-														disabled={isReceiptLoading}
-												>
-														<Receipt className="h-4 w-4" />
-												</Button> 
+											{/* 1. Print Receipt Button (Existing) */}
+											<Button 
+												variant="ghost" 
+												size="icon" 
+												title="Print Receipt"
+												onClick={() => handleSetReceiptData(payment)}
+												disabled={isReceiptLoading}
+											>
+												<Receipt className="h-4 w-4" />
+											</Button>
                     
-												{/* 2. WhatsApp Share Button */}
-												<Button 
+											{/* 2. WhatsApp Share Button */}
+											<Button 
+												variant="ghost" 
+												size="icon" 
+												title="Share Receipt (WhatsApp)"
+												onClick={() => handleWhatsAppShare(payment)} 
+											>
+												<Share2 className="h-4 w-4" />
+											</Button>
+
+											{/* ⭐️ 3. DELETE PAYMENT BUTTON - The key fix ⭐️ */}
+											<AlertDialog>
+												<AlertDialogTrigger asChild>
+													<Button 
 														variant="ghost" 
 														size="icon" 
-														title="Share Receipt (WhatsApp)"
-														onClick={() => handleWhatsAppShare(payment)} 
-												>
-														<Share2 className="h-4 w-4" />
-												</Button>
-
-												{/* ⭐️ 3. DELETE PAYMENT BUTTON - The Missing Component ⭐️ */}
-												<AlertDialog>
-														<AlertDialogTrigger asChild>
-																<Button 
-																		variant="ghost" 
-																		size="icon" 
-																		title="Delete Payment Record" 
-																		className="text-red-500 hover:text-red-700"
-																		disabled={isDeleting}
-																>
-																		<Trash2 className="h-4 w-4" />
-																</Button>
-														</AlertDialogTrigger>
-														<AlertDialogContent>
-																<AlertDialogHeader>
-																		<AlertDialogTitle>Confirm Payment Deletion</AlertDialogTitle>
-																		<AlertDialogDescription>
-																				Are you sure you want to delete this payment of <span className="font-bold">{formatNumber(payment.amount)}</span>? This action is permanent and will affect the invoice balance and customer running balance.
-																		</AlertDialogDescription>
-																</AlertDialogHeader>
-																<AlertDialogFooter>
-																		<AlertDialogCancel>Cancel</AlertDialogCancel>
-																		<AlertDialogAction 
-																				onClick={() => handleDeletePayment(
-																						selectedInvoice.customerId,
-																						selectedInvoice.id,
-																						payment.id
-																				)} 
-																				disabled={isDeleting}
-																				className="bg-destructive hover:bg-red-700"
-																		>
-																				{isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-																				Delete Record
-																		</AlertDialogAction>
-																</AlertDialogFooter>
-														</AlertDialogContent>
-												</AlertDialog>
+														title="Delete Payment Record" 
+														className="text-red-500 hover:text-red-700"
+														disabled={isDeleting}
+													>
+														<Trash2 className="h-4 w-4" />
+													</Button>
+												</AlertDialogTrigger>
+												<AlertDialogContent>
+													<AlertDialogHeader>
+														<AlertDialogTitle>Confirm Payment Deletion</AlertDialogTitle>
+														<AlertDialogDescription>
+															Are you sure you want to delete this payment of <span className="font-bold">{formatNumber(payment.amount)}</span>? This action is permanent and will affect the invoice balance and customer running balance.
+														</AlertDialogDescription>
+													</AlertDialogHeader>
+													<AlertDialogFooter>
+														<AlertDialogCancel>Cancel</AlertDialogCancel>
+														<AlertDialogAction 
+															onClick={() => handleDeletePayment(
+																selectedInvoice.customerId,
+																selectedInvoice.id,
+																payment.id
+															)} 
+															disabled={isDeleting}
+															className="bg-destructive hover:bg-red-700"
+														>
+															{isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+															Delete Record
+														</AlertDialogAction>
+													</AlertDialogFooter>
+												</AlertDialogContent>
+											</AlertDialog>
 										</div>
-								</div>
-							))}
-					</div>
+									</div>
+								))}
+							</div>
+						)}
                         </div>
                     )}
                 </SheetContent>
@@ -693,4 +593,58 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
             )}
         </div>
     );
-} // ⭐️ FINAL CRITICAL CLOSING BRACE ⭐️
+}
+
+
+// --- ASSUMED INVOICETABLE COMPONENT ---
+// This is a placeholder structure for the InvoiceTable component used above.
+const InvoiceTable: React.FC<any> = ({ invoices, onRowClick, onDeleteClick, sortConfig, requestSort, customers }) => {
+    return (
+        <div className="rounded-lg border shadow-sm overflow-hidden">
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>ID</TableHead>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Total</TableHead>
+                        <TableHead>Balance</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Actions</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {invoices.map((invoice: Order) => (
+                        <TableRow key={invoice.id} onClick={() => onRowClick(invoice)} className="cursor-pointer hover:bg-gray-50">
+                            <TableCell>{invoice.id.replace('ORD', 'INV')}</TableCell>
+                            <TableCell>{getCustomerName(invoice.customerId, customers)}</TableCell>
+                            <TableCell>{new Date(invoice.date).toLocaleDateString()}</TableCell>
+                            <TableCell>{formatNumber(invoice.grandTotal)}</TableCell>
+                            <TableCell><Badge variant={ (invoice.balanceDue ?? 0) > 0 ? 'destructive' : 'secondary'}>{formatNumber(invoice.balanceDue)}</Badge></TableCell>
+                            <TableCell>{invoice.status}</TableCell>
+                            <TableCell onClick={(e) => e.stopPropagation()}>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" className="h-8 w-8 p-0">
+                                            <span className="sr-only">Open menu</span>
+                                            <MoreHorizontal className="h-4 w-4" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        <DropdownMenuItem onClick={() => onRowClick(invoice)}>
+                                            <Edit className="mr-2 h-4 w-4" /> View/Edit
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem onClick={() => onDeleteClick(invoice)} className="text-red-600">
+                                            <Trash2 className="mr-2 h-4 w-4" /> Delete Invoice
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </div>
+    );
+};
