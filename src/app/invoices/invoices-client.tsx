@@ -574,69 +574,68 @@ export function InvoicesClient({ orders: initialOrders, customers: initialCustom
 										</div>
                 
 										<div className="flex space-x-2">
-											{/* 1. Print Receipt Button (Existing) */}
-											<Button 
-												variant="ghost" 
-												size="icon" 
-												title="Print Receipt"
-												onClick={() => handleSetReceiptData(payment)} // Sets data to open modal
-												disabled={isReceiptLoading}
-											>
-												<Receipt className="h-4 w-4" />
-											</Button>
-                    
-											{/* 2. WhatsApp Share Button (Existing) */}
-											<Button 
-												variant="ghost" 
-												size="icon" 
-												title="Share Receipt (WhatsApp)"
-												onClick={() => handleWhatsAppShare(payment)} 
-											>
-												<Share2 className="h-4 w-4" />
-											</Button>
-
-											{/* ⭐️ 3. DELETE PAYMENT BUTTON ⭐️ */}
-											<AlertDialog>
-												<AlertDialogTrigger asChild>
-													<Button 
+												{/* 1. Print Receipt Button (Existing) */}
+												<Button 
 														variant="ghost" 
 														size="icon" 
-														title="Delete Payment Record" 
-														className="text-red-500 hover:text-red-700"
-														disabled={isDeleting}
-													>
-														<Trash2 className="h-4 w-4" />
-													</Button>
-												</AlertDialogTrigger>
-												<AlertDialogContent>
-													<AlertDialogHeader>
-														<AlertDialogTitle>Confirm Payment Deletion</AlertDialogTitle>
-														<AlertDialogDescription>
-															Are you sure you want to delete this payment of <span className="font-bold">{formatNumber(payment.amount)}</span>? This action is permanent and will affect the invoice balance and customer running balance.
-														</AlertDialogDescription>
-													</AlertDialogHeader>
-													<AlertDialogFooter>
-														<AlertDialogCancel>Cancel</AlertDialogCancel>
-														<AlertDialogAction 
-															onClick={() => handleDeletePayment(
-																selectedInvoice.customerId,
-																selectedInvoice.id,
-																payment.id
-															)} 
-															disabled={isDeleting}
-															className="bg-destructive hover:bg-red-700"
-														>
-															{isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-															Delete Record
-														</AlertDialogAction>
-													</AlertDialogFooter>
-												</AlertDialogContent>
-											</AlertDialog>
+														title="Print Receipt"
+														onClick={() => handleSetReceiptData(payment)} // Sets data to open modal
+														disabled={isReceiptLoading}
+												>
+														<Receipt className="h-4 w-4" />
+												</Button> 
+                    
+												{/* 2. WhatsApp Share Button */}
+												<Button 
+														variant="ghost" 
+														size="icon" 
+														title="Share Receipt (WhatsApp)"
+														onClick={() => handleWhatsAppShare(payment)} 
+												>
+														<Share2 className="h-4 w-4" />
+												</Button>
+
+												{/* ⭐️ 3. DELETE PAYMENT BUTTON - The Missing Component ⭐️ */}
+												<AlertDialog>
+														<AlertDialogTrigger asChild>
+																<Button 
+																		variant="ghost" 
+																		size="icon" 
+																		title="Delete Payment Record" 
+																		className="text-red-500 hover:text-red-700"
+																		disabled={isDeleting}
+																>
+																		<Trash2 className="h-4 w-4" />
+																</Button>
+														</AlertDialogTrigger>
+														<AlertDialogContent>
+																<AlertDialogHeader>
+																		<AlertDialogTitle>Confirm Payment Deletion</AlertDialogTitle>
+																		<AlertDialogDescription>
+																				Are you sure you want to delete this payment of <span className="font-bold">{formatNumber(payment.amount)}</span>? This action is permanent and will affect the invoice balance and customer running balance.
+																		</AlertDialogDescription>
+																</AlertDialogHeader>
+																<AlertDialogFooter>
+																		<AlertDialogCancel>Cancel</AlertDialogCancel>
+																		<AlertDialogAction 
+																				onClick={() => handleDeletePayment(
+																						selectedInvoice.customerId,
+																						selectedInvoice.id,
+																						payment.id
+																				)} 
+																				disabled={isDeleting}
+																				className="bg-destructive hover:bg-red-700"
+																		>
+																				{isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+																				Delete Record
+																		</AlertDialogAction>
+																</AlertDialogFooter>
+														</AlertDialogContent>
+												</AlertDialog>
 										</div>
-									</div>
-								))}
-							</div>
-						)}
+								</div>
+							))}
+					</div>
                         </div>
                     )}
                 </SheetContent>
